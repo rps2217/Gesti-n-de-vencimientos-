@@ -1,0 +1,44 @@
+export interface SheetMetadata {
+  spreadsheetId: string;
+  title: string;
+  sheets: {
+    sheetId: number;
+    title: string;
+  }[];
+}
+
+export type ColumnType = 'text' | 'longtext' | 'number' | 'date' | 'datetime' | 'enum' | 'enumlist' | 'ref' | 'calculated';
+export type ColumnBehavior = 'none' | 'auto_id' | 'calc_fecha_vc' | 'calc_retiro' | 'sku_lookup';
+
+export type EventCategory = 'VENCIMIENTO' | 'TRANSPORTE' | 'DIFERENCIA' | 'AVERIA' | 'DEVOLUCION';
+
+export interface EventTypeDefinition {
+  id: EventCategory;
+  name: string;
+  shortLabel: string;
+  description: string;
+  badgeBg: string;
+  badgeText: string;
+  badgeBorder: string;
+  colorClass: string;
+  isVencimiento: boolean;
+}
+
+export interface ColumnSchema {
+  visible: boolean;
+  searchable: boolean;
+  type: ColumnType;
+  behavior: ColumnBehavior;
+  options?: string; // Comma-separated options for enum and enumlist
+  formula?: string;
+  isKey?: boolean; // Primary key for table relation
+  isLabel?: boolean; // Main display label when referenced
+  refTable?: string; // Target sheet name when type is 'ref'
+  refKeyCol?: string; // Target key column
+  refLabelCol?: string; // Target label column
+}
+
+export interface InventoryItem {
+  _rowIndex: number; // Row number in the sheet for update/delete operations
+  [key: string]: any; // Dynamic columns based on the sheet's headers
+}

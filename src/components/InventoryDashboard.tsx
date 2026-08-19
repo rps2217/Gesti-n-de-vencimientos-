@@ -141,6 +141,45 @@ function SidebarItem({ icon, label, active, onClick, collapsed }: any) {
   );
 }
 
+// Universal Date Parser supporting ISO (YYYY-MM-DD), Latin (DD/MM/YYYY, DD-MM-YYYY), and Month/Year (MM/YYYY)
+export function parseAnyDate(dateVal: any): Date | null {
+  if (!dateVal) return null;
+  if (dateVal instanceof Date) return isNaN(dateVal.getTime()) ? null : dateVal;
+  const str = String(dateVal).trim();
+  if (!str) return null;
+
+  // 1. ISO format: YYYY-MM-DD or YYYY/MM/DD
+  const ymd = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (ymd) {
+    const d = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // 2. Latin format: DD/MM/YYYY or DD-MM-YYYY
+  const dmy = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (dmy) {
+    const d = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // 3. Month/Year format: MM/YYYY (evaluates to last day of that month)
+  const my = str.match(/^(\d{1,2})[-/](\d{4})$/);
+  if (my) {
+    const m = Number(my[1]);
+    const y = Number(my[2]);
+    if (m >= 1 && m <= 12) {
+      const lastDay = new Date(y, m, 0);
+      if (!isNaN(lastDay.getTime())) return lastDay;
+    }
+  }
+
+  // 4. Standard Date fallback
+  const standard = new Date(str);
+  if (!isNaN(standard.getTime())) return standard;
+
+  return null;
+}
+
 // Helper to compute expiration, retirement and drainage status for an item
 function getItemStatus(item: InventoryItem, headers: string[]) {
   const retCol = headers.find(h => /retiro|canje/i.test(h));
@@ -153,22 +192,16 @@ function getItemStatus(item: InventoryItem, headers: string[]) {
   let daysToExpiry: number | null = null;
 
   if (retCol && item[retCol]) {
-    const parts = String(item[retCol]).split('-');
-    if (parts.length === 3) {
-      const dRet = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-      if (!isNaN(dRet.getTime())) {
-        daysToRetire = Math.ceil((dRet.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      }
+    const dRet = parseAnyDate(item[retCol]);
+    if (dRet) {
+      daysToRetire = Math.ceil((dRet.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     }
   }
 
   if (vcCol && item[vcCol]) {
-    const parts = String(item[vcCol]).split('-');
-    if (parts.length === 3) {
-      const dVc = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-      if (!isNaN(dVc.getTime())) {
-        daysToExpiry = Math.ceil((dVc.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      }
+    const dVc = parseAnyDate(item[vcCol]);
+    if (dVc) {
+      daysToExpiry = Math.ceil((dVc.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     }
   }
 
@@ -254,6 +287,7 @@ export default function InventoryDashboard() {
   const [isSchemaLoading, setIsSchemaLoading] = useState(false);
   const [sheetConfig, setSheetConfig] = useState({
     main: '',
+    events: '',
     products: '',
     policies: '',
     schema: {} as Record<string, Record<string, ColumnSchema>>
@@ -346,7 +380,7 @@ export default function InventoryDashboard() {
 
   // Event Metrics Summary
   const eventMetrics = useMemo(() => {
-    if (activeView !== 'main' || items.length === 0) {
+    if ((activeView !== 'main' && activeView !== 'events') || items.length === 0) {
       return {
         total: items.length,
         vencimientos: 0,
@@ -414,8 +448,8 @@ export default function InventoryDashboard() {
   const filteredItems = useMemo(() => {
     let list = items;
 
-    // Apply Event Category Filter in main view
-    if (activeView === 'main' && eventFilter !== 'all') {
+    // Apply Event Category Filter in main or events view
+    if ((activeView === 'main' || activeView === 'events') && eventFilter !== 'all') {
       list = list.filter(item => getEventCategory(item, headers) === eventFilter);
     }
 
@@ -508,11 +542,13 @@ export default function InventoryDashboard() {
         }
       }
 
-      let mainSheetTitle = currentConfig.main || allSheets[0];
+      let mainSheetTitle = currentConfig.main || allSheets.find((t: string) => /vencimiento|caducidad/i.test(t)) || allSheets[0];
+      let eventsSheetTitle = currentConfig.events || allSheets.find((t: string) => /^frc$|evento|incidencia|averia|merma|diferencia|transporte/i.test(t));
       let prodSheetTitle = currentConfig.products || allSheets.find((t: string) => /producto/i.test(t));
       let polSheetTitle = currentConfig.policies || allSheets.find((t: string) => /política|politica|canje/i.test(t));
       
       if (!currentConfig.main && mainSheetTitle) currentConfig.main = mainSheetTitle;
+      if (!currentConfig.events && eventsSheetTitle) currentConfig.events = eventsSheetTitle;
       if (!currentConfig.products && prodSheetTitle) currentConfig.products = prodSheetTitle;
       if (!currentConfig.policies && polSheetTitle) currentConfig.policies = polSheetTitle;
       if (currentConfig !== sheetConfig) {
@@ -567,6 +603,7 @@ export default function InventoryDashboard() {
       // Determine target sheet for current view
       let targetSheetTitle = '';
       if (currentView === 'main') targetSheetTitle = currentConfig.main || allSheets[0];
+      else if (currentView === 'events') targetSheetTitle = currentConfig.events || eventsSheetTitle || '';
       else if (currentView === 'products') targetSheetTitle = currentConfig.products;
       else if (currentView === 'policies') targetSheetTitle = currentConfig.policies;
       else targetSheetTitle = currentView;
@@ -847,9 +884,9 @@ export default function InventoryDashboard() {
              if (matchedPolicy) {
                  const days = parseInt(matchedPolicy[polDaysCol], 10);
                  if (!isNaN(days)) {
-                     const parts = currentExpiry.split('-');
-                     if (parts.length === 3) {
-                       const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+                     const expDate = parseAnyDate(currentExpiry);
+                     if (expDate) {
+                       const d = new Date(expDate.getTime());
                        d.setDate(d.getDate() - days);
                        const yyyy = d.getFullYear();
                        const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -944,7 +981,7 @@ export default function InventoryDashboard() {
   }
 
   // Identify unmapped sheets (excluding technical/hidden sheets starting with _)
-  const mappedSheets = [sheetConfig.main, sheetConfig.products, sheetConfig.policies].filter(Boolean);
+  const mappedSheets = [sheetConfig.main, sheetConfig.events, sheetConfig.products, sheetConfig.policies].filter(Boolean);
   const otherSheets = metadata?.sheets
     .map((s: any) => s.properties.title)
     .filter((t: string) => !mappedSheets.includes(t) && !/^_/i.test(t.trim())) || [];
@@ -968,6 +1005,13 @@ export default function InventoryDashboard() {
               label="Vencimientos & Radar" 
               active={activeView === 'main'} 
               onClick={() => { setActiveView('main'); setSelectedProduct(null); }}
+              collapsed={isSidebarCollapsed}
+            />
+            <SidebarItem 
+              icon={<FileSpreadsheet />} 
+              label="Incidencias & FRC" 
+              active={activeView === 'events'} 
+              onClick={() => { setActiveView('events'); setSelectedProduct(null); }}
               collapsed={isSidebarCollapsed}
             />
             <SidebarItem 
@@ -1039,6 +1083,7 @@ export default function InventoryDashboard() {
           <div>
             <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
               {activeView === 'main' ? 'Radar de Vencimientos & Drenaje' : 
+               activeView === 'events' ? 'Registro de Incidencias & FRC' :
                activeView === 'products' ? 'Catálogo de Productos' : 
                activeView === 'policies' ? 'Políticas de Canje' : 
                activeView === 'schema' ? 'Estructura de Datos' :
@@ -1061,7 +1106,7 @@ export default function InventoryDashboard() {
                   Pestaña <span className="font-mono font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">{activeSheet.title}</span>
                   <span className="text-slate-300">•</span>
                   <span className="font-medium text-slate-600">
-                    {searchTerm || pmRadarFilter !== 'all' ? `${filteredItems.length} de ${items.length} registros` : `${items.length} registros`}
+                    {searchTerm || pmRadarFilter !== 'all' || eventFilter !== 'all' ? `${filteredItems.length} de ${items.length} registros` : `${items.length} registros`}
                   </span>
                   {isRelationalActive && (
                     <>
@@ -1122,12 +1167,169 @@ export default function InventoryDashboard() {
                   className="text-sm bg-blue-600 text-white px-4 py-2 rounded-xl font-bold shadow-md shadow-blue-200 flex items-center gap-2 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all"
                 >
                   <Plus className="w-4 h-4"/>
-                  <span>Nuevo Registro</span>
+                  <span>
+                    {activeView === 'main' ? 'Nuevo Vencimiento' :
+                     activeView === 'events' ? 'Nueva Incidencia (FRC)' :
+                     activeView === 'products' ? 'Nuevo Producto' :
+                     activeView === 'policies' ? 'Nueva Política' :
+                     'Nuevo Registro'}
+                  </span>
                 </button>
               </>
             )}
           </div>
         </div>
+
+        {/* INCIDENCIAS & FRC STRIP (When activeView === 'events') */}
+        {activeView === 'events' && activeSheet && (
+          <div className="bg-white border-b border-slate-200 px-8 py-4 shrink-0 flex flex-col gap-4 shadow-sm">
+            {/* Event Category Summary Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* 1. Deterioro de Transporte */}
+              <button
+                onClick={() => setEventFilter(eventFilter === 'TRANSPORTE' ? 'all' : 'TRANSPORTE')}
+                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
+                  eventFilter === 'TRANSPORTE'
+                    ? 'border-amber-500 ring-2 ring-amber-500/20 bg-amber-50/70 shadow-sm'
+                    : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
+                    <Truck className="w-4 h-4" />
+                  </div>
+                  <span className="text-xl font-black text-slate-800 font-mono">{eventMetrics.transporte}</span>
+                </div>
+                <div className="mt-2.5">
+                  <h4 className="text-xs font-bold text-slate-800">Deterioro Transporte</h4>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Golpe / rotura en flete</p>
+                </div>
+              </button>
+
+              {/* 2. Diferencias de Pedido */}
+              <button
+                onClick={() => setEventFilter(eventFilter === 'DIFERENCIA' ? 'all' : 'DIFERENCIA')}
+                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
+                  eventFilter === 'DIFERENCIA'
+                    ? 'border-purple-500 ring-2 ring-purple-500/20 bg-purple-50/70 shadow-sm'
+                    : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center">
+                    <FileSpreadsheet className="w-4 h-4" />
+                  </div>
+                  <span className="text-xl font-black text-slate-800 font-mono">{eventMetrics.diferencia}</span>
+                </div>
+                <div className="mt-2.5">
+                  <h4 className="text-xs font-bold text-slate-800">Diferencia Pedido</h4>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Faltante / sobrante / trocado</p>
+                </div>
+              </button>
+
+              {/* 3. Avería Almacén */}
+              <button
+                onClick={() => setEventFilter(eventFilter === 'AVERIA' ? 'all' : 'AVERIA')}
+                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
+                  eventFilter === 'AVERIA'
+                    ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/70 shadow-sm'
+                    : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-800 flex items-center justify-center">
+                    <PackageX className="w-4 h-4" />
+                  </div>
+                  <span className="text-xl font-black text-slate-800 font-mono">{eventMetrics.averia}</span>
+                </div>
+                <div className="mt-2.5">
+                  <h4 className="text-xs font-bold text-slate-800">Avería / Merma</h4>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Derrame o rotura interna</p>
+                </div>
+              </button>
+
+              {/* 4. Devolución Proveedor */}
+              <button
+                onClick={() => setEventFilter(eventFilter === 'DEVOLUCION' ? 'all' : 'DEVOLUCION')}
+                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
+                  eventFilter === 'DEVOLUCION'
+                    ? 'border-teal-500 ring-2 ring-teal-500/20 bg-teal-50/70 shadow-sm'
+                    : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center">
+                    <RotateCcw className="w-4 h-4" />
+                  </div>
+                  <span className="text-xl font-black text-slate-800 font-mono">{eventMetrics.devolucion}</span>
+                </div>
+                <div className="mt-2.5">
+                  <h4 className="text-xs font-bold text-slate-800">Devolución / Canje</h4>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Gestión con proveedor</p>
+                </div>
+              </button>
+            </div>
+
+            {/* Filter Buttons */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-100 text-xs">
+              <span className="font-bold text-slate-400 uppercase tracking-wider text-[10px] mr-1">Filtrar Incidencias:</span>
+              <button 
+                onClick={() => setEventFilter('all')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                  eventFilter === 'all'
+                    ? 'bg-slate-800 text-white shadow-sm' 
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Todos ({items.length})
+              </button>
+              <button 
+                onClick={() => setEventFilter('TRANSPORTE')}
+                className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
+                  eventFilter === 'TRANSPORTE'
+                    ? 'bg-amber-600 text-white shadow-sm shadow-amber-200' 
+                    : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
+                }`}
+              >
+                <Truck className="w-3.5 h-3.5" />
+                <span>Transporte ({eventMetrics.transporte})</span>
+              </button>
+              <button 
+                onClick={() => setEventFilter('DIFERENCIA')}
+                className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
+                  eventFilter === 'DIFERENCIA'
+                    ? 'bg-purple-600 text-white shadow-sm shadow-purple-200' 
+                    : 'bg-purple-50 text-purple-800 hover:bg-purple-100'
+                }`}
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Diferencias ({eventMetrics.diferencia})</span>
+              </button>
+              <button 
+                onClick={() => setEventFilter('AVERIA')}
+                className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
+                  eventFilter === 'AVERIA'
+                    ? 'bg-rose-600 text-white shadow-sm shadow-rose-200' 
+                    : 'bg-rose-50 text-rose-800 hover:bg-rose-100'
+                }`}
+              >
+                <PackageX className="w-3.5 h-3.5" />
+                <span>Averías ({eventMetrics.averia})</span>
+              </button>
+              <button 
+                onClick={() => setEventFilter('DEVOLUCION')}
+                className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
+                  eventFilter === 'DEVOLUCION'
+                    ? 'bg-teal-600 text-white shadow-sm shadow-teal-200' 
+                    : 'bg-teal-50 text-teal-800 hover:bg-teal-100'
+                }`}
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Devolución ({eventMetrics.devolucion})</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* RADAR COMERCIAL & EVENT INCIDENT STRIP (Only in main view) */}
         {activeView === 'main' && activeSheet && (
@@ -2626,6 +2828,22 @@ export default function InventoryDashboard() {
                     className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:border-blue-500 outline-none"
                   >
                     <option value="">-- Seleccionar --</option>
+                    {metadata?.sheets
+                      .filter((s: any) => !/^_/i.test(s.properties.title))
+                      .map((s: any) => (
+                        <option key={s.properties.sheetId} value={s.properties.title}>{s.properties.title}</option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Pestaña de Incidencias & Eventos (FRC)</label>
+                  <select 
+                    value={sheetConfig.events} 
+                    onChange={(e) => saveConfig({ ...sheetConfig, events: e.target.value })}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:border-blue-500 outline-none"
+                  >
+                    <option value="">-- Seleccionar (ej. FRC) --</option>
                     {metadata?.sheets
                       .filter((s: any) => !/^_/i.test(s.properties.title))
                       .map((s: any) => (

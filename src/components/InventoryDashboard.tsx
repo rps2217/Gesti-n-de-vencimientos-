@@ -172,6 +172,7 @@ export const InventoryDashboard: React.FC = () => {
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const [activeView, setActiveView] = useState<string>('main');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [areFiltersVisible, setAreFiltersVisible] = useState<boolean>(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isScriptModalOpen, setIsScriptModalOpen] = useState(false);
@@ -1235,6 +1236,17 @@ export const InventoryDashboard: React.FC = () => {
 
             {activeView !== 'schema' && activeView !== 'analytics' && (
               <button
+                onClick={() => setAreFiltersVisible(!areFiltersVisible)}
+                className={`text-xs bg-white border ${areFiltersVisible ? 'border-blue-300 text-blue-700 bg-blue-50/50' : 'border-slate-200 text-slate-700'} hover:bg-slate-50 px-3.5 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-sm`}
+                title={areFiltersVisible ? "Ocultar paneles de filtros y radar" : "Mostrar paneles de filtros y radar"}
+              >
+                <Sliders className="w-4 h-4 text-blue-600" />
+                <span className="hidden sm:inline">{areFiltersVisible ? 'Ocultar Filtros' : 'Mostrar Filtros'}</span>
+              </button>
+            )}
+
+            {activeView !== 'schema' && activeView !== 'analytics' && (
+              <button
                 onClick={() => setIsColumnManagerOpen(true)}
                 className="text-xs bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-sm"
               >
@@ -1273,8 +1285,11 @@ export const InventoryDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* QUICK CHIPS (Píldoras Contextuales) */}
-        {quickChips.length > 0 && activeView !== 'schema' && activeView !== 'analytics' && (
+        {/* FILTERS & RADAR PANELS (Collapsible) */}
+        {areFiltersVisible && (
+          <>
+            {/* QUICK CHIPS (Píldoras Contextuales) */}
+            {quickChips.length > 0 && activeView !== 'schema' && activeView !== 'analytics' && (
           <div className="bg-slate-50 border-b border-slate-200 px-8 py-2.5 shrink-0 flex items-center gap-2 overflow-x-auto">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider mr-2 shrink-0">Filtros Rápidos:</span>
             {quickChips.map((chip, idx) => (
@@ -1569,6 +1584,8 @@ export const InventoryDashboard: React.FC = () => {
               </div>
             )}
           </div>
+        )}
+          </>
         )}
 
         {/* Content Body */}

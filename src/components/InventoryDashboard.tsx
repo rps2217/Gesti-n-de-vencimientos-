@@ -21,7 +21,7 @@ import {
   Plus, Edit2, Trash2, RefreshCw, Loader2, Database, AlertCircle, Package, 
   FileSpreadsheet, FileText, Search, X, Truck, RotateCcw, 
   PackageX, Sparkles, Clock, Clock3, Flame, AlertTriangle, CheckCircle2, 
-  Sliders, Link2
+  Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown
 } from 'lucide-react';
 
 // Utilities & Hooks
@@ -67,8 +67,37 @@ export const InventoryDashboard: React.FC = () => {
 
   // Search and Filter States
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRowIds, setSelectedRowIds] = useState<number[]>([]);
   const [eventFilter, setEventFilter] = useState<EventCategory | 'all'>('all');
   const [pmRadarFilter, setPmRadarFilter] = useState<'all' | 'drainage' | 'upcoming' | 'retire_now'>('all');
+
+  // Column Manager State
+  const [isColumnManagerOpen, setIsColumnManagerOpen] = useState(false);
+  const [columnOrders, setColumnOrders] = useState<Record<string, string[]>>(() => {
+    try {
+      const saved = localStorage.getItem('appsheet_clone_col_orders');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [hiddenColumns, setHiddenColumns] = useState<Record<string, string[]>>(() => {
+    try {
+      const saved = localStorage.getItem('appsheet_clone_hidden_cols');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Persist column preferences
+  useEffect(() => {
+    localStorage.setItem('appsheet_clone_col_orders', JSON.stringify(columnOrders));
+  }, [columnOrders]);
+
+  useEffect(() => {
+    localStorage.setItem('appsheet_clone_hidden_cols', JSON.stringify(hiddenColumns));
+  }, [hiddenColumns]);
 
   // Sheet configuration state
   const [sheetConfig, setSheetConfig] = useState<SheetConfig>(() => {
@@ -150,8 +179,29 @@ export const InventoryDashboard: React.FC = () => {
 
   const visibleHeaders = useMemo(() => {
     if (!activeSheet) return [];
-    return headers.filter(h => sheetConfig.schema?.[activeSheet.title]?.[h]?.visible !== false);
-  }, [headers, activeSheet, sheetConfig.schema]);
+    
+    // First, filter out those hidden via schema OR hidden locally via user preference
+    const viewHidden = hiddenColumns[activeView] || [];
+    let cols = headers.filter(h => 
+      sheetConfig.schema?.[activeSheet.title]?.[h]?.visible !== false &&
+      !viewHidden.includes(h)
+    );
+
+    // Then, reorder them if a custom order exists for this view
+    const viewOrder = columnOrders[activeView];
+    if (viewOrder && viewOrder.length > 0) {
+      cols.sort((a, b) => {
+        const idxA = viewOrder.indexOf(a);
+        const idxB = viewOrder.indexOf(b);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return 0;
+      });
+    }
+    
+    return cols;
+  }, [headers, activeSheet, sheetConfig.schema, hiddenColumns, columnOrders, activeView]);
 
   const searchableHeaders = useMemo(() => {
     if (!activeSheet) return headers;
@@ -249,7 +299,7 @@ export const InventoryDashboard: React.FC = () => {
         if (pmRadarFilter === 'drainage') return st.code === 'DRAINAGE_PM';
         if (pmRadarFilter === 'upcoming') return st.code === 'UPCOMING';
         if (pmRadarFilter === 'retire_now') return st.code === 'RETIRE_NOW' || st.code === 'EXPIRED';
-        if (pmRadarFilter === 'en_regla') return st.code === 'GOOD';
+        if (pmRadarFilter === 'en_regla') return st.code === 'NORMAL';
         return true;
       });
     }
@@ -433,6 +483,7 @@ export const InventoryDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchData(sheetConfig, activeView);
+    setSelectedRowIds([]);
   }, [activeView]);
 
   const handleSelectEventCategory = (cat: EventCategory) => {
@@ -792,12 +843,59 @@ export const InventoryDashboard: React.FC = () => {
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
         
-        {/* Header Bar */}
-        <div className="px-8 py-5 border-b border-slate-200 bg-white shrink-0 flex flex-col md:flex-row justify-between md:items-center gap-4">
+        {/* MACRO SEARCH NAV (Always top, sticky) */}
+        <div className="bg-white border-b border-slate-200 z-20 sticky top-0 shrink-0 px-4 sm:px-8 py-3 flex items-center justify-between gap-4">
+          {/* Search is the hero */}
+          <div className="flex-1 flex justify-center">
+            {(activeView !== 'schema' || searchableHeaders.length > 0) ? (
+              <div className="relative w-full max-w-3xl">
+                <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder={activeView === 'analytics' ? "Explorar y filtrar gráficos por lote, descripción, proveedor..." : `Buscar en todo el inventario (${searchableHeaders.length} columnas)...`}
+                  className="w-full pl-11 pr-10 py-3 bg-slate-100/70 hover:bg-slate-100 border-transparent focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-2xl text-base font-medium text-slate-700 placeholder:text-slate-400 outline-none transition-all"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1.5 rounded-full hover:bg-slate-200/60 transition-colors"
+                    title="Limpiar búsqueda"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="w-full max-w-3xl py-3" /> /* Spacer */
+            )}
+          </div>
+
+          {/* Global Utils (Refresh, Export) */}
+          <div className="flex items-center gap-2 shrink-0">
+            {activeView !== 'schema' && (
+              <button
+                onClick={() => exportToCSV(`${activeView}_${new Date().toISOString().split('T')[0]}`, headers, filteredItems)}
+                className="text-sm bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-2 hidden md:flex"
+                title="Exportar la vista actual a CSV"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                <span>Exportar CSV</span>
+              </button>
+            )}
+            <button onClick={() => fetchData()} className="text-sm bg-white border border-slate-200 px-3 py-2.5 rounded-xl font-medium shadow-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700 transition-colors" title="Refrescar datos">
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* CONTEXTUAL PAGE HEADER */}
+        <div className="bg-slate-50/50 border-b border-slate-200 shrink-0 px-8 py-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-              {activeView === 'main' ? 'Radar de Vencimientos & Drenaje' : 
-               activeView === 'events' ? 'Registro de Incidencias & FRC' :
+              {activeView === 'main' ? 'Radar de Vencimientos & Drenaje' :
+               activeView === 'events' ? 'Registro de Incidencias & FRC' : 
                activeView === 'products' ? 'Catálogo de Productos' : 
                activeView === 'policies' ? 'Políticas de Canje' : 
                activeView === 'schema' ? 'Configuración de Datos & Relaciones' :
@@ -810,7 +908,7 @@ export const InventoryDashboard: React.FC = () => {
                 </span>
               )}
             </h1>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-500 mt-1">
               {activeView === 'main' ? 'Monitoreo de lotes críticos, fechas de retiro comercial y solicitud de precio para PM.' :
                activeView === 'events' ? 'Deterioros de transporte, diferencias de pedido, averías de almacén y devoluciones.' :
                activeView === 'products' ? 'Maestro de SKUs con relaciones directas hacia vencimientos e incidencias.' :
@@ -821,105 +919,64 @@ export const InventoryDashboard: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {activeView === 'schema' ? (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsScriptModalOpen(true)}
-                  className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl font-bold transition-colors flex items-center gap-1.5"
-                >
-                  <Sliders className="w-4 h-4 text-blue-600" />
-                  <span>Conector Apps Script</span>
-                </button>
-              </div>
-            ) : activeView === 'analytics' ? (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => exportToCSV(`Exportacion_${new Date().toISOString().split('T')[0]}`, headers, filteredItems)}
-                  className="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-2 rounded-xl font-bold shadow-sm transition-all flex items-center gap-1.5"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                  <span>Exportar Datos (CSV)</span>
-                </button>
-                <button onClick={() => fetchData()} className="text-sm bg-white border border-slate-200 px-3 py-2 rounded-xl font-medium shadow-sm hover:bg-slate-50 flex items-center gap-1.5 text-slate-700 transition-colors">
-                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                </button>
-              </div>
-            ) : (
-              <>
-                {/* PM Drainage Report Trigger (Main view) */}
-                {activeView === 'main' && (
-                  <button
-                    onClick={() => setIsPmReportOpen(true)}
-                    className="text-xs bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200 px-3 py-2 rounded-xl font-bold shadow-sm transition-all flex items-center gap-1.5"
-                    title="Generar resumen de productos críticos para enviar a Product Manager"
-                  >
-                    <Flame className="w-4 h-4 text-orange-600" />
-                    <span>Reporte PM ({drainageReportItems.length})</span>
-                  </button>
-                )}
+          <div className="flex flex-wrap items-center gap-3">
+            {activeView === 'schema' && (
+              <button
+                onClick={() => setIsScriptModalOpen(true)}
+                className="text-xs bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-sm"
+              >
+                <Sliders className="w-4 h-4 text-blue-600" />
+                <span>Conector Apps Script</span>
+              </button>
+            )}
+            
+            {activeView === 'main' && (
+              <button
+                onClick={() => setIsPmReportOpen(true)}
+                className="text-xs bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200 px-3.5 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-1.5"
+                title="Generar resumen de productos críticos para enviar a Product Manager"
+              >
+                <Flame className="w-4 h-4 text-orange-600" />
+                <span>Reporte PM ({drainageReportItems.length})</span>
+              </button>
+            )}
 
-                {/* Export CSV Button */}
-                <button
-                  onClick={() => exportToCSV(`${activeView}_${new Date().toISOString().split('T')[0]}`, headers, filteredItems)}
-                  className="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-2 rounded-xl font-bold shadow-sm transition-all flex items-center gap-1.5 hidden sm:flex"
-                  title="Exportar la vista actual a CSV"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                  <span className="hidden md:inline">Exportar CSV</span>
-                </button>
+            {activeView !== 'schema' && activeView !== 'analytics' && (
+              <button
+                onClick={() => setIsColumnManagerOpen(true)}
+                className="text-xs bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-sm"
+              >
+                <Columns className="w-4 h-4 text-blue-600" />
+                <span className="hidden sm:inline">Columnas</span>
+              </button>
+            )}
+            
+            {hasCustomColWidths && activeView !== 'schema' && activeView !== 'analytics' && (
+              <button
+                onClick={handleResetColWidths}
+                className="text-xs bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-3 py-2.5 rounded-xl font-medium shadow-sm transition-colors flex items-center gap-1"
+                title="Restablecer ancho original de todas las columnas de esta tabla"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span className="hidden lg:inline">Ajuste Columnas</span>
+              </button>
+            )}
 
-                {/* Reset custom column widths button */}
-                {hasCustomColWidths && (
-                  <button
-                    onClick={handleResetColWidths}
-                    className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-2 rounded-xl font-medium transition-colors flex items-center gap-1"
-                    title="Restablecer ancho original de todas las columnas de esta tabla"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span className="hidden lg:inline">Ajuste Columnas</span>
-                  </button>
-                )}
-
-                {/* Universal Search Bar */}
-                <div className="relative w-full sm:w-64 md:w-72">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder={`Buscar en ${searchableHeaders.length} columnas...`}
-                    className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all shadow-sm"
-                  />
-                  {searchTerm && (
-                    <button
-                      onClick={() => setSearchTerm('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200/60 transition-colors"
-                      title="Limpiar búsqueda"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-
-                <button onClick={() => fetchData()} className="text-sm bg-white border border-slate-200 px-3 py-2 rounded-xl font-medium shadow-sm hover:bg-slate-50 flex items-center gap-1.5 text-slate-700 transition-colors">
-                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                </button>
-                <button 
-                  disabled={!activeSheet || isModalOpen} 
-                  onClick={() => handleOpenModal()} 
-                  className="text-sm bg-blue-600 text-white px-4 py-2 rounded-xl font-bold shadow-md shadow-blue-200 flex items-center gap-2 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all"
-                >
-                  <Plus className="w-4 h-4"/>
-                  <span>
-                    {activeView === 'main' ? 'Nuevo Vencimiento' :
-                     activeView === 'events' ? 'Nueva Incidencia (FRC)' :
-                     activeView === 'products' ? 'Nuevo Producto' :
-                     activeView === 'policies' ? 'Nueva Política' :
-                     'Nuevo Registro'}
-                  </span>
-                </button>
-              </>
+            {activeView !== 'schema' && activeView !== 'analytics' && (
+              <button 
+                disabled={!activeSheet || isModalOpen} 
+                onClick={() => handleOpenModal()} 
+                className="text-sm bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-md shadow-blue-200 flex items-center gap-2 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all"
+              >
+                <Plus className="w-4 h-4"/>
+                <span>
+                  {activeView === 'main' ? 'Nuevo Vencimiento' :
+                   activeView === 'events' ? 'Nueva Incidencia (FRC)' :
+                   activeView === 'products' ? 'Nuevo Producto' :
+                   activeView === 'policies' ? 'Nueva Política' :
+                   'Nuevo Registro'}
+                </span>
+              </button>
             )}
           </div>
         </div>
@@ -1227,7 +1284,7 @@ export const InventoryDashboard: React.FC = () => {
               activeView={activeView}
             />
           ) : activeView === 'analytics' ? (
-            <AnalyticsDashboard items={allMainItems} headers={headers} />
+            <AnalyticsDashboard items={filteredItems} headers={headers} />
           ) : !activeSheet && !loading ? (
             <div className="h-full w-full flex items-center justify-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50">
               <div className="text-center max-w-sm">
@@ -1247,6 +1304,24 @@ export const InventoryDashboard: React.FC = () => {
                 <table className="text-left border-collapse" style={{ width: 'max-content', minWidth: '100%' }}>
                   <thead className="bg-slate-50/80 sticky top-0 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider select-none z-10">
                     <tr>
+                      {/* Selection Header */}
+                      <th className="p-4 text-center bg-slate-50" style={{ width: '48px', minWidth: '48px' }}>
+                        <div className="flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                            checked={filteredItems.length > 0 && selectedRowIds.length === filteredItems.length}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedRowIds(filteredItems.map(i => i._rowIndex as number));
+                              } else {
+                                setSelectedRowIds([]);
+                              }
+                            }}
+                            title="Seleccionar todos"
+                          />
+                        </div>
+                      </th>
                       {/* Fixed Row Index Header */}
                       <th 
                         style={{ width: `${getColWidth('_row', '#')}px`, minWidth: '50px' }} 
@@ -1370,7 +1445,25 @@ export const InventoryDashboard: React.FC = () => {
                         const isMainOrEvents = activeView === 'main' || activeView === 'events';
 
                         return (
-                          <tr key={idx} className="hover:bg-slate-50/80 transition-colors group">
+                          <tr key={idx} className={`transition-colors group ${selectedRowIds.includes(item._rowIndex as number) ? 'bg-blue-50/50 hover:bg-blue-50' : 'hover:bg-slate-50/80'}`}>
+                            {/* Selection Cell */}
+                            <td className="p-4 text-center">
+                              <div className="flex items-center justify-center">
+                                <input
+                                  type="checkbox"
+                                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                                  checked={selectedRowIds.includes(item._rowIndex as number)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedRowIds(prev => [...prev, item._rowIndex as number]);
+                                    } else {
+                                      setSelectedRowIds(prev => prev.filter(id => id !== item._rowIndex));
+                                    }
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </div>
+                            </td>
                             {/* Row Index */}
                             <td 
                               style={{ width: `${getColWidth('_row', '#')}px` }}
@@ -1484,6 +1577,64 @@ export const InventoryDashboard: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* FLOATING ACTION BAR (BULK ACTIONS) */}
+          {selectedRowIds.length > 0 && activeView !== 'schema' && activeView !== 'analytics' && (
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 bg-slate-800 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-bottom-10 fade-in duration-300 border border-slate-700">
+              <div className="flex items-center gap-2 border-r border-slate-600 pr-4">
+                <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-lg shadow-inner">{selectedRowIds.length}</span>
+                <span className="text-sm font-medium whitespace-nowrap">seleccionados</span>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => {
+                    const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
+                    exportToCSV(`Seleccion_${new Date().toISOString().split('T')[0]}`, headers, selectedItems);
+                  }}
+                  className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5 text-blue-400" /> Exportar
+                </button>
+                
+                {activeView === 'main' && (
+                  <button 
+                    onClick={() => { 
+                      setIsPmReportOpen(true); 
+                      // Note: Optionally we could pass selected items directly to PM Report here
+                    }}
+                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
+                  >
+                    <Flame className="w-3.5 h-3.5 text-orange-400" /> Acción PM
+                  </button>
+                )}
+
+                {activeView === 'events' && (
+                  <button 
+                    onClick={() => { alert('Funcionalidad de cambio de estado en masa en desarrollo.'); }}
+                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Marcar Resueltos
+                  </button>
+                )}
+                
+                <button 
+                  onClick={() => { alert('Eliminación en masa requiere conexión con la API de Google Sheets para optimización de cuotas.'); }}
+                  className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" /> Eliminar
+                </button>
+                
+                <button 
+                  onClick={() => setSelectedRowIds([])}
+                  className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-700 ml-2 transition-colors flex items-center justify-center shrink-0"
+                  title="Deseleccionar todo"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1541,6 +1692,105 @@ export const InventoryDashboard: React.FC = () => {
         fetchData={fetchData}
         activeView={activeView}
       />
+
+      {/* 6. COLUMN MANAGER MODAL */}
+      {isColumnManagerOpen && activeSheet && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">Gestionar Columnas</h3>
+                <p className="text-xs text-slate-500 mt-1">Oculta o reordena las columnas para esta vista.</p>
+              </div>
+              <button onClick={() => setIsColumnManagerOpen(false)} className="text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100 p-2 rounded-xl transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-2">
+              {(() => {
+                const viewOrder = columnOrders[activeView] || headers;
+                // Merge any headers that might be missing from viewOrder
+                const displayOrder = [...new Set([...viewOrder, ...headers])].filter(h => headers.includes(h));
+                const viewHidden = hiddenColumns[activeView] || [];
+                
+                return displayOrder.map((header, index) => {
+                  const isHidden = viewHidden.includes(header);
+                  
+                  const moveUp = () => {
+                    if (index === 0) return;
+                    const newOrder = [...displayOrder];
+                    [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
+                    setColumnOrders(prev => ({ ...prev, [activeView]: newOrder }));
+                  };
+                  
+                  const moveDown = () => {
+                    if (index === displayOrder.length - 1) return;
+                    const newOrder = [...displayOrder];
+                    [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+                    setColumnOrders(prev => ({ ...prev, [activeView]: newOrder }));
+                  };
+                  
+                  const toggleVisibility = () => {
+                    setHiddenColumns(prev => {
+                      const current = prev[activeView] || [];
+                      if (current.includes(header)) {
+                        return { ...prev, [activeView]: current.filter(h => h !== header) };
+                      } else {
+                        return { ...prev, [activeView]: [...current, header] };
+                      }
+                    });
+                  };
+
+                  return (
+                    <div key={header} className={`flex items-center justify-between p-3 rounded-xl mb-1 ${isHidden ? 'bg-slate-50/50' : 'hover:bg-slate-50'} transition-colors group`}>
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <button 
+                          onClick={toggleVisibility}
+                          className={`p-1.5 rounded-lg transition-colors shrink-0 ${isHidden ? 'text-slate-400 hover:bg-slate-200' : 'text-blue-600 hover:bg-blue-50'}`}
+                          title={isHidden ? 'Mostrar columna' : 'Ocultar columna'}
+                        >
+                          {isHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                        <span className={`text-sm font-medium truncate ${isHidden ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                          {header}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={moveUp} disabled={index === 0} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-lg disabled:opacity-30">
+                          <ArrowUp className="w-4 h-4" />
+                        </button>
+                        <button onClick={moveDown} disabled={index === displayOrder.length - 1} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-lg disabled:opacity-30">
+                          <ArrowDown className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+            
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-between shrink-0">
+              <button 
+                onClick={() => {
+                  setColumnOrders(prev => ({ ...prev, [activeView]: headers }));
+                  setHiddenColumns(prev => ({ ...prev, [activeView]: [] }));
+                }}
+                className="text-xs font-semibold text-slate-500 hover:text-slate-700 px-3 py-2"
+              >
+                Restablecer
+              </button>
+              <button 
+                onClick={() => setIsColumnManagerOpen(false)}
+                className="text-sm font-bold bg-slate-800 text-white px-5 py-2.5 rounded-xl hover:bg-slate-700 shadow-sm"
+              >
+                Listo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

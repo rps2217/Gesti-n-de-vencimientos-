@@ -69,7 +69,8 @@ export const InventoryDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRowIds, setSelectedRowIds] = useState<number[]>([]);
   const [eventFilter, setEventFilter] = useState<EventCategory | 'all'>('all');
-  const [pmRadarFilter, setPmRadarFilter] = useState<'all' | 'drainage' | 'upcoming' | 'retire_now'>('all');
+  const [pmRadarFilter, setPmRadarFilter] = useState<'all' | 'drainage' | 'upcoming' | 'retire_now' | 'en_regla'>('all');
+  const [activeQuickChip, setActiveQuickChip] = useState<string | null>(null);
 
   // Column Manager State
   const [isColumnManagerOpen, setIsColumnManagerOpen] = useState(false);
@@ -304,8 +305,8 @@ export const InventoryDashboard: React.FC = () => {
       });
     }
 
-    if (!searchTerm.trim()) return list;
-    const term = searchTerm.toLowerCase().trim();
+    if (!searchTerm.trim() && !activeQuickChip) return list;
+    const term = (searchTerm.trim() || activeQuickChip || '').toLowerCase();
     return list.filter(item => {
       return searchableHeaders.some(h => {
         const val = item[h];
@@ -313,7 +314,7 @@ export const InventoryDashboard: React.FC = () => {
         return String(val).toLowerCase().includes(term);
       });
     });
-  }, [items, searchTerm, searchableHeaders, activeView, eventFilter, pmRadarFilter, headers]);
+  }, [items, searchTerm, activeQuickChip, searchableHeaders, activeView, eventFilter, pmRadarFilter, headers]);
 
   // Critical items for PM drainage report
   const drainageReportItems = useMemo(() => {
@@ -325,6 +326,50 @@ export const InventoryDashboard: React.FC = () => {
       return st.code === 'DRAINAGE_PM' || st.code === 'UPCOMING' || st.code === 'RETIRE_NOW';
     });
   }, [items, allMainItems, activeView]);
+
+  const quickChips = useMemo(() => {
+    if (activeView === 'products') {
+      const providerCol = headers.find(h => /proveedor|marca|fabricante/i.test(h));
+      const categoryCol = headers.find(h => /categor[ií]a|familia|tipo/i.test(h));
+      const chips = [];
+      
+      if (providerCol) {
+        const topProviders = Array.from(new Set(items.map(i => i[providerCol]))).filter(Boolean).slice(0, 3);
+        topProviders.forEach(p => chips.push(String(p)));
+      }
+      if (categoryCol) {
+        const topCategories = Array.from(new Set(items.map(i => i[categoryCol]))).filter(Boolean).slice(0, 2);
+        topCategories.forEach(c => chips.push(String(c)));
+      }
+      return chips;
+    }
+    if (activeView === 'events') {
+      const respCol = headers.find(h => /responsable|usuario|creado_por|registrado/i.test(h));
+      const originCol = headers.find(h => /origen|tienda|almac[eé]n/i.test(h));
+      const chips = [];
+      
+      if (respCol) {
+        const topResp = Array.from(new Set(items.map(i => i[respCol]))).filter(Boolean).slice(0, 2);
+        topResp.forEach(r => chips.push(String(r)));
+      }
+      if (originCol) {
+        const topOrigin = Array.from(new Set(items.map(i => i[originCol]))).filter(Boolean).slice(0, 2);
+        topOrigin.forEach(o => chips.push(String(o)));
+      }
+      return chips;
+    }
+    if (activeView === 'main') {
+      const batchCol = headers.find(h => /lote|batch/i.test(h));
+      const chips = [];
+      if (batchCol) {
+        // Just extract some common distinct batches if any
+        const topBatches = Array.from(new Set(items.map(i => i[batchCol]))).filter(Boolean).slice(0, 3);
+        topBatches.forEach(b => chips.push(`Lote: ${b}`));
+      }
+      return chips;
+    }
+    return [];
+  }, [items, headers, activeView]);
 
   const fetchData = async (currentConfig = sheetConfig, currentView = activeView) => {
     try {
@@ -980,6 +1025,34 @@ export const InventoryDashboard: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* QUICK CHIPS (Píldoras Contextuales) */}
+        {quickChips.length > 0 && activeView !== 'schema' && activeView !== 'analytics' && (
+          <div className="bg-slate-50 border-b border-slate-200 px-8 py-2.5 shrink-0 flex items-center gap-2 overflow-x-auto">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider mr-2 shrink-0">Filtros Rápidos:</span>
+            {quickChips.map((chip, idx) => (
+              <button
+                key={idx}
+                onClick={() => setActiveQuickChip(activeQuickChip === chip ? null : chip)}
+                className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors shrink-0 ${
+                  activeQuickChip === chip
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {chip}
+              </button>
+            ))}
+            {activeQuickChip && (
+              <button
+                onClick={() => setActiveQuickChip(null)}
+                className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1.5 rounded-full transition-colors shrink-0 underline"
+              >
+                Limpiar filtro
+              </button>
+            )}
+          </div>
+        )}
 
         {/* INCIDENCIAS & FRC STRIP (When activeView === 'events') */}
         {activeView === 'events' && activeSheet && (

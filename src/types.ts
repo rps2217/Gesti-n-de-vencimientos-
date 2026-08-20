@@ -1,10 +1,31 @@
-export interface SheetMetadata {
-  spreadsheetId: string;
+export interface SheetProperties {
+  sheetId: number;
   title: string;
+  hidden?: boolean;
+  gridProperties?: {
+    rowCount: number;
+    columnCount: number;
+  };
+}
+
+export interface SheetMetadata {
+  spreadsheetId?: string;
+  title?: string;
   sheets: {
-    sheetId: number;
-    title: string;
+    sheetId?: number;
+    title?: string;
+    properties: SheetProperties;
   }[];
+}
+
+export type SpreadsheetMetadata = SheetMetadata;
+
+export interface SheetConfig {
+  main?: string;
+  events?: string;
+  products?: string;
+  policies?: string;
+  schema?: Record<string, Record<string, ColumnSchema>>;
 }
 
 export type ColumnType = 'text' | 'longtext' | 'number' | 'date' | 'datetime' | 'enum' | 'enumlist' | 'ref' | 'calculated';

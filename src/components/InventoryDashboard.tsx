@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { 
   getSpreadsheetMetadata, 
   getSheetData, 
@@ -17,11 +17,13 @@ import {
   SheetConfig, 
   EventCategory 
 } from '../types';
+import { z } from 'zod';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
   Plus, Edit2, Trash2, RefreshCw, Loader2, Database, AlertCircle, Package, 
   FileSpreadsheet, FileText, Search, X, Truck, RotateCcw, 
   PackageX, Sparkles, Clock, Clock3, Flame, AlertTriangle, CheckCircle2, 
-  Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown
+  Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown, Menu, Scan
 } from 'lucide-react';
 
 // Utilities & Hooks
@@ -33,6 +35,7 @@ import {
   getItemStatus 
 } from '../utils/dateCalculations';
 import { useColumnResize } from '../hooks/useColumnResize';
+import { SAMPLE_HEADERS, SAMPLE_ITEMS, SAMPLE_PRODUCTS, SAMPLE_POLICIES } from '../data/sampleInventory';
 
 // Modals & Drawers & Sub-components
 import { Sidebar } from './navigation/Sidebar';
@@ -43,6 +46,7 @@ import { ItemFormModal } from './modals/ItemFormModal';
 import { PmReportModal } from './modals/PmReportModal';
 import { ScriptCodeModal } from './modals/ScriptCodeModal';
 import { GlobalConfigModal } from './modals/GlobalConfigModal';
+import { BarcodeScannerModal } from './modals/BarcodeScannerModal';
 import { exportToCSV } from '../utils/exportUtils';
 
 export const InventoryDashboard: React.FC = () => {
@@ -64,6 +68,61 @@ export const InventoryDashboard: React.FC = () => {
   const [configStorageMode, setConfigStorageMode] = useState<'properties' | 'sheet' | 'local'>('local');
   const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
   const [syncSuccessMessage, setSyncSuccessMessage] = useState<string | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  // Advanced features: Pagination, Offline Cache & Concurrency
+  const [pageSize, setPageSize] = useState<number | 'all'>(100);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
+  const [lastCachedAt, setLastCachedAt] = useState<string | null>(null);
+  const [offlineQueue, setOfflineQueue] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('appsheet_clone_offline_queue');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('appsheet_clone_offline_queue', JSON.stringify(offlineQueue));
+  }, [offlineQueue]);
+
+  const handleSyncOfflineQueue = async () => {
+    if (offlineQueue.length === 0 || !activeSheet) return;
+    try {
+      setIsSyncingCloud(true);
+      for (const action of offlineQueue) {
+        if (action.type === 'append') {
+          await appendRow(action.sheetTitle, action.values);
+        } else if (action.type === 'update') {
+          await updateRow(action.sheetTitle, action.rowIndex, action.values);
+        } else if (action.type === 'delete') {
+          await deleteRow(action.sheetId, action.rowIndex);
+        }
+      }
+      setOfflineQueue([]);
+      localStorage.removeItem('appsheet_clone_offline_queue');
+      await fetchData();
+      alert('¡Cola offline sincronizada con éxito en Google Sheets!');
+    } catch (err: any) {
+      alert(`Error sincronizando cola offline: ${err.message}`);
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
 
   // Search and Filter States
   const [searchTerm, setSearchTerm] = useState('');
@@ -110,6 +169,7 @@ export const InventoryDashboard: React.FC = () => {
     }
   });
 
+  const tableContainerRef = useRef<HTMLDivElement>(null);
   const [activeView, setActiveView] = useState<string>('main');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -316,6 +376,28 @@ export const InventoryDashboard: React.FC = () => {
     });
   }, [items, searchTerm, activeQuickChip, searchableHeaders, activeView, eventFilter, pmRadarFilter, headers]);
 
+  const paginatedItems = useMemo(() => {
+    if (pageSize === 'all') return filteredItems;
+    const start = (currentPage - 1) * (pageSize as number);
+    return filteredItems.slice(start, start + (pageSize as number));
+  }, [filteredItems, currentPage, pageSize]);
+
+  const totalPages = pageSize === 'all' ? 1 : Math.ceil(filteredItems.length / (pageSize as number)) || 1;
+
+  const rowVirtualizer = useVirtualizer({
+    count: paginatedItems.length,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => 64, // Approximate row height (padding 16px top/bottom + text)
+    overscan: 10,
+  });
+  
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
+  const paddingBottom = virtualRows.length > 0 
+    ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end 
+    : 0;
+
+
   // Critical items for PM drainage report
   const drainageReportItems = useMemo(() => {
     const source = activeView === 'main' ? items : allMainItems;
@@ -495,7 +577,25 @@ export const InventoryDashboard: React.FC = () => {
       
       if (targetSheetProp) {
         setActiveSheet(targetSheetProp);
-        const rows = await getSheetData(targetSheetProp.title);
+        let rows = [];
+        try {
+          rows = await getSheetData(targetSheetProp.title);
+          const cachePayload = { rows, timestamp: new Date().toISOString() };
+          localStorage.setItem(`appsheet_clone_cache_${targetSheetProp.title}`, JSON.stringify(cachePayload));
+          setLastCachedAt(cachePayload.timestamp);
+          setIsOffline(false);
+        } catch (netErr) {
+          console.warn('Network error loading sheet data, attempting local cache fallback:', netErr);
+          const cached = localStorage.getItem(`appsheet_clone_cache_${targetSheetProp.title}`);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            rows = parsed.rows;
+            setLastCachedAt(parsed.timestamp);
+            setIsOffline(true);
+          } else {
+            throw netErr;
+          }
+        }
         
         if (rows.length > 0) {
           const headerRow = rows[0];
@@ -519,8 +619,24 @@ export const InventoryDashboard: React.FC = () => {
         setItems([]);
       }
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Error al cargar los datos de la hoja.');
+      console.warn('Network or Apps Script error, loading sample demo inventory:', err);
+      // Fallback to sample data so app is fully testable out-of-the-box
+      setMetadata({
+        sheets: [
+          { properties: { sheetId: 1, title: 'Vencimientos_Inventario', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } } },
+          { properties: { sheetId: 2, title: 'Incidencias_FRC', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } } },
+          { properties: { sheetId: 3, title: 'Catalogo_Productos', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } } },
+          { properties: { sheetId: 4, title: 'Politicas_Canje', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } } }
+        ]
+      });
+      setActiveSheet({ sheetId: 1, title: 'Vencimientos_Inventario', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } });
+      setHeaders(SAMPLE_HEADERS);
+      setItems(SAMPLE_ITEMS);
+      setAllMainItems(SAMPLE_ITEMS);
+      setProducts(SAMPLE_PRODUCTS);
+      setPolicies(SAMPLE_POLICIES);
+      setIsRelationalActive(true);
+      setError('Modo Demostración / Sin conexión: Mostrando datos de ejemplo de logística y vencimientos. Puede configurar su URL de Google Apps Script en Ajustes.');
     } finally {
       setLoading(false);
     }
@@ -627,74 +743,115 @@ export const InventoryDashboard: React.FC = () => {
     if (!activeSheet) return errors;
 
     const currentSchema = sheetConfig.schema?.[activeSheet.title] || {};
+    
+    // Dynamic Zod Schema generation based on our internal types
+    const zSchemaShape: Record<string, z.ZodTypeAny> = {};
 
     headers.forEach(header => {
-      const val = (formData[header] || '').trim();
       const colSchema = currentSchema[header];
       const effectiveType = colSchema?.type || (/fecha|vencimiento|retiro/i.test(header) ? 'date' : 'text');
       const isAutoCalculated = colSchema?.behavior === 'auto_id' || 
-                              colSchema?.behavior === 'calc_fecha_vc' || 
-                              colSchema?.behavior === 'calc_retiro' || 
-                              effectiveType === 'calculated' || 
-                              /^ID_VC$/i.test(header.trim());
+                               colSchema?.behavior === 'calc_fecha_vc' || 
+                               colSchema?.behavior === 'calc_retiro' || 
+                               effectiveType === 'calculated' || 
+                               /^ID_VC$/i.test(header.trim());
 
-      // Skip validation for calculated fields
-      if (isAutoCalculated) return;
-
-      // Number validation
-      if (effectiveType === 'number' && val !== '') {
-        if (isNaN(Number(val))) {
-          errors[header] = 'Debe ser un número válido.';
-        }
+      // If auto calculated, we don't strictly validate user input (it's read-only)
+      if (isAutoCalculated) {
+        zSchemaShape[header] = z.any();
+        return;
       }
 
-      // Date validation
-      if (effectiveType === 'date' && val !== '') {
-        const d = new Date(val);
-        if (isNaN(d.getTime())) {
-          errors[header] = 'Formato de fecha inválido (AAAA-MM-DD).';
-        }
+      // Base string schema
+      let fieldSchema: z.ZodTypeAny = z.string().trim();
+
+      // Required logic: Sku, dates, and amounts are usually required, others optional.
+      const isRequired = colSchema?.isKey || /sku|código|codigo|cantidad|fecha|lote|estado/i.test(header);
+
+      if (!isRequired) {
+        fieldSchema = z.string().trim().optional().or(z.literal(''));
+      } else {
+        fieldSchema = z.string().trim().min(1, 'Este campo es obligatorio.');
       }
 
-      // Month/Year validation for expirations
+      // Type specific validation
+      if (effectiveType === 'number' || /^cant|unidades|stock|dias|precio/i.test(header)) {
+        fieldSchema = fieldSchema.refine((val: any) => {
+          if (!isRequired && (!val || val === '')) return true;
+          return !isNaN(Number(val));
+        }, 'Debe ser un número válido.');
+      } else if (effectiveType === 'date' || /fecha/i.test(header)) {
+        fieldSchema = fieldSchema.refine((val: any) => {
+          if (!isRequired && (!val || val === '')) return true;
+          return !isNaN(new Date(val as string).getTime());
+        }, 'Formato de fecha inválido.');
+      }
+
+      // Custom validations for Vencimiento
       if (selectedEventCategory === 'VENCIMIENTO') {
-        if (/^MM$/i.test(header.trim()) && val !== '') {
-          const num = parseInt(val, 10);
-          if (isNaN(num) || num < 1 || num > 12) {
-            errors[header] = 'El mes debe estar entre 1 y 12.';
-          }
+        if (/^MM$/i.test(header.trim())) {
+          fieldSchema = fieldSchema.refine((val: any) => {
+            if (!val && !isRequired) return true;
+            const num = parseInt(val as string, 10);
+            return !isNaN(num) && num >= 1 && num <= 12;
+          }, 'El mes debe estar entre 1 y 12.');
+        } else if (/^YYYY$/i.test(header.trim())) {
+          fieldSchema = fieldSchema.refine((val: any) => {
+            if (!val && !isRequired) return true;
+            const num = parseInt(val as string, 10);
+            return !isNaN(num) && num >= 2000 && num <= 2100;
+          }, 'El año debe ser válido (ej. 2026).');
         }
+      }
 
-        if (/^YYYY$/i.test(header.trim()) && val !== '') {
-          const num = parseInt(val, 10);
-          if (isNaN(num) || num < 2000 || num > 2100) {
-            errors[header] = 'El año debe ser válido (ej. 2026).';
+      zSchemaShape[header] = fieldSchema;
+    });
+
+    const formSchema = z.object(zSchemaShape).superRefine((data, ctx) => {
+      // Cross-field validation: Expiration vs Withdrawal Date
+      if (selectedEventCategory === 'VENCIMIENTO') {
+        const fechaVcHeader = headers.find(h => /^FECHA_VC$/i.test(h.trim()) || sheetConfig.schema?.[activeSheet.title]?.[h]?.behavior === 'calc_fecha_vc');
+        const withdrawalHeader = headers.find(h => /retiro/i.test(h) || sheetConfig.schema?.[activeSheet.title]?.[h]?.behavior === 'calc_retiro');
+        
+        if (fechaVcHeader && withdrawalHeader) {
+          const vcVal = data[fechaVcHeader] as string;
+          const retVal = data[withdrawalHeader] as string;
+          
+          if (vcVal && retVal) {
+            const vcDate = new Date(vcVal as string);
+            const retDate = new Date(retVal as string);
+            
+            if (!isNaN(vcDate.getTime()) && !isNaN(retDate.getTime()) && retDate > vcDate) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'La fecha de retiro no puede ser posterior al vencimiento.',
+                path: [withdrawalHeader]
+              });
+            }
           }
         }
       }
     });
 
-    // Cross-field validation: Expiration vs Withdrawal Date
-    if (selectedEventCategory === 'VENCIMIENTO') {
-      const fechaVcHeader = headers.find(h => /^FECHA_VC$/i.test(h.trim()) || sheetConfig.schema?.[activeSheet.title]?.[h]?.behavior === 'calc_fecha_vc');
-      const withdrawalHeader = headers.find(h => /retiro/i.test(h) || sheetConfig.schema?.[activeSheet.title]?.[h]?.behavior === 'calc_retiro');
+    // Normalize formData so undefined values become empty strings for z.string().trim()
+    const normalizedFormData: Record<string, any> = {};
+    headers.forEach(h => {
+      normalizedFormData[h] = formData[h] !== undefined ? formData[h] : '';
+    });
 
-      if (fechaVcHeader && withdrawalHeader) {
-        const vcVal = formData[fechaVcHeader];
-        const retVal = formData[withdrawalHeader];
-        if (vcVal && retVal) {
-          const vcDate = new Date(vcVal);
-          const retDate = new Date(retVal);
-          if (!isNaN(vcDate.getTime()) && !isNaN(retDate.getTime()) && retDate > vcDate) {
-            errors[withdrawalHeader] = 'La fecha de retiro no puede ser posterior al vencimiento.';
-          }
+    const parseResult = formSchema.safeParse(normalizedFormData);
+    
+    if (!parseResult.success) {
+      parseResult.error.issues.forEach(issue => {
+        const key = issue.path[0] as string;
+        if (!errors[key]) {
+          errors[key] = issue.message;
         }
-      }
+      });
     }
 
     return errors;
   };
-
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     let newForm = { ...formData, [name]: value };
@@ -818,10 +975,24 @@ export const InventoryDashboard: React.FC = () => {
       }
       handleCloseModal();
 
-      if (editingItem) {
-        await updateRow(activeSheet.title, editingItem._rowIndex, rowValues);
-      } else {
-        await appendRow(activeSheet.title, rowValues);
+      const nowIso = new Date().toISOString();
+      try {
+        if (editingItem) {
+          await updateRow(activeSheet.title, editingItem._rowIndex, rowValues);
+        } else {
+          await appendRow(activeSheet.title, rowValues);
+        }
+      } catch (saveErr) {
+        console.warn('Network error during save, adding to offline queue:', saveErr);
+        setOfflineQueue(prev => [...prev, {
+          type: editingItem ? 'update' : 'append',
+          sheetTitle: activeSheet.title,
+          rowIndex: editingItem ? editingItem._rowIndex : undefined,
+          values: rowValues,
+          timestamp: nowIso
+        }]);
+        setIsOffline(true);
+        alert('Sin conexión con Google Sheets. Los cambios se guardaron localmente y se sincronizarán en la cola offline.');
       }
       
       await fetchData();
@@ -848,7 +1019,20 @@ export const InventoryDashboard: React.FC = () => {
       setItems(prev => prev.filter(i => i._rowIndex !== item._rowIndex));
       if (activeView === 'main') setAllMainItems(prev => prev.filter(i => i._rowIndex !== item._rowIndex));
       
-      await deleteRow(activeSheet.sheetId, item._rowIndex);
+      try {
+        await deleteRow(activeSheet.sheetId, item._rowIndex);
+      } catch (delErr) {
+        console.warn('Network error during delete, adding to offline queue:', delErr);
+        setOfflineQueue(prev => [...prev, {
+          type: 'delete',
+          sheetId: activeSheet.sheetId,
+          sheetTitle: activeSheet.title,
+          rowIndex: item._rowIndex,
+          timestamp: new Date().toISOString()
+        }]);
+        setIsOffline(true);
+        alert('Sin conexión. La eliminación se registró en la cola offline.');
+      }
       await fetchData();
     } catch (err: any) {
       // Rollback
@@ -874,43 +1058,90 @@ export const InventoryDashboard: React.FC = () => {
   return (
     <div className="flex h-full overflow-hidden bg-[#F8FAFC]">
       
-      {/* SIDEBAR NAVIGATION */}
-      <Sidebar
-        isSidebarCollapsed={isSidebarCollapsed}
-        setIsSidebarCollapsed={setIsSidebarCollapsed}
-        activeView={activeView}
-        setActiveView={setActiveView}
-        setSelectedProduct={setSelectedProduct}
-        otherSheets={otherSheets}
-        onOpenConfig={() => setIsConfigOpen(true)}
-      />
+      {/* DESKTOP SIDEBAR NAVIGATION */}
+      <div className="hidden lg:flex">
+        <Sidebar
+          isSidebarCollapsed={isSidebarCollapsed}
+          setIsSidebarCollapsed={setIsSidebarCollapsed}
+          activeView={activeView}
+          setActiveView={setActiveView}
+          setSelectedProduct={setSelectedProduct}
+          otherSheets={otherSheets}
+          onOpenConfig={() => setIsConfigOpen(true)}
+        />
+      </div>
+
+      {/* MOBILE SIDEBAR DRAWER */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex">
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
+          <div className="relative w-72 bg-white h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-left duration-200">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+              <span className="font-bold text-slate-800 text-base">Menú de Navegación</span>
+              <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <Sidebar
+                isSidebarCollapsed={false}
+                setIsSidebarCollapsed={() => {}}
+                activeView={activeView}
+                setActiveView={(v) => { setActiveView(v); setSelectedProduct(null); setIsMobileMenuOpen(false); }}
+                setSelectedProduct={setSelectedProduct}
+                otherSheets={otherSheets}
+                onOpenConfig={() => { setIsConfigOpen(true); setIsMobileMenuOpen(false); }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
         
         {/* MACRO SEARCH NAV (Always top, sticky) */}
         <div className="bg-white border-b border-slate-200 z-20 sticky top-0 shrink-0 px-4 sm:px-8 py-3 flex items-center justify-between gap-4">
+          {/* Mobile Menu Trigger */}
+          <button
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="lg:hidden p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-colors shrink-0"
+            title="Abrir menú"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
           {/* Search is the hero */}
           <div className="flex-1 flex justify-center">
             {(activeView !== 'schema' || searchableHeaders.length > 0) ? (
-              <div className="relative w-full max-w-3xl">
-                <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder={activeView === 'analytics' ? "Explorar y filtrar gráficos por lote, descripción, proveedor..." : `Buscar en todo el inventario (${searchableHeaders.length} columnas)...`}
-                  className="w-full pl-11 pr-10 py-3 bg-slate-100/70 hover:bg-slate-100 border-transparent focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-2xl text-base font-medium text-slate-700 placeholder:text-slate-400 outline-none transition-all"
-                />
-                {searchTerm && (
-                  <button
-                    onClick={() => setSearchTerm('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1.5 rounded-full hover:bg-slate-200/60 transition-colors"
-                    title="Limpiar búsqueda"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
+              <div className="relative w-full max-w-3xl flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder={activeView === 'analytics' ? "Explorar y filtrar gráficos por lote, descripción, proveedor..." : `Buscar en todo el inventario (${searchableHeaders.length} columnas)...`}
+                    className="w-full pl-11 pr-10 py-3 bg-slate-100/70 hover:bg-slate-100 border-transparent focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-2xl text-base font-medium text-slate-700 placeholder:text-slate-400 outline-none transition-all"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1.5 rounded-full hover:bg-slate-200/60 transition-colors"
+                      title="Limpiar búsqueda"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => setIsScannerOpen(true)}
+                  className="p-3 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-2xl transition-all shrink-0 flex items-center gap-2 border border-blue-200/60 shadow-sm"
+                  title="Escanear código de barras o QR con la cámara"
+                >
+                  <Scan className="w-5 h-5" />
+                  <span className="text-xs font-bold hidden sm:inline">Escanear</span>
+                </button>
               </div>
             ) : (
               <div className="w-full max-w-3xl py-3" /> /* Spacer */
@@ -929,6 +1160,22 @@ export const InventoryDashboard: React.FC = () => {
                 <span>Exportar CSV</span>
               </button>
             )}
+            {/* Status & Sync Indicator */}
+            <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-sm">
+              <span className={`w-2 h-2 rounded-full ${isOffline ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
+              <span className="text-slate-700">{isOffline ? 'Modo Offline (Caché)' : 'Conectado'}</span>
+              {lastCachedAt && (
+                <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">({new Date(lastCachedAt).toLocaleTimeString()})</span>
+              )}
+              {offlineQueue.length > 0 && (
+                <button 
+                  onClick={handleSyncOfflineQueue}
+                  className="ml-2 bg-blue-600 text-white px-2 py-0.5 rounded-lg text-[10px] font-bold hover:bg-blue-700 transition-colors"
+                >
+                  Sincronizar ({offlineQueue.length})
+                </button>
+              )}
+            </div>
             <button onClick={() => fetchData()} className="text-sm bg-white border border-slate-200 px-3 py-2.5 rounded-xl font-medium shadow-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700 transition-colors" title="Refrescar datos">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -1373,7 +1620,7 @@ export const InventoryDashboard: React.FC = () => {
             </div>
           ) : (
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
-              <div className="flex-1 overflow-auto relative">
+              <div className="flex-1 overflow-auto relative" ref={tableContainerRef}>
                 <table className="text-left border-collapse" style={{ width: 'max-content', minWidth: '100%' }}>
                   <thead className="bg-slate-50/80 sticky top-0 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider select-none z-10">
                     <tr>
@@ -1510,15 +1757,21 @@ export const InventoryDashboard: React.FC = () => {
                             : 'No hay datos en esta hoja.'}
                         </td>
                       </tr>
-                    ) : (
-                      filteredItems.map((item, idx) => {
+                    ) : (<>
+                      {paddingTop > 0 && (
+                        <tr><td style={{ height: `${paddingTop}px` }} colSpan={visibleHeaders.length + 3} /></tr>
+                      )}
+                      {virtualRows.map((virtualRow) => {
+                        const item = paginatedItems[virtualRow.index];
+                        const idx = virtualRow.index;
+
                         const eventCategory = getEventCategory(item, headers);
                         const eventCategoryDef = EVENT_CATEGORIES[eventCategory];
                         const status = getItemStatus(item, headers);
                         const isMainOrEvents = activeView === 'main' || activeView === 'events';
 
                         return (
-                          <tr key={idx} className={`transition-colors group ${selectedRowIds.includes(item._rowIndex as number) ? 'bg-blue-50/50 hover:bg-blue-50' : 'hover:bg-slate-50/80'}`}>
+                          <tr key={idx} data-index={virtualRow.index} ref={rowVirtualizer.measureElement} className={`transition-colors group ${selectedRowIds.includes(item._rowIndex as number) ? 'bg-blue-50/50 hover:bg-blue-50' : 'hover:bg-slate-50/80'}`}>
                             {/* Selection Cell */}
                             <td className="p-4 text-center">
                               <div className="flex items-center justify-center">
@@ -1612,6 +1865,7 @@ export const InventoryDashboard: React.FC = () => {
                               );
                             })}
 
+
                             {/* Row Actions */}
                             <td className="p-4 text-right sticky right-0 bg-white group-hover:bg-slate-50 transition-colors shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)] w-24 min-w-[96px]">
                               <div className="flex items-center justify-end gap-1">
@@ -1633,7 +1887,11 @@ export const InventoryDashboard: React.FC = () => {
                             </td>
                           </tr>
                         );
-                      })
+                      })}
+                      {paddingBottom > 0 && (
+                        <tr><td style={{ height: `${paddingBottom}px` }} colSpan={visibleHeaders.length + 3} /></tr>
+                      )}
+                    </>
                     )}
                   </tbody>
                 </table>
@@ -1764,6 +2022,13 @@ export const InventoryDashboard: React.FC = () => {
         metadata={metadata}
         fetchData={fetchData}
         activeView={activeView}
+      />
+
+      {/* BARCODE SCANNER MODAL */}
+      <BarcodeScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScanSuccess={(code) => setSearchTerm(code)}
       />
 
       {/* 6. COLUMN MANAGER MODAL */}

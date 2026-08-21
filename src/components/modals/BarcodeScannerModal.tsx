@@ -19,24 +19,34 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const elementId = 'reader-container';
 
   useEffect(() => {
+    let isMounted = true;
+
     if (!isOpen) {
       if (scannerRef.current) {
-        scannerRef.current.stop().catch(() => {}).finally(() => {
+        try {
+          if (scannerRef.current.isScanning) {
+            scannerRef.current.stop().catch(() => {}).finally(() => {
+              scannerRef.current = null;
+              if (isMounted) setIsScanning(false);
+            });
+          } else {
+            scannerRef.current = null;
+            if (isMounted) setIsScanning(false);
+          }
+        } catch {
           scannerRef.current = null;
-          setIsScanning(false);
-        });
+          if (isMounted) setIsScanning(false);
+        }
       }
       return;
     }
-
-    let isMounted = true;
 
     const startScanner = async () => {
       try {
         setErrorMsg(null);
         // Wait for DOM element
-        await new Promise(resolve => setTimeout(resolve, 300));
-        if (!isMounted) return;
+        await new Promise(resolve => setTimeout(resolve, 400));
+        if (!isMounted || !isOpen) return;
 
         const html5QrCode = new Html5Qrcode(elementId);
         scannerRef.current = html5QrCode;
@@ -50,15 +60,27 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           (decodedText) => {
             if (isMounted) {
               onScanSuccess(decodedText);
-              html5QrCode.stop().catch(() => {}).finally(() => {
+              try {
+                if (html5QrCode.isScanning) {
+                  html5QrCode.stop().catch(() => {}).finally(() => {
+                    scannerRef.current = null;
+                    if (isMounted) setIsScanning(false);
+                    onClose();
+                  });
+                } else {
+                  scannerRef.current = null;
+                  if (isMounted) setIsScanning(false);
+                  onClose();
+                }
+              } catch {
                 scannerRef.current = null;
-                setIsScanning(false);
+                if (isMounted) setIsScanning(false);
                 onClose();
-              });
+              }
             }
           },
           (errorMessage) => {
-            // Scanning in progress or frame not recognized yet, ignore noisy errors
+            // Scanning in progress or frame not recognized yet
           }
         );
         if (isMounted) setIsScanning(true);
@@ -77,10 +99,17 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     return () => {
       isMounted = false;
       if (scannerRef.current) {
-        scannerRef.current.stop().catch(() => {}).finally(() => {
+        try {
+          if (scannerRef.current.isScanning) {
+            scannerRef.current.stop().catch(() => {}).finally(() => {
+              scannerRef.current = null;
+            });
+          } else {
+            scannerRef.current = null;
+          }
+        } catch {
           scannerRef.current = null;
-          setIsScanning(false);
-        });
+        }
       }
     };
   }, [isOpen]);

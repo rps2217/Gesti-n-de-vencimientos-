@@ -108,6 +108,7 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
               <option value="MERMAS">MERMAS</option>
               <option value="CALIDAD">CALIDAD</option>
               <option value="VENCIMIENTO_CERCANO">VENCIMIENTO CERCANO</option>
+              <option value="CANJES">CANJES</option>
             </select>
           </div>
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  Truck, FileSpreadsheet, PackageX, RotateCcw, Clock, AlertCircle, AlertTriangle, Clock3, Flame, CheckCircle2 
+  Truck, FileSpreadsheet, PackageX, RotateCcw, Clock, AlertCircle, AlertTriangle, Clock3, Flame, CheckCircle2, Tag 
 } from 'lucide-react';
 import { InventoryItem, EventCategory, EventTypeDefinition } from '../types';
 import { findColumnBySemantic } from './columnAliases';
@@ -88,6 +88,18 @@ export const EVENT_CATEGORIES: Record<EventCategory, {
     cardBorder: 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/50',
     cardBg: 'bg-indigo-600 text-white',
     iconBg: 'bg-indigo-100 text-indigo-700'
+  },
+  CANJES: {
+    id: 'CANJES',
+    name: 'Canjes',
+    shortLabel: 'Canjes',
+    description: 'Gestión y control de canjes comerciales de productos',
+    badgeBg: 'bg-pink-50',
+    badgeText: 'text-pink-700',
+    badgeBorder: 'border-pink-200',
+    cardBorder: 'border-pink-500 ring-2 ring-pink-500/20 bg-pink-50/50',
+    cardBg: 'bg-pink-600 text-white',
+    iconBg: 'bg-pink-100 text-pink-700'
   }
 };
 
@@ -103,6 +115,8 @@ export function renderEventIcon(category: EventCategory, className = 'w-4 h-4') 
       return <RotateCcw className={className} />;
     case 'VENCIMIENTO_CERCANO':
       return <Clock3 className={className} />;
+    case 'CANJES':
+      return <Tag className={className} />;
     case 'VENCIMIENTO':
     default:
       return <Clock className={className} />;
@@ -252,7 +266,8 @@ export function getEventCategory(item: InventoryItem, headers: string[]): EventC
     if (raw.includes('TRANSP') || raw.includes('FLETE') || raw.includes('DAÑO') || raw.includes('DETERIORO')) return 'TRANSPORTE';
     if (raw.includes('DIFER') || raw.includes('PEDIDO') || raw.includes('FALT') || raw.includes('SOBR') || raw.includes('TROC')) return 'DIFERENCIA';
     if (raw.includes('AVER') || raw.includes('MERMA') || raw.includes('ROTURA')) return 'AVERIA';
-    if (raw.includes('DEVOL') || raw.includes('RECLAM') || raw.includes('CANJE_PROV')) return 'DEVOLUCION';
+    if (raw.includes('DEVOL') || raw.includes('RECLAM')) return 'DEVOLUCION';
+    if (raw.includes('CANJE')) return 'CANJES';
     if (raw.includes('CERCAN') || raw.includes('PROXIM')) return 'VENCIMIENTO_CERCANO';
     if (raw.includes('VENC') || raw.includes('CADUC')) return 'VENCIMIENTO';
   }

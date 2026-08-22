@@ -31,7 +31,7 @@ export interface SheetConfig {
 export type ColumnType = 'text' | 'longtext' | 'number' | 'date' | 'datetime' | 'enum' | 'enumlist' | 'ref' | 'calculated';
 export type ColumnBehavior = 'none' | 'auto_id' | 'calc_fecha_vc' | 'calc_retiro' | 'sku_lookup';
 
-export type EventCategory = 'VENCIMIENTO' | 'VENCIMIENTO_CERCANO' | 'TRANSPORTE' | 'DIFERENCIA' | 'AVERIA' | 'DEVOLUCION';
+export type EventCategory = 'VENCIMIENTO' | 'VENCIMIENTO_CERCANO' | 'TRANSPORTE' | 'DIFERENCIA' | 'AVERIA' | 'DEVOLUCION' | 'CANJES';
 
 export interface EventTypeDefinition {
   id: EventCategory;

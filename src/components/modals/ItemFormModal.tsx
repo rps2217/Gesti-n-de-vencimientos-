@@ -45,22 +45,22 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   const isMainOrEvents = activeView === 'main' || activeView === 'events';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-      <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-150">
         
         {/* Header */}
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
           <div>
-            <h3 className="font-bold text-slate-900 text-lg">
+            <h3 className="font-bold text-slate-900 dark:text-slate-100 text-lg">
               {editingItem ? 'Editar Registro' : 'Nuevo Registro'}
             </h3>
-            <p className="text-xs text-slate-500">
-              Pestaña destino: <span className="font-bold text-slate-700">{activeSheet.title}</span>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Pestaña destino: <span className="font-bold text-slate-700 dark:text-slate-300">{activeSheet.title}</span>
             </p>
           </div>
           <button 
             onClick={onClose} 
-            className="text-slate-400 hover:bg-slate-100 hover:text-slate-700 p-2 rounded-xl transition-colors"
+            className="text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 p-2 rounded-xl transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -72,8 +72,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
             
             {/* Event Category Selector (Main or Events views) */}
             {isMainOrEvents && (
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2">
+              <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-4">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block mb-2">
                   Tipo de Registro / Evento:
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -87,15 +87,15 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                         onClick={() => onSelectEventCategory(catKey)}
                         className={`p-2.5 rounded-xl border text-left flex items-center gap-2.5 transition-all ${
                           isSelected 
-                            ? `${cat.cardBorder} bg-white shadow-sm` 
-                            : 'border-slate-200 bg-white/70 hover:bg-white text-slate-700'
+                            ? `${cat.cardBorder} bg-white dark:bg-slate-800 shadow-sm` 
+                            : 'border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-800/40 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
                         }`}
                       >
                         <div className={`p-1.5 rounded-lg ${cat.iconBg} shrink-0`}>
                           {renderEventIcon(catKey, 'w-3.5 h-3.5')}
                         </div>
                         <div className="overflow-hidden">
-                          <span className={`text-xs font-bold block truncate ${isSelected ? 'text-slate-900' : 'text-slate-700'}`}>
+                          <span className={`text-xs font-bold block truncate ${isSelected ? 'text-slate-900 dark:text-slate-100' : 'text-slate-700 dark:text-slate-300'}`}>
                             {cat.shortLabel}
                           </span>
                         </div>
@@ -103,7 +103,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                     );
                   })}
                 </div>
-                <p className="text-[11px] text-slate-500 mt-2.5">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2.5">
                   {EVENT_CATEGORIES[selectedEventCategory].description}
                 </p>
               </div>
@@ -134,21 +134,21 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                         <span>{header}</span>
                         {colSchema?.isKey && (
-                          <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1 py-0.2 rounded font-mono font-bold">
+                          <span className="text-[9px] bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-1 py-0.2 rounded font-mono font-bold">
                             KEY
                           </span>
                         )}
                         {isAutoCalc && (
-                          <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.2 rounded font-mono font-bold">
+                          <span className="text-[10px] bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 px-1.5 py-0.2 rounded font-mono font-bold">
                             auto
                           </span>
                         )}
                       </label>
                       {isSkuWithCatalog && (
-                        <span className="text-[10px] text-blue-600 font-semibold flex items-center gap-0.5">
+                        <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-0.5">
                           <Link2 className="w-3 h-3" /> Auto-completa producto
                         </span>
                       )}
@@ -160,10 +160,10 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                         name={header}
                         value={formData[header] || ''}
                         onChange={onChange}
-                        className={`w-full bg-slate-50 border rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-800 outline-none transition-all ${
+                        className={`w-full bg-slate-50 dark:bg-slate-800 border rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-800 dark:text-slate-100 outline-none transition-all ${
                           hasError 
                             ? 'border-rose-400 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10' 
-                            : 'border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
+                            : 'border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
                         }`}
                       >
                         <option value="">-- Seleccionar --</option>
@@ -178,10 +178,10 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                         value={formData[header] || ''}
                         onChange={onChange}
                         placeholder={`Ingresa ${header.toLowerCase()}...`}
-                        className={`w-full bg-slate-50 border rounded-xl px-3.5 py-2 text-sm font-medium text-slate-800 outline-none transition-all resize-none ${
+                        className={`w-full bg-slate-50 dark:bg-slate-800 border rounded-xl px-3.5 py-2 text-sm font-medium text-slate-800 dark:text-slate-100 outline-none transition-all resize-none ${
                           hasError 
                             ? 'border-rose-400 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10' 
-                            : 'border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
+                            : 'border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
                         }`}
                       />
                     ) : (
@@ -195,19 +195,19 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                         onChange={onChange}
                         readOnly={isAutoCalc}
                         placeholder={isAutoCalc ? 'Calculado automáticamente' : `Ingresa ${header.toLowerCase()}...`}
-                        className={`w-full border rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-800 outline-none transition-all ${
+                        className={`w-full border rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-800 dark:text-slate-100 outline-none transition-all ${
                           isAutoCalc
-                            ? 'bg-slate-100/70 border-slate-200 text-slate-500 cursor-not-allowed'
+                            ? 'bg-slate-100/70 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
                             : hasError
-                              ? 'bg-rose-50/50 border-rose-400 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10'
-                              : 'bg-slate-50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
+                              ? 'bg-rose-50/50 dark:bg-rose-950/40 border-rose-400 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10'
+                              : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
                         }`}
                       />
                     )}
 
                     {/* Error message */}
                     {hasError && (
-                      <p className="text-[11px] text-rose-600 font-semibold flex items-center gap-1 mt-0.5">
+                      <p className="text-[11px] text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-1 mt-0.5">
                         <AlertCircle className="w-3 h-3 shrink-0" />
                         <span>{errorMsg}</span>
                       </p>
@@ -219,19 +219,19 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
           </div>
 
           {/* Footer Actions */}
-          <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-2 shrink-0">
+          <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-end gap-2 shrink-0">
             <button
               type="button"
               onClick={onClose}
               disabled={isSaving}
-              className="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition-colors"
+              className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={isSaving}
-              className="px-6 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-xl hover:bg-blue-700 shadow-sm shadow-blue-200 flex items-center gap-2 disabled:opacity-50 transition-all"
+              className="px-6 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-xl hover:bg-blue-700 shadow-sm shadow-blue-200 dark:shadow-none flex items-center gap-2 disabled:opacity-50 transition-all"
             >
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               <span>{isSaving ? 'Guardando...' : editingItem ? 'Actualizar Fila' : 'Guardar en Sheet'}</span>

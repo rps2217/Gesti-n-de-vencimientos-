@@ -51,23 +51,23 @@ export const PmReportModal: React.FC<PmReportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-      <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-150">
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-orange-50/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+      <div className="w-full max-w-3xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-150">
+        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-orange-50/50 dark:bg-orange-950/20">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-orange-500 text-white rounded-xl shadow-md shadow-orange-200">
+            <div className="p-2.5 bg-orange-500 text-white rounded-xl shadow-md shadow-orange-200 dark:shadow-none">
               <Flame className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-900 text-lg">Reporte de Drenaje para Product Manager (PM)</h3>
-              <p className="text-xs text-orange-800">
+              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-lg">Reporte de Drenaje para Product Manager (PM)</h3>
+              <p className="text-xs text-orange-800 dark:text-orange-400">
                 Productos con vencimiento próximo para solicitar precio especial o descuento de liquidación.
               </p>
             </div>
           </div>
           <button 
             onClick={onClose} 
-            className="text-slate-400 hover:bg-slate-200 hover:text-slate-700 p-2 rounded-xl transition-colors"
+            className="text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 p-2 rounded-xl transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -75,15 +75,15 @@ export const PmReportModal: React.FC<PmReportModalProps> = ({
 
         <div className="p-6 overflow-y-auto flex-1">
           {drainageReportItems.length === 0 ? (
-            <div className="text-center py-12 text-slate-500">
+            <div className="text-center py-12 text-slate-500 dark:text-slate-400">
               <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
-              <h4 className="font-bold text-slate-700">¡Todo en orden!</h4>
-              <p className="text-xs text-slate-400 mt-1">No hay productos en ventana crítica de retiro actualmente.</p>
+              <h4 className="font-bold text-slate-700 dark:text-slate-300">¡Todo en orden!</h4>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">No hay productos en ventana crítica de retiro actualmente.</p>
             </div>
           ) : (
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
               <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
                   <tr>
                     <th className="p-3">SKU</th>
                     <th className="p-3">Producto / Descripción</th>
@@ -93,7 +93,7 @@ export const PmReportModal: React.FC<PmReportModalProps> = ({
                     <th className="p-3">Estado Comercial</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {drainageReportItems.map((it, idx) => {
                     const keys = Object.keys(it);
                     const st = getItemStatus(it, keys);
@@ -108,12 +108,12 @@ export const PmReportModal: React.FC<PmReportModalProps> = ({
                     const fRet = retCol && it[retCol] ? formatDisplayDate(it[retCol]) : '-';
 
                     return (
-                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-3 font-mono font-bold text-blue-600">{sku}</td>
-                        <td className="p-3 font-medium text-slate-800">{desc}</td>
-                        <td className="p-3 font-medium text-slate-600">{fVc}</td>
-                        <td className="p-3 font-medium text-slate-600">{fRet}</td>
-                        <td className="p-3 font-mono font-bold text-slate-800">{st.daysToRetire ?? '-'} días</td>
+                      <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td className="p-3 font-mono font-bold text-blue-600 dark:text-blue-400">{sku}</td>
+                        <td className="p-3 font-medium text-slate-800 dark:text-slate-200">{desc}</td>
+                        <td className="p-3 font-medium text-slate-600 dark:text-slate-400">{fVc}</td>
+                        <td className="p-3 font-medium text-slate-600 dark:text-slate-400">{fRet}</td>
+                        <td className="p-3 font-mono font-bold text-slate-800 dark:text-slate-200">{st.daysToRetire ?? '-'} días</td>
                         <td className="p-3">
                           <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border inline-flex items-center gap-1 ${st.color}`}>
                             {st.icon}
@@ -129,21 +129,21 @@ export const PmReportModal: React.FC<PmReportModalProps> = ({
           )}
         </div>
 
-        <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-3">
-          <span className="text-xs text-slate-500 font-medium">
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between gap-3">
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
             {drainageReportItems.length} registros listos para enviar al PM
           </span>
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100"
+              className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700"
             >
               Cerrar
             </button>
             <button
               onClick={copyPmReportToClipboard}
               disabled={drainageReportItems.length === 0}
-              className="px-4 py-2 bg-orange-600 text-white font-bold text-xs rounded-xl hover:bg-orange-700 flex items-center gap-1.5 shadow-sm shadow-orange-200 disabled:opacity-50"
+              className="px-4 py-2 bg-orange-600 text-white font-bold text-xs rounded-xl hover:bg-orange-700 flex items-center gap-1.5 shadow-sm shadow-orange-200 dark:shadow-none disabled:opacity-50"
             >
               {copiedReport ? <CheckCheck className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
               <span>{copiedReport ? '¡Copiado al Portapapeles!' : 'Copiar Resumen para PM'}</span>

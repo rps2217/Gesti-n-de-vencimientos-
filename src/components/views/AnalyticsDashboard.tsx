@@ -102,49 +102,49 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ items, h
   }, [items, headers]);
 
   return (
-    <div className="p-6 bg-slate-50 flex-1 overflow-y-auto w-full h-full">
+    <div className="p-6 bg-slate-50 dark:bg-slate-950 flex-1 overflow-y-auto w-full h-full transition-colors">
       <div className="max-w-7xl mx-auto space-y-6">
         
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center shrink-0">
-              <Activity className="w-6 h-6 text-blue-600" />
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-950/60 rounded-xl flex items-center justify-center shrink-0">
+              <Activity className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-500 uppercase">Total Registros</p>
-              <h3 className="text-2xl font-black text-slate-800">{items.length}</h3>
+              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase">Total Registros</p>
+              <h3 className="text-2xl font-black text-slate-800 dark:text-slate-100">{items.length}</h3>
             </div>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center shrink-0">
-              <AlertTriangle className="w-6 h-6 text-red-600" />
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
+            <div className="w-12 h-12 bg-red-100 dark:bg-red-950/60 rounded-xl flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-500 uppercase">Alertas Críticas</p>
-              <h3 className="text-2xl font-black text-slate-800">
+              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase">Alertas Críticas</p>
+              <h3 className="text-2xl font-black text-slate-800 dark:text-slate-100">
                 {statusData.find(d => d.name === 'Retirar/Vencido')?.value || 0}
               </h3>
             </div>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center shrink-0">
-              <TrendingUp className="w-6 h-6 text-orange-600" />
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
+            <div className="w-12 h-12 bg-orange-100 dark:bg-orange-950/60 rounded-xl flex items-center justify-center shrink-0">
+              <TrendingUp className="w-6 h-6 text-orange-600 dark:text-orange-400" />
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-500 uppercase">Casos Drenaje PM</p>
-              <h3 className="text-2xl font-black text-slate-800">
+              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase">Casos Drenaje PM</p>
+              <h3 className="text-2xl font-black text-slate-800 dark:text-slate-100">
                 {statusData.find(d => d.name === 'Drenaje PM')?.value || 0}
               </h3>
             </div>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center shrink-0">
-              <PackageX className="w-6 h-6 text-purple-600" />
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
+            <div className="w-12 h-12 bg-purple-100 dark:bg-purple-950/60 rounded-xl flex items-center justify-center shrink-0">
+              <PackageX className="w-6 h-6 text-purple-600 dark:text-purple-400" />
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-500 uppercase">Incidencias (FRC)</p>
-              <h3 className="text-2xl font-black text-slate-800">
+              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase">Incidencias (FRC)</p>
+              <h3 className="text-2xl font-black text-slate-800 dark:text-slate-100">
                 {incidentData.reduce((acc, curr) => acc + curr.value, 0)}
               </h3>
             </div>
@@ -154,18 +154,18 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ items, h
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Expiration Timeline */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <h3 className="text-lg font-bold text-slate-800 mb-6">Proyección de Vencimientos</h3>
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">Proyección de Vencimientos</h3>
             {expirationData.length > 0 ? (
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={expirationData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
+                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} />
                     <RechartsTooltip 
-                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                      cursor={{ fill: '#f8fafc' }}
+                      contentStyle={{ borderRadius: '12px', border: '1px solid #334155', backgroundColor: '#1e293b', color: '#f8fafc', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.3)' }}
+                      cursor={{ fill: 'rgba(51, 65, 85, 0.1)' }}
                     />
                     <Bar dataKey="vencimientos" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={40} />
                   </BarChart>
@@ -180,8 +180,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ items, h
 
           <div className="grid grid-cols-1 gap-6">
             {/* Status Breakdown */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <h3 className="text-lg font-bold text-slate-800 mb-6">Estado del Radar (Vencimientos)</h3>
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">Estado del Radar (Vencimientos)</h3>
               <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -198,8 +198,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ items, h
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <RechartsTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                    <RechartsTooltip contentStyle={{ borderRadius: '12px', border: '1px solid #334155', backgroundColor: '#1e293b', color: '#f8fafc', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.3)' }} />
+                    <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ color: '#94a3b8' }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -207,8 +207,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ items, h
             
             {/* Incident Types */}
             {incidentData.length > 0 && (
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                <h3 className="text-lg font-bold text-slate-800 mb-6">Tipos de Incidencia (FRC)</h3>
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">Tipos de Incidencia (FRC)</h3>
                 <div className="h-56">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -225,8 +225,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ items, h
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <RechartsTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                      <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                      <RechartsTooltip contentStyle={{ borderRadius: '12px', border: '1px solid #334155', backgroundColor: '#1e293b', color: '#f8fafc', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.3)' }} />
+                      <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ color: '#94a3b8' }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>

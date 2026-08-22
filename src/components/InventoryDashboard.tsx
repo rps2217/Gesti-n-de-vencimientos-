@@ -34,6 +34,7 @@ import {
   getEventCategory, 
   getItemStatus 
 } from '../utils/dateCalculations';
+import { findColumnBySemantic } from '../utils/columnAliases';
 import { useColumnResize } from '../hooks/useColumnResize';
 import { SAMPLE_HEADERS, SAMPLE_ITEMS, SAMPLE_PRODUCTS, SAMPLE_POLICIES } from '../data/sampleInventory';
 
@@ -1062,21 +1063,47 @@ export const InventoryDashboard: React.FC = () => {
       return undefined;
     };
 
-    const colFrcN = findHeader('frc_n');
+    const colFrcN = findHeader('frc_n') || findHeader('folio') || findHeader('id_vc');
     const colTraspaso = findHeader('n_traspaso') || findHeader('traspaso');
-    const colTipoEvento = findHeader('tipo_de_evento') || findHeader('tipo_evento') || findHeader('tipo');
-    const colFrcBod = findHeader('frc_bod') || findHeader('bodega');
+    let colTipoEvento = findColumnBySemantic(headers, 'tipo_evento') || findHeader('tipo_de_evento') || findHeader('tipo_evento') || findHeader('tipo') || findHeader('incidencia');
+    const colFrcBod = findHeader('frc_bod') || findHeader('bodega') || findHeader('frc_bodega');
+
+    let currentHeaders = [...headers];
+    if (values.tipo_evento && !colTipoEvento) {
+      colTipoEvento = 'TIPO_EVENTO';
+      currentHeaders.push(colTipoEvento);
+      try {
+        await updateRow(activeSheet.title, 1, currentHeaders);
+      } catch (err) {
+        console.warn('Could not auto-add TIPO_EVENTO header to sheet', err);
+      }
+    }
 
     const originalItems = [...items];
 
     try {
       setIsSaving(true);
+
+      let resolvedTipoEvento = values.tipo_evento;
+      if (values.tipo_evento) {
+        const upper = values.tipo_evento.toUpperCase().trim();
+        if (EVENT_CATEGORIES[upper as EventCategory]) {
+          resolvedTipoEvento = EVENT_CATEGORIES[upper as EventCategory].name;
+        } else if (upper === 'DIFERENCIAS') {
+          resolvedTipoEvento = EVENT_CATEGORIES['DIFERENCIA'].name;
+        } else if (upper === 'MERMAS') {
+          resolvedTipoEvento = EVENT_CATEGORIES['AVERIA'].name;
+        } else if (upper === 'CALIDAD') {
+          resolvedTipoEvento = EVENT_CATEGORIES['DEVOLUCION'].name;
+        }
+      }
+
       const updatedItems = items.map(item => {
         if (!selectedRowIds.includes(item._rowIndex as number)) return item;
         const updated = { ...item };
         if (values.frc_n && colFrcN) updated[colFrcN] = values.frc_n;
         if (values.n_traspaso && colTraspaso) updated[colTraspaso] = values.n_traspaso;
-        if (values.tipo_evento && colTipoEvento) updated[colTipoEvento] = values.tipo_evento;
+        if (values.tipo_evento && colTipoEvento) updated[colTipoEvento] = resolvedTipoEvento;
         if (values.frc_bod && colFrcBod) updated[colFrcBod] = values.frc_bod;
         return updated;
       });
@@ -1086,7 +1113,7 @@ export const InventoryDashboard: React.FC = () => {
       for (const rowIndex of selectedRowIds) {
         const itemToUpdate = updatedItems.find(i => i._rowIndex === rowIndex);
         if (!itemToUpdate) continue;
-        const rowValues = headers.map(h => itemToUpdate[h] || '');
+        const rowValues = currentHeaders.map(h => itemToUpdate[h] || '');
         try {
           await updateRow(activeSheet.title, rowIndex, rowValues);
         } catch (err) {

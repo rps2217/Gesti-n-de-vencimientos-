@@ -102,13 +102,13 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-800 dark:text-slate-100 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500"
             >
               <option value="">-- No modificar / Mantener actual --</option>
-              <option value="VENCIMIENTO">VENCIMIENTO</option>
-              <option value="TRANSPORTE">TRANSPORTE</option>
-              <option value="DIFERENCIAS">DIFERENCIAS</option>
-              <option value="MERMAS">MERMAS</option>
-              <option value="CALIDAD">CALIDAD</option>
-              <option value="VENCIMIENTO_CERCANO">VENCIMIENTO CERCANO</option>
-              <option value="CANJES">CANJES</option>
+              <option value="VENCIMIENTO">Vencimiento</option>
+              <option value="VENCIMIENTO_CERCANO">Vencimiento Cercano</option>
+              <option value="TRANSPORTE">Transporte / Logística</option>
+              <option value="DIFERENCIA">Diferencia de Inventario</option>
+              <option value="AVERIA">Avería / Merma Almacén</option>
+              <option value="DEVOLUCION">Reclamo / Devolución</option>
+              <option value="CANJES">Canjes</option>
             </select>
           </div>
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useDeferredValue } from 'react';
 import { 
   getSpreadsheetMetadata, 
   getSheetData, 
@@ -126,6 +126,7 @@ export const InventoryDashboard: React.FC = () => {
 
   // Search and Filter States
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [selectedRowIds, setSelectedRowIds] = useState<number[]>([]);
   const [eventFilter, setEventFilter] = useState<EventCategory | 'all'>('all');
   const [pmRadarFilter, setPmRadarFilter] = useState<'all' | 'drainage' | 'upcoming' | 'retire_now' | 'en_regla'>('all');
@@ -371,8 +372,8 @@ export const InventoryDashboard: React.FC = () => {
       });
     }
 
-    if (!searchTerm.trim() && !activeQuickChip) return list;
-    const term = (searchTerm.trim() || activeQuickChip || '').toLowerCase();
+    if (!deferredSearchTerm.trim() && !activeQuickChip) return list;
+    const term = (deferredSearchTerm.trim() || activeQuickChip || '').toLowerCase();
     return list.filter(item => {
       return searchableHeaders.some(h => {
         const val = item[h];
@@ -380,7 +381,7 @@ export const InventoryDashboard: React.FC = () => {
         return String(val).toLowerCase().includes(term);
       });
     });
-  }, [items, searchTerm, activeQuickChip, searchableHeaders, activeView, eventFilter, pmRadarFilter, headers]);
+  }, [items, deferredSearchTerm, activeQuickChip, searchableHeaders, activeView, eventFilter, pmRadarFilter, headers]);
 
   const paginatedItems = useMemo(() => {
     if (pageSize === 'all') return filteredItems;

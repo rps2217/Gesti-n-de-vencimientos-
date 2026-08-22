@@ -30,6 +30,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ items, h
     let diferencia = 0;
     let averia = 0;
     let devolucion = 0;
+    let vencimientoCercano = 0;
 
     items.forEach(item => {
       const cat = getEventCategory(item, headers);
@@ -37,6 +38,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ items, h
       if (cat === 'DIFERENCIA') diferencia++;
       if (cat === 'AVERIA') averia++;
       if (cat === 'DEVOLUCION') devolucion++;
+      if (cat === 'VENCIMIENTO_CERCANO') vencimientoCercano++;
     });
 
     return [
@@ -44,6 +46,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ items, h
       { name: 'Diferencia', value: diferencia, color: '#8b5cf6' }, // purple
       { name: 'Avería', value: averia, color: '#f43f5e' }, // rose
       { name: 'Devolución', value: devolucion, color: '#14b8a6' }, // teal
+      { name: 'Venc. Cercano', value: vencimientoCercano, color: '#6366f1' }, // indigo
     ].filter(d => d.value > 0);
   }, [items, headers]);
 

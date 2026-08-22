@@ -76,6 +76,18 @@ export const EVENT_CATEGORIES: Record<EventCategory, {
     cardBorder: 'border-teal-500 ring-2 ring-teal-500/20 bg-teal-50/50',
     cardBg: 'bg-teal-600 text-white',
     iconBg: 'bg-teal-100 text-teal-800'
+  },
+  VENCIMIENTO_CERCANO: {
+    id: 'VENCIMIENTO_CERCANO',
+    name: 'Vencimiento Cercano',
+    shortLabel: 'Vencimiento Cercano',
+    description: 'Control prioritario de lotes próximos a vencer para rotación inmediata',
+    badgeBg: 'bg-indigo-50',
+    badgeText: 'text-indigo-700',
+    badgeBorder: 'border-indigo-200',
+    cardBorder: 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/50',
+    cardBg: 'bg-indigo-600 text-white',
+    iconBg: 'bg-indigo-100 text-indigo-700'
   }
 };
 
@@ -89,6 +101,8 @@ export function renderEventIcon(category: EventCategory, className = 'w-4 h-4') 
       return <PackageX className={className} />;
     case 'DEVOLUCION':
       return <RotateCcw className={className} />;
+    case 'VENCIMIENTO_CERCANO':
+      return <Clock3 className={className} />;
     case 'VENCIMIENTO':
     default:
       return <Clock className={className} />;
@@ -239,6 +253,7 @@ export function getEventCategory(item: InventoryItem, headers: string[]): EventC
     if (raw.includes('DIFER') || raw.includes('PEDIDO') || raw.includes('FALT') || raw.includes('SOBR') || raw.includes('TROC')) return 'DIFERENCIA';
     if (raw.includes('AVER') || raw.includes('MERMA') || raw.includes('ROTURA')) return 'AVERIA';
     if (raw.includes('DEVOL') || raw.includes('RECLAM') || raw.includes('CANJE_PROV')) return 'DEVOLUCION';
+    if (raw.includes('CERCAN') || raw.includes('PROXIM')) return 'VENCIMIENTO_CERCANO';
     if (raw.includes('VENC') || raw.includes('CADUC')) return 'VENCIMIENTO';
   }
   

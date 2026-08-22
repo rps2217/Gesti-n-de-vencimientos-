@@ -286,6 +286,7 @@ export const InventoryDashboard: React.FC = () => {
         diferencia: 0,
         averia: 0,
         devolucion: 0,
+        vencimientoCercano: 0,
         drainagePm: 0,
         upcoming: 0,
         retireNow: 0
@@ -297,6 +298,7 @@ export const InventoryDashboard: React.FC = () => {
     let diferencia = 0;
     let averia = 0;
     let devolucion = 0;
+    let vencimientoCercano = 0;
     let drainagePm = 0;
     let upcoming = 0;
     let retireNow = 0;
@@ -311,6 +313,8 @@ export const InventoryDashboard: React.FC = () => {
         averia++;
       } else if (cat === 'DEVOLUCION') {
         devolucion++;
+      } else if (cat === 'VENCIMIENTO_CERCANO') {
+        vencimientoCercano++;
       } else {
         vencimientos++;
         const st = getItemStatus(item, headers);
@@ -327,6 +331,7 @@ export const InventoryDashboard: React.FC = () => {
       diferencia,
       averia,
       devolucion,
+      vencimientoCercano,
       drainagePm,
       upcoming,
       retireNow
@@ -1319,7 +1324,7 @@ export const InventoryDashboard: React.FC = () => {
         {/* INCIDENCIAS & FRC STRIP (When activeView === 'events') */}
         {activeView === 'events' && activeSheet && (
           <div className="bg-white border-b border-slate-200 px-8 py-4 shrink-0 flex flex-col gap-4 shadow-sm">
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               <button
                 onClick={() => setEventFilter(eventFilter === 'TRANSPORTE' ? 'all' : 'TRANSPORTE')}
                 className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
@@ -1399,6 +1404,26 @@ export const InventoryDashboard: React.FC = () => {
                   <p className="text-[10px] text-slate-500 mt-0.5">Gestión con proveedor</p>
                 </div>
               </button>
+
+              <button
+                onClick={() => setEventFilter(eventFilter === 'VENCIMIENTO_CERCANO' ? 'all' : 'VENCIMIENTO_CERCANO')}
+                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
+                  eventFilter === 'VENCIMIENTO_CERCANO'
+                    ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/70 shadow-sm'
+                    : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                    <Clock3 className="w-4 h-4" />
+                  </div>
+                  <span className="text-xl font-black text-slate-800 font-mono">{eventMetrics.vencimientoCercano}</span>
+                </div>
+                <div className="mt-2.5">
+                  <h4 className="text-xs font-bold text-slate-800">Vencimiento Cercano</h4>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Control de caducidad inminente</p>
+                </div>
+              </button>
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-100 text-xs">
@@ -1456,6 +1481,17 @@ export const InventoryDashboard: React.FC = () => {
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Devolución ({eventMetrics.devolucion})</span>
+              </button>
+              <button 
+                onClick={() => setEventFilter('VENCIMIENTO_CERCANO')}
+                className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
+                  eventFilter === 'VENCIMIENTO_CERCANO'
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200' 
+                    : 'bg-indigo-50 text-indigo-800 hover:bg-indigo-100'
+                }`}
+              >
+                <Clock3 className="w-3.5 h-3.5" />
+                <span>Venc. Cercano ({eventMetrics.vencimientoCercano})</span>
               </button>
             </div>
           </div>

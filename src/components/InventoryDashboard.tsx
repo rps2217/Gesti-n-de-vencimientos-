@@ -47,6 +47,7 @@ import { PmReportModal } from './modals/PmReportModal';
 import { ScriptCodeModal } from './modals/ScriptCodeModal';
 import { GlobalConfigModal } from './modals/GlobalConfigModal';
 import { BarcodeScannerModal } from './modals/BarcodeScannerModal';
+import { BulkEditModal } from './modals/BulkEditModal';
 import { exportToCSV } from '../utils/exportUtils';
 
 export const InventoryDashboard: React.FC = () => {
@@ -184,6 +185,7 @@ export const InventoryDashboard: React.FC = () => {
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
 
   // Column Resizing Custom Hook
   const activeSheetKey = activeSheet?.title || activeView;
@@ -1046,6 +1048,68 @@ export const InventoryDashboard: React.FC = () => {
       setItems(originalItems);
       setAllMainItems(originalMainItems);
       alert(`Error eliminando fila (rollback aplicado): ${err.message}`);
+    }
+  };
+
+  const handleApplyBulkEdit = async (values: { frc_n: string; n_traspaso: string; tipo_evento: string; frc_bod: string }) => {
+    if (!activeSheet || selectedRowIds.length === 0) return;
+
+    const findHeader = (target: string) => {
+      const normTarget = target.replace(/[\s\-_]+/g, '').toLowerCase();
+      for (const h of headers) {
+        if (h.replace(/[\s\-_]+/g, '').toLowerCase() === normTarget) return h;
+      }
+      return undefined;
+    };
+
+    const colFrcN = findHeader('frc_n');
+    const colTraspaso = findHeader('n_traspaso') || findHeader('traspaso');
+    const colTipoEvento = findHeader('tipo_de_evento') || findHeader('tipo_evento') || findHeader('tipo');
+    const colFrcBod = findHeader('frc_bod') || findHeader('bodega');
+
+    const originalItems = [...items];
+
+    try {
+      setIsSaving(true);
+      const updatedItems = items.map(item => {
+        if (!selectedRowIds.includes(item._rowIndex as number)) return item;
+        const updated = { ...item };
+        if (values.frc_n && colFrcN) updated[colFrcN] = values.frc_n;
+        if (values.n_traspaso && colTraspaso) updated[colTraspaso] = values.n_traspaso;
+        if (values.tipo_evento && colTipoEvento) updated[colTipoEvento] = values.tipo_evento;
+        if (values.frc_bod && colFrcBod) updated[colFrcBod] = values.frc_bod;
+        return updated;
+      });
+
+      setItems(updatedItems);
+
+      for (const rowIndex of selectedRowIds) {
+        const itemToUpdate = updatedItems.find(i => i._rowIndex === rowIndex);
+        if (!itemToUpdate) continue;
+        const rowValues = headers.map(h => itemToUpdate[h] || '');
+        try {
+          await updateRow(activeSheet.title, rowIndex, rowValues);
+        } catch (err) {
+          console.warn(`Error updating row ${rowIndex} in cloud, adding to offline queue`, err);
+          setOfflineQueue(prev => [...prev, {
+            type: 'update',
+            sheetTitle: activeSheet.title,
+            rowIndex,
+            values: rowValues,
+            timestamp: new Date().toISOString()
+          }]);
+          setIsOffline(true);
+        }
+      }
+
+      setSelectedRowIds([]);
+      await fetchData();
+      alert(`¡Se actualizaron ${selectedRowIds.length} registros exitosamente con la información masiva!`);
+    } catch (err: any) {
+      setItems(originalItems);
+      alert(`Error en actualización masiva: ${err.message}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1996,10 +2060,10 @@ export const InventoryDashboard: React.FC = () => {
 
                 {activeView === 'events' && (
                   <button 
-                    onClick={() => { alert('Funcionalidad de cambio de estado en masa en desarrollo.'); }}
-                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
+                    onClick={() => setIsBulkEditOpen(true)}
+                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5 bg-blue-600/40 text-blue-200 border border-blue-500/40"
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Marcar Resueltos
+                    <Edit2 className="w-3.5 h-3.5 text-blue-400" /> Edición Masiva FRC
                   </button>
                 )}
                 
@@ -2083,6 +2147,14 @@ export const InventoryDashboard: React.FC = () => {
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         onScanSuccess={(code) => setSearchTerm(code)}
+      />
+
+      {/* BULK EDIT MODAL */}
+      <BulkEditModal
+        isOpen={isBulkEditOpen}
+        onClose={() => setIsBulkEditOpen(false)}
+        selectedCount={selectedRowIds.length}
+        onApply={handleApplyBulkEdit}
       />
 
       {/* 6. COLUMN MANAGER MODAL */}

@@ -492,12 +492,27 @@ export const InventoryDashboard: React.FC = () => {
     };
   }, [items, headers]);
 
+  const augmentedItems = useMemo(() => {
+    return items.map(item => {
+      const virtualData: Record<string, any> = {};
+      const activeVCs = sheetConfig.activeVirtualColumns || [];
+      VIRTUAL_COLUMNS.filter(col => activeVCs.includes(col.id)).forEach(col => {
+        // Pass products and policies as allData
+        virtualData[col.id] = col.calculate(item, headers, { products, policies });
+      });
+      return { ...item, ...virtualData };
+    });
+  }, [items, headers, sheetConfig.activeVirtualColumns, products, policies]);
+
   // Memoized unique options per column for ColumnFilterMenu
   const columnOptionsMap = useMemo(() => {
     const map: Record<string, { label: string; value: string }[]> = {};
-    headers.forEach(h => {
+    const activeVCs = sheetConfig.activeVirtualColumns || [];
+    const allHeaders = [...headers, ...VIRTUAL_COLUMNS.filter(vc => activeVCs.includes(vc.id)).map(vc => vc.id)];
+    
+    allHeaders.forEach(h => {
       const uniqueVals = new Set<string>();
-      items.forEach(item => {
+      augmentedItems.forEach(item => {
         const val = item[h];
         if (val !== undefined && val !== null && String(val).trim() !== '') {
           uniqueVals.add(String(val).trim());
@@ -511,19 +526,7 @@ export const InventoryDashboard: React.FC = () => {
         .map(v => ({ label: v, value: v }));
     });
     return map;
-  }, [items, headers]);
-
-  const augmentedItems = useMemo(() => {
-    return items.map(item => {
-      const virtualData: Record<string, any> = {};
-      const activeVCs = sheetConfig.activeVirtualColumns || [];
-      VIRTUAL_COLUMNS.filter(col => activeVCs.includes(col.id)).forEach(col => {
-        // Pass products and policies as allData
-        virtualData[col.id] = col.calculate(item, headers, { products, policies });
-      });
-      return { ...item, ...virtualData };
-    });
-  }, [items, headers, sheetConfig.activeVirtualColumns, products, policies]);
+  }, [augmentedItems, headers, sheetConfig.activeVirtualColumns]);
 
   const filteredItems = useMemo(() => {
     let list = augmentedItems;

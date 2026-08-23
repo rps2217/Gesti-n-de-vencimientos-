@@ -71,7 +71,18 @@ export interface ColumnSchema {
   refLabelCol?: string; // Target label column
 }
 
+export type ResolutionStatus = 'PENDIENTE' | 'REALIZADO';
+
+export interface EventResolutionStatus {
+  isResolved: boolean;
+  status: ResolutionStatus;
+  label: string;
+  traspasoNumber: string;
+  traspasoColumn?: string;
+}
+
 export interface InventoryItem {
   _rowIndex: number; // Row number in the sheet for update/delete operations
   [key: string]: any; // Dynamic columns based on the sheet's headers
 }
+

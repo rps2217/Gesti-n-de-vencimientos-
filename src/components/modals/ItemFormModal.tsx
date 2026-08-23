@@ -122,6 +122,9 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 const isSku = /sku|código|codigo/i.test(header);
                 const hasError = !!formErrors[header];
                 const errorMsg = formErrors[header];
+                const isTraspasoCol = /traspaso/i.test(header);
+                const traspasoVal = (formData[header] || '').trim();
+                const isTraspasoFilled = traspasoVal !== '' && traspasoVal !== '-' && traspasoVal !== '0';
 
                 // Auto-fill SKU quick badges if product catalog exists
                 const isSkuWithCatalog = isSku && products.length > 0;
@@ -131,7 +134,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                     key={header} 
                     className={`flex flex-col gap-1.5 ${
                       /observ|nota|motivo|descrip|detalle/i.test(header) ? 'sm:col-span-2' : ''
-                    }`}
+                    } ${isTraspasoCol ? 'sm:col-span-2 bg-slate-50/80 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700' : ''}`}
                   >
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
@@ -150,6 +153,15 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                       {isSkuWithCatalog && (
                         <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-0.5">
                           <Link2 className="w-3 h-3" /> Auto-completa producto
+                        </span>
+                      )}
+                      {isTraspasoCol && (
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          isTraspasoFilled 
+                            ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700' 
+                            : 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                        }`}>
+                          {isTraspasoFilled ? '✅ Estado: Realizado' : '⏳ Estado: Pendiente'}
                         </span>
                       )}
                     </div>
@@ -194,7 +206,13 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                         value={formData[header] || ''}
                         onChange={onChange}
                         readOnly={isAutoCalc}
-                        placeholder={isAutoCalc ? 'Calculado automáticamente' : `Ingresa ${header.toLowerCase()}...`}
+                        placeholder={
+                          isAutoCalc 
+                            ? 'Calculado automáticamente' 
+                            : isTraspasoCol 
+                              ? 'Ej. TR-99823 (dejar vacío si aún está pendiente)' 
+                              : `Ingresa ${header.toLowerCase()}...`
+                        }
                         className={`w-full border rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-800 dark:text-slate-100 outline-none transition-all ${
                           isAutoCalc
                             ? 'bg-slate-100/70 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
@@ -203,6 +221,12 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                               : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
                         }`}
                       />
+                    )}
+
+                    {isTraspasoCol && (
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5">
+                        💡 Anota el número de traspaso entregado por tu otro sistema informático para marcar este registro como <strong>Realizado</strong>. Si aún no ha sido gestionado, déjalo vacío y figurará como <strong>Pendiente</strong>.
+                      </p>
                     )}
 
                     {/* Error message */}

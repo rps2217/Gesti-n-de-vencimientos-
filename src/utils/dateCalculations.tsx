@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   Truck, FileSpreadsheet, PackageX, RotateCcw, Clock, AlertCircle, AlertTriangle, Clock3, Flame, CheckCircle2, Tag 
 } from 'lucide-react';
-import { InventoryItem, EventCategory, EventTypeDefinition } from '../types';
+import { InventoryItem, EventCategory, EventTypeDefinition, EventResolutionStatus } from '../types';
 import { findColumnBySemantic } from './columnAliases';
 
 export const EVENT_CATEGORIES: Record<EventCategory, EventTypeDefinition> = {
@@ -400,4 +400,46 @@ export function getItemStatus(item: InventoryItem, headers: string[]): ItemStatu
 
   return { code, label, color, icon, daysToRetire, daysToExpiry };
 }
+
+/**
+ * Determines whether an incident/FRC event is 'REALIZADO' (managed/resolved with a transfer number)
+ * or 'PENDIENTE' (pending management, no valid transfer number registered).
+ */
+export function getItemResolutionStatus(item: InventoryItem, headers: string[]): EventResolutionStatus {
+  const traspasoCol = findColumnBySemantic(headers, 'n_traspaso') 
+    || headers.find(h => /^n(_|\s)?traspaso/i.test(h.trim()))
+    || headers.find(h => /traspaso/i.test(h.trim()));
+
+  const val = traspasoCol 
+    ? item[traspasoCol] 
+    : (item.N_TRASPASO || item.n_traspaso || item['N_TRASPASO'] || item['N° TRASPASO'] || item['NRO_TRASPASO'] || item['NUM_TRASPASO']);
+  
+  if (val !== undefined && val !== null) {
+    const str = String(val).trim();
+    // Exclude empty strings and placeholders like '-', '0', 's/n', 'sin asignar', 'pendiente', 'n/a'
+    if (
+      str !== '' && 
+      str !== '-' && 
+      str !== '0' && 
+      !/^(sin\s+traspaso|sin\s+asignar|pendiente|n\/?a|s\/n|ninguno|null|undefined)$/i.test(str)
+    ) {
+      return {
+        isResolved: true,
+        status: 'REALIZADO',
+        label: 'Realizado',
+        traspasoNumber: str,
+        traspasoColumn: traspasoCol
+      };
+    }
+  }
+
+  return {
+    isResolved: false,
+    status: 'PENDIENTE',
+    label: 'Pendiente',
+    traspasoNumber: '',
+    traspasoColumn: traspasoCol
+  };
+}
+
 

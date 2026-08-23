@@ -33,11 +33,19 @@ import {
   parseAnyDate, 
   getEventCategory, 
   getItemStatus,
-  getCategoryFromEventValue
+  getCategoryFromEventValue,
+  getItemResolutionStatus
 } from '../utils/dateCalculations';
 import { findColumnBySemantic } from '../utils/columnAliases';
 import { useColumnResize } from '../hooks/useColumnResize';
-import { SAMPLE_HEADERS, SAMPLE_ITEMS, SAMPLE_PRODUCTS, SAMPLE_POLICIES } from '../data/sampleInventory';
+import { 
+  SAMPLE_HEADERS, 
+  SAMPLE_ITEMS, 
+  SAMPLE_EVENTS_HEADERS,
+  SAMPLE_EVENTS_ITEMS,
+  SAMPLE_PRODUCTS, 
+  SAMPLE_POLICIES 
+} from '../data/sampleInventory';
 
 // Modals & Drawers & Sub-components
 import { Sidebar } from './navigation/Sidebar';
@@ -50,6 +58,7 @@ import { ScriptCodeModal } from './modals/ScriptCodeModal';
 import { GlobalConfigModal } from './modals/GlobalConfigModal';
 import { BarcodeScannerModal } from './modals/BarcodeScannerModal';
 import { BulkEditModal } from './modals/BulkEditModal';
+import { QuickTransferModal } from './modals/QuickTransferModal';
 import { exportToCSV } from '../utils/exportUtils';
 
 export const InventoryDashboard: React.FC = () => {
@@ -132,6 +141,9 @@ export const InventoryDashboard: React.FC = () => {
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [selectedRowIds, setSelectedRowIds] = useState<number[]>([]);
   const [eventFilter, setEventFilter] = useState<EventCategory | 'all'>('all');
+  const [eventResolutionFilter, setEventResolutionFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const [quickTraspasoItem, setQuickTraspasoItem] = useState<InventoryItem | null>(null);
+  const [isQuickTraspasoOpen, setIsQuickTraspasoOpen] = useState<boolean>(false);
   const [pmRadarFilter, setPmRadarFilter] = useState<'all' | 'drainage' | 'upcoming' | 'retire_now' | 'en_regla'>('all');
   const [activeQuickChip, setActiveQuickChip] = useState<string | null>(null);
 
@@ -387,6 +399,22 @@ export const InventoryDashboard: React.FC = () => {
     };
   }, [eventMetrics]);
 
+  // Event Resolution Metrics (Pendientes vs Realizados con N_TRASPASO)
+  const eventResolutionMetrics = useMemo(() => {
+    let pending = 0;
+    let completed = 0;
+    items.forEach(item => {
+      const res = getItemResolutionStatus(item, headers);
+      if (res.isResolved) completed++;
+      else pending++;
+    });
+    return {
+      total: items.length,
+      pending,
+      completed
+    };
+  }, [items, headers]);
+
   const filteredItems = useMemo(() => {
     let list = items;
 
@@ -396,8 +424,15 @@ export const InventoryDashboard: React.FC = () => {
         const cat = getEventCategory(item, headers);
         return cat === 'VENCIMIENTO' || cat === 'VENCIMIENTO_CERCANO';
       });
-    } else if (activeView === 'events' && eventFilter !== 'all') {
-      list = list.filter(item => getEventCategory(item, headers) === eventFilter);
+    } else if (activeView === 'events') {
+      if (eventFilter !== 'all') {
+        list = list.filter(item => getEventCategory(item, headers) === eventFilter);
+      }
+      if (eventResolutionFilter === 'pending') {
+        list = list.filter(item => !getItemResolutionStatus(item, headers).isResolved);
+      } else if (eventResolutionFilter === 'completed') {
+        list = list.filter(item => getItemResolutionStatus(item, headers).isResolved);
+      }
     }
 
     // Apply PM Radar Filter when in main view
@@ -421,7 +456,7 @@ export const InventoryDashboard: React.FC = () => {
         return String(val).toLowerCase().includes(term);
       });
     });
-  }, [items, deferredSearchTerm, activeQuickChip, searchableHeaders, activeView, eventFilter, pmRadarFilter, headers]);
+  }, [items, deferredSearchTerm, activeQuickChip, searchableHeaders, activeView, eventFilter, eventResolutionFilter, pmRadarFilter, headers]);
 
   const paginatedItems = useMemo(() => {
     if (pageSize === 'all') return filteredItems;
@@ -676,9 +711,25 @@ export const InventoryDashboard: React.FC = () => {
           { properties: { sheetId: 4, title: 'Politicas_Canje', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } } }
         ]
       });
-      setActiveSheet({ sheetId: 1, title: 'Vencimientos_Inventario', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } });
-      setHeaders(SAMPLE_HEADERS);
-      setItems(SAMPLE_ITEMS);
+
+      if (currentView === 'events') {
+        setActiveSheet({ sheetId: 2, title: 'Incidencias_FRC', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } });
+        setHeaders(SAMPLE_EVENTS_HEADERS);
+        setItems(SAMPLE_EVENTS_ITEMS);
+      } else if (currentView === 'products') {
+        setActiveSheet({ sheetId: 3, title: 'Catalogo_Productos', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } });
+        setHeaders(Object.keys(SAMPLE_PRODUCTS[0] || {}));
+        setItems(SAMPLE_PRODUCTS.map((p, i) => ({ _rowIndex: i + 2, ...p })));
+      } else if (currentView === 'policies') {
+        setActiveSheet({ sheetId: 4, title: 'Politicas_Canje', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } });
+        setHeaders(Object.keys(SAMPLE_POLICIES[0] || {}));
+        setItems(SAMPLE_POLICIES.map((p, i) => ({ _rowIndex: i + 2, ...p })));
+      } else {
+        setActiveSheet({ sheetId: 1, title: 'Vencimientos_Inventario', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } });
+        setHeaders(SAMPLE_HEADERS);
+        setItems(SAMPLE_ITEMS);
+      }
+
       setAllMainItems(SAMPLE_ITEMS);
       setProducts(SAMPLE_PRODUCTS);
       setPolicies(SAMPLE_POLICIES);
@@ -686,6 +737,32 @@ export const InventoryDashboard: React.FC = () => {
       setError('Modo Demostración / Sin conexión: Mostrando datos de ejemplo de logística y vencimientos. Puede configurar su URL de Google Apps Script en Ajustes.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveQuickTraspaso = async (targetItem: InventoryItem, traspasoNumber: string) => {
+    const traspasoCol = findColumnBySemantic(headers, 'n_traspaso') || 'N_TRASPASO';
+    const updatedItem = { ...targetItem, [traspasoCol]: traspasoNumber };
+
+    // Update local state immediately for instant feedback
+    setItems(prev => prev.map(it => (it._rowIndex === targetItem._rowIndex ? updatedItem : it)));
+
+    // If online and connected to Apps Script, sync changes to cloud
+    if (activeSheet && updatedItem._rowIndex) {
+      const rowValues = headers.map(h => updatedItem[h] || '');
+      try {
+        await updateRow(activeSheet.title, updatedItem._rowIndex, rowValues);
+      } catch (saveErr) {
+        console.warn('Network error during quick transfer save, adding to offline queue:', saveErr);
+        setOfflineQueue(prev => [...prev, {
+          type: 'update',
+          sheetTitle: activeSheet.title,
+          rowIndex: updatedItem._rowIndex,
+          values: rowValues,
+          timestamp: new Date().toISOString()
+        }]);
+        setIsOffline(true);
+      }
     }
   };
 
@@ -1441,131 +1518,105 @@ export const InventoryDashboard: React.FC = () => {
 
         {/* INCIDENCIAS & FRC STRIP (When activeView === 'events') */}
         {activeView === 'events' && activeSheet && (
-          <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-8 py-4 shrink-0 flex flex-col gap-4 shadow-sm">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              <button
-                onClick={() => setEventFilter(eventFilter === 'VENCIMIENTO_CERCANO' ? 'all' : 'VENCIMIENTO_CERCANO')}
-                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
-                  eventFilter === 'VENCIMIENTO_CERCANO'
-                    ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/70 dark:bg-indigo-950/40 shadow-sm'
-                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 flex items-center justify-center">
-                    <Clock3 className="w-4 h-4" />
-                  </div>
-                  <span className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">{eventMetrics.vencimientoCercano}</span>
-                </div>
-                <div className="mt-2.5">
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Venc. Cercano</h4>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">VENC. CERC.</p>
-                </div>
-              </button>
+          <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-8 py-5 shrink-0 flex flex-col gap-4 shadow-xs">
+            
+            {/* Primary Visual Separation: Pendientes vs Realizados */}
+            <div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2.5">
+                <span className="font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider text-xs flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  <span>Estado de Gestión de Incidencias (N° de Traspaso)</span>
+                </span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Separación automática según ingreso en columna <strong>N_TRASPASO</strong>
+                </span>
+              </div>
 
-              <button
-                onClick={() => setEventFilter(eventFilter === 'TRANSPORTE' ? 'all' : 'TRANSPORTE')}
-                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
-                  eventFilter === 'TRANSPORTE'
-                    ? 'border-amber-500 ring-2 ring-amber-500/20 bg-amber-50/70 dark:bg-amber-950/40 shadow-sm'
-                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 flex items-center justify-center">
-                    <Truck className="w-4 h-4" />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* 1. Todos los registros */}
+                <button
+                  onClick={() => setEventResolutionFilter('all')}
+                  className={`p-4 rounded-2xl border text-left transition-all relative overflow-hidden flex items-center justify-between cursor-pointer ${
+                    eventResolutionFilter === 'all'
+                      ? 'border-indigo-600 dark:border-indigo-400 ring-2 ring-indigo-500/20 bg-indigo-50/50 dark:bg-indigo-950/40 shadow-sm'
+                      : 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/60 hover:bg-slate-100/70 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center font-bold">
+                      <Database className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">Todos los Registros</h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Total de incidencias y FRC</p>
+                    </div>
                   </div>
-                  <span className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">{eventMetrics.transporte}</span>
-                </div>
-                <div className="mt-2.5">
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Det. Pedido</h4>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">DET. PED (Transporte)</p>
-                </div>
-              </button>
+                  <span className="text-2xl font-black text-slate-900 dark:text-slate-100 font-mono">
+                    {eventResolutionMetrics.total}
+                  </span>
+                </button>
 
-              <button
-                onClick={() => setEventFilter(eventFilter === 'CAL_INTERNA' ? 'all' : 'CAL_INTERNA')}
-                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
-                  eventFilter === 'CAL_INTERNA'
-                    ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/70 dark:bg-emerald-950/40 shadow-sm'
-                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 flex items-center justify-center">
-                    <CheckCircle2 className="w-4 h-4" />
+                {/* 2. Pendientes */}
+                <button
+                  onClick={() => setEventResolutionFilter(eventResolutionFilter === 'pending' ? 'all' : 'pending')}
+                  className={`p-4 rounded-2xl border text-left transition-all relative overflow-hidden flex items-center justify-between cursor-pointer ${
+                    eventResolutionFilter === 'pending'
+                      ? 'border-amber-500 ring-2 ring-amber-500/30 bg-amber-50 dark:bg-amber-950/50 shadow-sm'
+                      : 'border-amber-200/80 dark:border-amber-900/40 bg-amber-50/30 dark:bg-amber-950/20 hover:bg-amber-50/70 dark:hover:bg-amber-950/40'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 flex items-center justify-center font-bold">
+                      <Clock3 className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="text-sm font-bold text-amber-950 dark:text-amber-200">Pendientes</h4>
+                        <span className="text-[10px] bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200 px-1.5 py-0.2 rounded font-semibold">
+                          Sin Traspaso
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-amber-700/80 dark:text-amber-400 mt-0.5">Falta gestionar en sistema</p>
+                    </div>
                   </div>
-                  <span className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">{eventMetrics.calInterna}</span>
-                </div>
-                <div className="mt-2.5">
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Cal. Interna</h4>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">CAL. INTER</p>
-                </div>
-              </button>
+                  <span className="text-2xl font-black text-amber-700 dark:text-amber-300 font-mono">
+                    {eventResolutionMetrics.pending}
+                  </span>
+                </button>
 
-              <button
-                onClick={() => setEventFilter(eventFilter === 'CAL_EXTERNA' ? 'all' : 'CAL_EXTERNA')}
-                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
-                  eventFilter === 'CAL_EXTERNA'
-                    ? 'border-teal-500 ring-2 ring-teal-500/20 bg-teal-50/70 dark:bg-teal-950/40 shadow-sm'
-                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-300 flex items-center justify-center">
-                    <CheckCircle2 className="w-4 h-4" />
+                {/* 3. Realizados */}
+                <button
+                  onClick={() => setEventResolutionFilter(eventResolutionFilter === 'completed' ? 'all' : 'completed')}
+                  className={`p-4 rounded-2xl border text-left transition-all relative overflow-hidden flex items-center justify-between cursor-pointer ${
+                    eventResolutionFilter === 'completed'
+                      ? 'border-emerald-500 ring-2 ring-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/50 shadow-sm'
+                      : 'border-emerald-200/80 dark:border-emerald-900/40 bg-emerald-50/30 dark:bg-emerald-950/20 hover:bg-emerald-50/70 dark:hover:bg-emerald-950/40'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 flex items-center justify-center font-bold">
+                      <CheckCircle2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="text-sm font-bold text-emerald-950 dark:text-emerald-200">Realizados</h4>
+                        <span className="text-[10px] bg-emerald-200/80 dark:bg-emerald-900/80 text-emerald-900 dark:text-emerald-200 px-1.5 py-0.2 rounded font-semibold">
+                          Con N° Traspaso
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400 mt-0.5">Gestionados con éxito</p>
+                    </div>
                   </div>
-                  <span className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">{eventMetrics.calExterna}</span>
-                </div>
-                <div className="mt-2.5">
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Cal. Externa</h4>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">CAL. EXT.</p>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setEventFilter(eventFilter === 'CANJES' ? 'all' : 'CANJES')}
-                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
-                  eventFilter === 'CANJES'
-                    ? 'border-pink-500 ring-2 ring-pink-500/20 bg-pink-50/70 dark:bg-pink-950/40 shadow-sm'
-                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-pink-100 dark:bg-pink-900/60 text-pink-700 dark:text-pink-300 flex items-center justify-center">
-                    <Tag className="w-4 h-4" />
-                  </div>
-                  <span className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">{eventMetrics.canjes}</span>
-                </div>
-                <div className="mt-2.5">
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Canjes</h4>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">CANJES</p>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setEventFilter(eventFilter === 'DIFERENCIA' ? 'all' : 'DIFERENCIA')}
-                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
-                  eventFilter === 'DIFERENCIA'
-                    ? 'border-purple-500 ring-2 ring-purple-500/20 bg-purple-50/70 dark:bg-purple-950/40 shadow-sm'
-                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-300 flex items-center justify-center">
-                    <FileSpreadsheet className="w-4 h-4" />
-                  </div>
-                  <span className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">{eventMetrics.diferencia}</span>
-                </div>
-                <div className="mt-2.5">
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Dif. Pedido</h4>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">DIF. PED</p>
-                </div>
-              </button>
+                  <span className="text-2xl font-black text-emerald-700 dark:text-emerald-300 font-mono">
+                    {eventResolutionMetrics.completed}
+                  </span>
+                </button>
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-100 dark:border-slate-800 text-xs">
-              <span className="font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider text-[10px] mr-1">Filtrar Incidencias (FRC_EVEN):</span>
+            {/* Categorías FRC Secundarias */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+              <span className="font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider text-[10px] mr-1">Filtrar Tipo de Incidencia:</span>
               <button 
                 onClick={() => setEventFilter('all')}
                 className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
@@ -1574,7 +1625,7 @@ export const InventoryDashboard: React.FC = () => {
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
-                Todos ({items.length})
+                Todos los tipos ({items.length})
               </button>
               <button 
                 onClick={() => setEventFilter('VENCIMIENTO_CERCANO')}
@@ -1828,14 +1879,14 @@ export const InventoryDashboard: React.FC = () => {
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col h-full">
               <div className="flex-1 overflow-auto relative" ref={tableContainerRef}>
                 <table className="text-left border-collapse" style={{ width: 'max-content', minWidth: '100%' }}>
-                  <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0 border-b border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-200 uppercase tracking-wider select-none z-10 shadow-sm">
+                  <thead className="bg-slate-100 dark:bg-slate-700/90 sticky top-0 border-b border-slate-200 dark:border-slate-600/80 text-xs font-bold text-slate-700 dark:text-slate-100 uppercase tracking-wider select-none z-10 shadow-sm">
                     <tr>
                       {/* Selection Header */}
-                      <th className="p-4 text-center bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700" style={{ width: '48px', minWidth: '48px' }}>
+                      <th className="p-4 text-center bg-slate-100 dark:bg-slate-700/90 border-b border-slate-200 dark:border-slate-600/80" style={{ width: '48px', minWidth: '48px' }}>
                         <div className="flex items-center justify-center">
                           <input
                             type="checkbox"
-                            className="w-4 h-4 text-blue-600 rounded border-slate-300 dark:border-slate-700 dark:bg-slate-800 focus:ring-blue-500 cursor-pointer"
+                            className="w-4 h-4 text-blue-600 rounded border-slate-300 dark:border-slate-600 dark:bg-slate-800 focus:ring-blue-500 cursor-pointer"
                             checked={filteredItems.length > 0 && selectedRowIds.length === filteredItems.length}
                             onChange={(e) => {
                               if (e.target.checked) {
@@ -1851,7 +1902,7 @@ export const InventoryDashboard: React.FC = () => {
                       {/* Fixed Row Index Header */}
                       <th 
                         style={{ width: `${getColWidth('_row', '#')}px`, minWidth: '50px' }} 
-                        className="p-4 text-center text-slate-500 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 relative group font-bold"
+                        className="p-4 text-center text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-700/90 border-b border-slate-200 dark:border-slate-600/80 relative group font-bold"
                       >
                         <span>#</span>
                         <div
@@ -1862,7 +1913,7 @@ export const InventoryDashboard: React.FC = () => {
                             resizingCol?.colId === '_row' ? 'bg-blue-600 w-2.5' : ''
                           }`}
                         >
-                          <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-600 group-hover:bg-blue-500"></div>
+                          <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-500 group-hover:bg-blue-500"></div>
                         </div>
                       </th>
 
@@ -1870,7 +1921,7 @@ export const InventoryDashboard: React.FC = () => {
                       {activeView === 'main' && (
                         <th 
                           style={{ width: `${getColWidth('_status', 'Estado / Radar PM')}px`, minWidth: '100px' }} 
-                          className="p-4 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 relative group font-bold"
+                          className="p-4 bg-slate-100 dark:bg-slate-700/90 text-slate-700 dark:text-slate-100 border-b border-slate-200 dark:border-slate-600/80 relative group font-bold"
                         >
                           <div className="truncate pr-2">Estado / Radar PM</div>
                           <div
@@ -1881,7 +1932,27 @@ export const InventoryDashboard: React.FC = () => {
                               resizingCol?.colId === '_status' ? 'bg-blue-600 w-2.5' : ''
                             }`}
                           >
-                            <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-600 group-hover:bg-blue-500"></div>
+                            <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-500 group-hover:bg-blue-500"></div>
+                          </div>
+                        </th>
+                      )}
+
+                      {/* Resolution Status Header (Events view only) */}
+                      {activeView === 'events' && (
+                        <th 
+                          style={{ width: `${getColWidth('_res_status', 'Estado Gestión')}px`, minWidth: '125px' }} 
+                          className="p-4 bg-slate-100 dark:bg-slate-700/90 text-slate-700 dark:text-slate-100 border-b border-slate-200 dark:border-slate-600/80 relative group font-bold"
+                        >
+                          <div className="truncate pr-2">Estado Gestión</div>
+                          <div
+                            onMouseDown={(e) => handleStartResize('_res_status', getColWidth('_res_status', 'Estado Gestión'), e)}
+                            onDoubleClick={() => handleAutoFitColumn('_res_status', 'Estado Gestión')}
+                            title="Arrastra para cambiar ancho (Doble clic para autoajustar)"
+                            className={`absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400/80 transition-colors z-20 flex items-center justify-center ${
+                              resizingCol?.colId === '_res_status' ? 'bg-blue-600 w-2.5' : ''
+                            }`}
+                          >
+                            <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-500 group-hover:bg-blue-500"></div>
                           </div>
                         </th>
                       )}
@@ -1898,7 +1969,7 @@ export const InventoryDashboard: React.FC = () => {
                           <th 
                             key={header} 
                             style={{ width: `${width}px`, minWidth: '70px' }}
-                            className={`p-4 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 relative group transition-all cursor-grab active:cursor-grabbing hover:bg-slate-100/90 dark:hover:bg-slate-700/80 dark:hover:text-white select-none ${
+                            className={`p-4 bg-slate-100 dark:bg-slate-700/90 text-slate-700 dark:text-slate-100 border-b border-slate-200 dark:border-slate-600/80 relative group transition-all cursor-grab active:cursor-grabbing hover:bg-slate-200/90 dark:hover:bg-slate-600/90 dark:hover:text-white select-none ${
                               isDraggingThis ? 'opacity-40 scale-[0.98]' : ''
                             } ${
                               isDropTarget ? 'ring-2 ring-blue-500 ring-inset bg-blue-50/50 dark:bg-blue-950/50 shadow-inner' : ''
@@ -1937,7 +2008,7 @@ export const InventoryDashboard: React.FC = () => {
                             title="Mantén presionado y arrastra para reordenar columna"
                           >
                             <div className="flex items-center gap-1.5 truncate pr-2">
-                              <GripVertical className="w-3.5 h-3.5 text-slate-300 dark:text-slate-500 group-hover:text-blue-400 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <GripVertical className="w-3.5 h-3.5 text-slate-400 dark:text-slate-400 group-hover:text-blue-400 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
                               <span className="truncate font-bold tracking-tight">{header}</span>
                               {colSchema?.isKey && (
                                 <span className="text-[9px] bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 px-1 py-0.2 rounded font-mono font-bold shrink-0">
@@ -1960,14 +2031,14 @@ export const InventoryDashboard: React.FC = () => {
                                 isResizingThis ? 'bg-blue-600 w-3' : ''
                               }`}
                             >
-                              <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-600 group-hover:bg-blue-500"></div>
+                              <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-500 group-hover:bg-blue-500"></div>
                             </div>
                           </th>
                         );
                       })}
                       
                       {/* Fixed Actions Column Header */}
-                      <th className="p-4 text-right bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 sticky right-0 z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)] w-24 min-w-[96px] font-bold">
+                      <th className="p-4 text-right bg-slate-100 dark:bg-slate-700/90 text-slate-700 dark:text-slate-100 border-b border-slate-200 dark:border-slate-600/80 sticky right-0 z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)] w-24 min-w-[96px] font-bold">
                         Acciones
                       </th>
                     </tr>
@@ -1976,7 +2047,7 @@ export const InventoryDashboard: React.FC = () => {
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm text-slate-700 dark:text-slate-200">
                     {filteredItems.length === 0 ? (
                       <tr>
-                        <td colSpan={visibleHeaders.length + (activeView === 'main' ? 4 : 3)} className="p-8 text-center text-slate-400 dark:text-slate-500">
+                        <td colSpan={visibleHeaders.length + (activeView === 'main' || activeView === 'events' ? 4 : 3)} className="p-8 text-center text-slate-400 dark:text-slate-500">
                           {searchTerm 
                             ? 'No se encontraron resultados que coincidan con la búsqueda.' 
                             : 'No hay datos en esta hoja.'}
@@ -1984,7 +2055,7 @@ export const InventoryDashboard: React.FC = () => {
                       </tr>
                     ) : (<>
                       {paddingTop > 0 && (
-                        <tr><td style={{ height: `${paddingTop}px` }} colSpan={visibleHeaders.length + (activeView === 'main' ? 3 : 2)} /></tr>
+                        <tr><td style={{ height: `${paddingTop}px` }} colSpan={visibleHeaders.length + (activeView === 'main' || activeView === 'events' ? 3 : 2)} /></tr>
                       )}
                       {virtualRows.map((virtualRow) => {
                         const item = paginatedItems[virtualRow.index];
@@ -1992,16 +2063,33 @@ export const InventoryDashboard: React.FC = () => {
 
                         const eventCategory = getEventCategory(item, headers);
                         const status = getItemStatus(item, headers);
+                        const isEventView = activeView === 'events';
+                        const eventResStatus = isEventView ? getItemResolutionStatus(item, headers) : null;
+                        const isSelected = selectedRowIds.includes(item._rowIndex as number);
+
+                        let rowBgClass = 'hover:bg-slate-50/80 dark:hover:bg-slate-800/60';
+                        if (isSelected) {
+                          rowBgClass = 'bg-blue-50/50 dark:bg-blue-950/40 hover:bg-blue-50 dark:hover:bg-blue-950/60';
+                        } else if (isEventView) {
+                          rowBgClass = eventResStatus?.isResolved
+                            ? 'bg-emerald-50/25 dark:bg-emerald-950/20 border-l-4 border-l-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/35'
+                            : 'bg-amber-50/30 dark:bg-amber-950/25 border-l-4 border-l-amber-500 hover:bg-amber-50/60 dark:hover:bg-amber-950/40';
+                        }
 
                         return (
-                          <tr key={idx} data-index={virtualRow.index} ref={rowVirtualizer.measureElement} className={`transition-colors group ${selectedRowIds.includes(item._rowIndex as number) ? 'bg-blue-50/50 dark:bg-blue-950/40 hover:bg-blue-50 dark:hover:bg-blue-950/60' : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/60'}`}>
+                          <tr 
+                            key={idx} 
+                            data-index={virtualRow.index} 
+                            ref={rowVirtualizer.measureElement} 
+                            className={`transition-colors group ${rowBgClass}`}
+                          >
                             {/* Selection Cell */}
                             <td className="p-4 text-center">
                               <div className="flex items-center justify-center">
                                 <input
                                   type="checkbox"
                                   className="w-4 h-4 text-blue-600 rounded border-slate-300 dark:border-slate-700 dark:bg-slate-800 focus:ring-blue-500 cursor-pointer"
-                                  checked={selectedRowIds.includes(item._rowIndex as number)}
+                                  checked={isSelected}
                                   onChange={(e) => {
                                     if (e.target.checked) {
                                       setSelectedRowIds(prev => [...prev, item._rowIndex as number]);
@@ -2038,11 +2126,32 @@ export const InventoryDashboard: React.FC = () => {
                               </td>
                             )}
 
+                            {/* Incident Resolution Status Badge (Events view) */}
+                            {activeView === 'events' && (
+                              <td 
+                                style={{ width: `${getColWidth('_res_status', 'Estado Gestión')}px` }}
+                                className="p-4 truncate"
+                              >
+                                {eventResStatus?.isResolved ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700/80 shadow-2xs">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                    <span>Realizado</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700/80 shadow-2xs">
+                                    <Clock3 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0 animate-pulse" />
+                                    <span>Pendiente</span>
+                                  </span>
+                                )}
+                              </td>
+                            )}
+
                             {/* Cell Values */}
                             {visibleHeaders.map((header) => {
                               const val = item[header];
                               const isSku = /sku|código|codigo/i.test(header);
                               const isEventCol = /^frc(_|\s)?even/i.test(header.trim()) || findColumnBySemantic(headers, 'tipo_evento') === header;
+                              const isTraspasoCol = /traspaso/i.test(header) || findColumnBySemantic(headers, 'n_traspaso') === header;
                               const eventCat = isEventCol && val ? getCategoryFromEventValue(val) : null;
                               const isProductsView = activeView === 'products';
                               const colWidth = getColWidth(header, header);
@@ -2073,6 +2182,38 @@ export const InventoryDashboard: React.FC = () => {
                                       {renderEventIcon(eventCat, 'w-3.5 h-3.5 shrink-0')}
                                       <span className="truncate">{String(val)}</span>
                                     </span>
+                                  ) : isEventView && isTraspasoCol ? (
+                                    val !== undefined && val !== null && String(val).trim() !== '' ? (
+                                      <div className="flex items-center gap-1.5 group/traspaso">
+                                        <span className="font-mono font-bold text-xs bg-emerald-100/90 dark:bg-emerald-950/70 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700/80 px-2 py-0.5 rounded-md truncate">
+                                          {String(val)}
+                                        </span>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setQuickTraspasoItem(item);
+                                            setIsQuickTraspasoOpen(true);
+                                          }}
+                                          className="p-1 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 opacity-0 group-hover/traspaso:opacity-100 transition-opacity rounded cursor-pointer shrink-0"
+                                          title="Modificar N° Traspaso"
+                                        >
+                                          <Edit2 className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setQuickTraspasoItem(item);
+                                          setIsQuickTraspasoOpen(true);
+                                        }}
+                                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold border border-dashed border-amber-400 dark:border-amber-600/90 bg-amber-50/90 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-all cursor-pointer group shrink-0"
+                                        title="Anotar número de traspaso de su sistema informático"
+                                      >
+                                        <Plus className="w-3 h-3 group-hover:scale-125 transition-transform text-amber-600 dark:text-amber-400 shrink-0" />
+                                        <span>Anotar Traspaso</span>
+                                      </button>
+                                    )
                                   ) : (
                                     <span className="truncate block">
                                       {val !== undefined && val !== null && String(val).trim() !== '' ? String(val) : '-'}
@@ -2106,7 +2247,7 @@ export const InventoryDashboard: React.FC = () => {
                         );
                       })}
                       {paddingBottom > 0 && (
-                        <tr><td style={{ height: `${paddingBottom}px` }} colSpan={visibleHeaders.length + (activeView === 'main' ? 3 : 2)} /></tr>
+                        <tr><td style={{ height: `${paddingBottom}px` }} colSpan={visibleHeaders.length + (activeView === 'main' || activeView === 'events' ? 3 : 2)} /></tr>
                       )}
                     </>
                     )}
@@ -2115,11 +2256,11 @@ export const InventoryDashboard: React.FC = () => {
               </div>
               
               {/* Footer summary bar */}
-              <div className="p-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-300 flex flex-col sm:flex-row justify-between items-center gap-2">
+              <div className="p-3 bg-slate-100 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 flex flex-col sm:flex-row justify-between items-center gap-2">
                 <span>
-                  Mostrando <strong className="text-slate-700 dark:text-slate-100">{filteredItems.length}</strong> de <strong className="text-slate-700 dark:text-slate-100">{items.length}</strong> registros
+                  Mostrando <strong className="text-slate-800 dark:text-slate-100">{filteredItems.length}</strong> de <strong className="text-slate-800 dark:text-slate-100">{items.length}</strong> registros
                 </span>
-                <span className="text-[11px] text-slate-400 dark:text-slate-400">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">
                   Tip: Arrastra las líneas entre columnas para cambiar su tamaño, o haz <strong>doble clic</strong> para auto-ajustar.
                 </span>
               </div>
@@ -2354,6 +2495,18 @@ export const InventoryDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* QUICK TRANSFER MODAL */}
+      <QuickTransferModal
+        isOpen={isQuickTraspasoOpen}
+        onClose={() => {
+          setIsQuickTraspasoOpen(false);
+          setQuickTraspasoItem(null);
+        }}
+        item={quickTraspasoItem}
+        headers={headers}
+        onSave={handleSaveQuickTraspaso}
+      />
     </div>
   );
 };

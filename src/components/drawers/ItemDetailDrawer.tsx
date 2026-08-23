@@ -8,6 +8,7 @@ import {
   renderEventIcon, 
   getItemStatus, 
   getEventCategory, 
+  getItemResolutionStatus,
   formatDisplayDate, 
   formatLocaleNumber 
 } from '../../utils/dateCalculations';
@@ -185,16 +186,27 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
                   const cant = cantCol && inc[cantCol] ? formatLocaleNumber(inc[cantCol]) : '-';
                   const obs = (obsCol && inc[obsCol]) || '-';
 
+                  const resStatus = getItemResolutionStatus(inc, incKeys);
+
                   return (
-                    <div key={idx} className="p-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center justify-between gap-4 shadow-sm">
+                    <div key={idx} className={`p-3.5 bg-white dark:bg-slate-800 border rounded-xl flex items-center justify-between gap-4 shadow-sm ${resStatus.isResolved ? 'border-emerald-200 dark:border-emerald-800/60' : 'border-amber-200 dark:border-amber-800/60'}`}>
                       <div className="flex items-start gap-3">
                         <div className={`p-2 rounded-lg ${catDef.iconBg} shrink-0`}>
                           {renderEventIcon(cat, 'w-4 h-4')}
                         </div>
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs font-bold text-slate-800 dark:text-slate-100">{catDef.shortLabel}</span>
                             {cant !== '-' && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-bold font-mono">{cant} un.</span>}
+                            {resStatus.isResolved ? (
+                              <span className="text-[10px] bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.5 rounded-md font-bold font-mono">
+                                ✅ Realizado (TR: {resStatus.traspasoNumber})
+                              </span>
+                            ) : (
+                              <span className="text-[10px] bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-1.5 py-0.5 rounded-md font-bold">
+                                ⏳ Pendiente (Sin Traspaso)
+                              </span>
+                            )}
                           </div>
                           {obs !== '-' && <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 line-clamp-2">{obs}</p>}
                         </div>

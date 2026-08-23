@@ -16,7 +16,8 @@ export type KnownFieldSemantic =
   | 'precio'
   | 'observacion'
   | 'proveedor'
-  | 'dias_anticipacion';
+  | 'dias_anticipacion'
+  | 'n_traspaso';
 
 const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
   id: [
@@ -163,6 +164,21 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
     /^distribuidor$/i,
     /^vendor$/i,
     /^supplier$/i
+  ],
+  n_traspaso: [
+    /^n(_|\s)?traspaso$/i,
+    /^nro(_|\s)?traspaso$/i,
+    /^num(_|\s)?traspaso$/i,
+    /^n(_|\s)?de(_|\s)?traspaso$/i,
+    /^n°(_|\s)?traspaso$/i,
+    /^numero(_|\s)?(de)?(_|\s)?traspaso$/i,
+    /^traspaso(_|\s)?(id|num|nro|n)?$/i,
+    /^traspaso$/i,
+    /^fol(_|\s)?traspaso$/i,
+    /^folio(_|\s)?traspaso$/i,
+    /^resoluci[oó]n$/i,
+    /^nro(_|\s)?resoluci[oó]n$/i,
+    /^transfer(_|\s)?(num|no|id)?$/i
   ]
 };
 
@@ -216,7 +232,7 @@ export function detectAllColumnSemantics(headers: string[]): Partial<Record<Know
   const semantics: KnownFieldSemantic[] = [
     'id', 'sku', 'descripcion', 'fecha_vc', 'fecha_retiro', 'mes', 'anio', 
     'cantidad', 'lote', 'politica', 'dias_anticipacion', 'tipo_evento', 
-    'precio', 'observacion', 'proveedor'
+    'precio', 'observacion', 'proveedor', 'n_traspaso'
   ];
 
   semantics.forEach(semantic => {

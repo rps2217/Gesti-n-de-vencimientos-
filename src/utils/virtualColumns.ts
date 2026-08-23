@@ -29,7 +29,12 @@ export const VIRTUAL_COLUMNS: VirtualColumn[] = [
       // 3. DIAS_RETIRO_VC = [RUT_PROVEEDOR_VC].[RETIRO (DÍAS)]
       // Policies: A is RUT, H is RETIRO (DÍAS)
       let diasRetiro = 30; // Default
-      if (rutProveedor) {
+      
+      // Try to get dias_retiro directly from the item first (it's already loaded in the data)
+      const diasRetiroCol = findColumnBySemantic(headers, 'dias_retiro');
+      if (diasRetiroCol && item[diasRetiroCol]) {
+        diasRetiro = parseInt(String(item[diasRetiroCol])) || 30;
+      } else if (rutProveedor) {
         const policyEntry = policies?.find((p: any) => {
           const pRut = p['RUT'] || p['A'];
           return String(pRut).trim() === String(rutProveedor).trim();

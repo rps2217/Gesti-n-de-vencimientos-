@@ -15,114 +15,130 @@ interface EventMetrics {
 
 interface EventFilterChipsProps {
   totalItems: number;
-  eventFilter: EventCategory | 'all';
-  setEventFilter: (filter: EventCategory | 'all') => void;
+  eventFilter: string[];
+  onFilterClick: (filter: string, isMulti: boolean) => void;
   metrics: EventMetrics;
 }
 
 export const EventFilterChips: React.FC<EventFilterChipsProps> = ({
   totalItems,
   eventFilter,
-  setEventFilter,
+  onFilterClick,
   metrics,
 }) => {
   return (
     <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
       <span className="font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider text-[10px] mr-1">Filtrar Tipo de Incidencia:</span>
       <button 
-        onClick={() => setEventFilter('all')}
+        onClick={(e) => onFilterClick('all', false)}
         className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
-          eventFilter === 'all'
+          eventFilter.length === 0
             ? 'bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 shadow-sm' 
             : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
         }`}
       >
         Todos los tipos ({totalItems})
       </button>
+      
       <button 
-        onClick={() => setEventFilter('VENCIMIENTO_CERCANO')}
+        onClick={(e) => onFilterClick('VENCIMIENTO_CERCANO', e.ctrlKey || e.metaKey)}
         className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
-          eventFilter === 'VENCIMIENTO_CERCANO'
+          eventFilter.includes('VENCIMIENTO_CERCANO')
             ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200 dark:shadow-none' 
             : 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'
         }`}
+        title="Clic normal: Solo este. Ctrl+Clic: Sumar filtro."
       >
         <Clock3 className="w-3.5 h-3.5" />
         <span>VENC. CERC. ({metrics.vencimientoCercano})</span>
       </button>
+      
       <button 
-        onClick={() => setEventFilter('TRANSPORTE')}
+        onClick={(e) => onFilterClick('TRANSPORTE', e.ctrlKey || e.metaKey)}
         className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
-          eventFilter === 'TRANSPORTE'
+          eventFilter.includes('TRANSPORTE')
             ? 'bg-amber-600 text-white shadow-sm shadow-amber-200 dark:shadow-none' 
             : 'bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50'
         }`}
+        title="Clic normal: Solo este. Ctrl+Clic: Sumar filtro."
       >
         <Truck className="w-3.5 h-3.5" />
         <span>DET. PED ({metrics.transporte})</span>
       </button>
+      
       <button 
-        onClick={() => setEventFilter('CAL_INTERNA')}
+        onClick={(e) => onFilterClick('CAL_INTERNA', e.ctrlKey || e.metaKey)}
         className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
-          eventFilter === 'CAL_INTERNA'
+          eventFilter.includes('CAL_INTERNA')
             ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-200 dark:shadow-none' 
             : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
         }`}
+        title="Clic normal: Solo este. Ctrl+Clic: Sumar filtro."
       >
         <CheckCircle2 className="w-3.5 h-3.5" />
         <span>CAL. INTER ({metrics.calInterna})</span>
       </button>
+      
       <button 
-        onClick={() => setEventFilter('CAL_EXTERNA')}
+        onClick={(e) => onFilterClick('CAL_EXTERNA', e.ctrlKey || e.metaKey)}
         className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
-          eventFilter === 'CAL_EXTERNA'
+          eventFilter.includes('CAL_EXTERNA')
             ? 'bg-teal-600 text-white shadow-sm shadow-teal-200 dark:shadow-none' 
             : 'bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/50'
         }`}
+        title="Clic normal: Solo este. Ctrl+Clic: Sumar filtro."
       >
         <CheckCircle2 className="w-3.5 h-3.5" />
         <span>CAL. EXT. ({metrics.calExterna})</span>
       </button>
+      
       <button 
-        onClick={() => setEventFilter('CANJES')}
+        onClick={(e) => onFilterClick('CANJES', e.ctrlKey || e.metaKey)}
         className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
-          eventFilter === 'CANJES'
+          eventFilter.includes('CANJES')
             ? 'bg-pink-600 text-white shadow-sm shadow-pink-200 dark:shadow-none' 
             : 'bg-pink-50 dark:bg-pink-950/50 text-pink-800 dark:text-pink-300 hover:bg-pink-100 dark:hover:bg-pink-900/50'
         }`}
+        title="Clic normal: Solo este. Ctrl+Clic: Sumar filtro."
       >
         <Tag className="w-3.5 h-3.5" />
         <span>CANJES ({metrics.canjes})</span>
       </button>
+      
       <button 
-        onClick={() => setEventFilter('DIFERENCIA')}
+        onClick={(e) => onFilterClick('DIFERENCIA', e.ctrlKey || e.metaKey)}
         className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
-          eventFilter === 'DIFERENCIA'
+          eventFilter.includes('DIFERENCIA')
             ? 'bg-purple-600 text-white shadow-sm shadow-purple-200 dark:shadow-none' 
             : 'bg-purple-50 dark:bg-purple-950/50 text-purple-800 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50'
         }`}
+        title="Clic normal: Solo este. Ctrl+Clic: Sumar filtro."
       >
         <FileSpreadsheet className="w-3.5 h-3.5" />
         <span>DIF. PED ({metrics.diferencia})</span>
       </button>
+      
       <button 
-        onClick={() => setEventFilter('AVERIA')}
+        onClick={(e) => onFilterClick('AVERIA', e.ctrlKey || e.metaKey)}
         className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
-          eventFilter === 'AVERIA'
+          eventFilter.includes('AVERIA')
             ? 'bg-rose-600 text-white shadow-sm shadow-rose-200 dark:shadow-none' 
             : 'bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/50'
         }`}
+        title="Clic normal: Solo este. Ctrl+Clic: Sumar filtro."
       >
         <PackageX className="w-3.5 h-3.5" />
         <span>AVERIA ({metrics.averia})</span>
       </button>
+      
       <button 
-        onClick={() => setEventFilter('DEVOLUCION')}
+        onClick={(e) => onFilterClick('DEVOLUCION', e.ctrlKey || e.metaKey)}
         className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
-          eventFilter === 'DEVOLUCION'
+          eventFilter.includes('DEVOLUCION')
             ? 'bg-teal-600 text-white shadow-sm shadow-teal-200 dark:shadow-none' 
             : 'bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/50'
         }`}
+        title="Clic normal: Solo este. Ctrl+Clic: Sumar filtro."
       >
         <RotateCcw className="w-3.5 h-3.5" />
         <span>DEVOLUCION ({metrics.devolucion})</span>

@@ -22,7 +22,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
   Plus, Edit2, Trash2, RefreshCw, Loader2, Database, AlertCircle, Package, 
   FileSpreadsheet, Printer, Settings, FileText, Search, X, Truck, RotateCcw, 
-  PackageX, Sparkles, Clock, Clock3, Flame, AlertTriangle, CheckCircle2, 
+  PackageX, Sparkles, Clock, Clock3, Flame, AlertTriangle, CheckCircle2, FilterX, 
   Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown, Menu, Scan, GripVertical, Tag
 } from 'lucide-react';
 
@@ -146,12 +146,39 @@ export const InventoryDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [selectedRowIds, setSelectedRowIds] = useState<number[]>([]);
-  const [eventFilter, setEventFilter] = useState<EventCategory | 'all'>('all');
-  const [eventResolutionFilter, setEventResolutionFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const [eventFilter, setEventFilter] = useState<string[]>([]);
+  const [eventResolutionFilter, setEventResolutionFilter] = useState<string[]>([]);
   const [quickTraspasoItem, setQuickTraspasoItem] = useState<InventoryItem | null>(null);
   const [isQuickTraspasoOpen, setIsQuickTraspasoOpen] = useState<boolean>(false);
-  const [pmRadarFilter, setPmRadarFilter] = useState<'all' | 'drainage' | 'upcoming' | 'retire_now' | 'en_regla'>('all');
+  const [pmRadarFilter, setPmRadarFilter] = useState<string[]>([]);
+
+  // Multiselect toggle helper (Ctrl/Cmd + Click)
+  const handleFilterToggle = (current: string[], value: string, isMulti: boolean): string[] => {
+    if (value === 'all') return [];
+    if (!isMulti) {
+      return current.includes(value) && current.length === 1 ? [] : [value];
+    }
+    if (current.includes(value)) {
+      return current.filter(v => v !== value);
+    }
+    return [...current, value];
+  };
   const [activeQuickChip, setActiveQuickChip] = useState<string | null>(null);
+
+  const hasActiveFilters = 
+    searchTerm !== '' || 
+    eventFilter.length > 0 || 
+    eventResolutionFilter.length > 0 || 
+    pmRadarFilter.length > 0 || 
+    activeQuickChip !== null;
+
+  const clearAllFilters = () => {
+    setSearchTerm('');
+    setEventFilter([]);
+    setEventResolutionFilter([]);
+    setPmRadarFilter([]);
+    setActiveQuickChip(null);
+  };
 
   // Column Manager State
   const [isColumnManagerOpen, setIsColumnManagerOpen] = useState(false);
@@ -464,25 +491,30 @@ export const InventoryDashboard: React.FC = () => {
         return cat === 'VENCIMIENTO' || cat === 'VENCIMIENTO_CERCANO';
       });
     } else if (activeView === 'events') {
-      if (eventFilter !== 'all') {
-        list = list.filter(item => getEventCategory(item, headers) === eventFilter);
+      if (eventFilter.length > 0) {
+        list = list.filter(item => {
+          const cat = getEventCategory(item, headers);
+          return cat && eventFilter.includes(cat);
+        });
       }
-      if (eventResolutionFilter === 'pending') {
-        list = list.filter(item => !getItemResolutionStatus(item, headers).isResolved);
-      } else if (eventResolutionFilter === 'completed') {
-        list = list.filter(item => getItemResolutionStatus(item, headers).isResolved);
+      if (eventResolutionFilter.length > 0) {
+        list = list.filter(item => {
+          const isResolved = getItemResolutionStatus(item, headers).isResolved;
+          const status = isResolved ? 'completed' : 'pending';
+          return eventResolutionFilter.includes(status);
+        });
       }
     }
 
     // Apply PM Radar Filter when in main view
-    if (activeView === 'main' && pmRadarFilter !== 'all') {
+    if (activeView === 'main' && pmRadarFilter.length > 0) {
       list = list.filter(item => {
         const st = getItemStatus(item, headers);
-        if (pmRadarFilter === 'drainage') return st.code === 'DRAINAGE_PM';
-        if (pmRadarFilter === 'upcoming') return st.code === 'UPCOMING';
-        if (pmRadarFilter === 'retire_now') return st.code === 'RETIRE_NOW' || st.code === 'EXPIRED';
-        if (pmRadarFilter === 'en_regla') return st.code === 'NORMAL';
-        return true;
+        if (pmRadarFilter.includes('drainage') && st.code === 'DRAINAGE_PM') return true;
+        if (pmRadarFilter.includes('upcoming') && st.code === 'UPCOMING') return true;
+        if (pmRadarFilter.includes('retire_now') && (st.code === 'RETIRE_NOW' || st.code === 'EXPIRED')) return true;
+        if (pmRadarFilter.includes('en_regla') && st.code === 'NORMAL') return true;
+        return false;
       });
     }
 
@@ -1371,6 +1403,16 @@ export const InventoryDashboard: React.FC = () => {
                     </button>
                   )}
                 </div>
+                {hasActiveFilters && (
+                  <button
+                    onClick={clearAllFilters}
+                    className="flex items-center gap-2 px-4 py-3 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-2xl font-bold transition-colors whitespace-nowrap border border-red-100 dark:border-red-900/50"
+                    title="Limpiar todos los filtros"
+                  >
+                    <FilterX className="w-4 h-4" />
+                    <span className="hidden sm:inline">Limpiar filtros</span>
+                  </button>
+                )}
                 <button
                   onClick={() => setIsScannerOpen(true)}
                   className="p-3 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-2xl transition-all shrink-0 flex items-center gap-2 border border-blue-200/60 dark:border-blue-800/60 shadow-sm"
@@ -1579,15 +1621,15 @@ export const InventoryDashboard: React.FC = () => {
             
             <EventResolutionCards 
               eventResolutionFilter={eventResolutionFilter} 
-              setEventResolutionFilter={setEventResolutionFilter} 
+              onFilterClick={(val, isMulti) => setEventResolutionFilter(prev => handleFilterToggle(prev, val, isMulti))}
               metrics={eventResolutionMetrics} 
             />
 
             {/* Categorías FRC Secundarias */}
             <EventFilterChips 
               totalItems={items.length} 
-              eventFilter={eventFilter as any} 
-              setEventFilter={setEventFilter as any} 
+              eventFilter={eventFilter} 
+              onFilterClick={(val, isMulti) => setEventFilter(prev => handleFilterToggle(prev, val, isMulti))}
               metrics={eventMetrics} 
             />
           </div>
@@ -1597,7 +1639,7 @@ export const InventoryDashboard: React.FC = () => {
         {activeView === 'main' && activeSheet && (
           <PmRadarCards 
             pmRadarFilter={pmRadarFilter} 
-            setPmRadarFilter={setPmRadarFilter} 
+            onFilterClick={(val, isMulti) => setPmRadarFilter(prev => handleFilterToggle(prev, val, isMulti))}
             metrics={pmMetrics} 
           />
         )}
@@ -1900,10 +1942,10 @@ export const InventoryDashboard: React.FC = () => {
                                         (code === 'EXPIRED' || code === 'RETIRE_NOW') ? 'retire_now' :
                                         (code === 'UPCOMING') ? 'upcoming' :
                                         (code === 'DRAINAGE_PM') ? 'drainage' : 'en_regla';
-                                      setPmRadarFilter(targetFilter);
+                                      setPmRadarFilter(prev => handleFilterToggle(prev, targetFilter, e.ctrlKey || e.metaKey));
                                     }}
                                     className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border truncate cursor-pointer hover:opacity-80 transition-opacity ${status.color}`}
-                                    title="Clic para filtrar por este estado"
+                                    title="Clic normal: Solo este estado. Ctrl+Clic: Sumar estado."
                                   >
                                     <span className="shrink-0">{status.icon}</span>
                                     <span className="truncate">{status.label}</span>
@@ -1922,18 +1964,18 @@ export const InventoryDashboard: React.FC = () => {
                               >
                                 {eventResStatus?.isResolved ? (
                                   <button
-                                    onClick={(e) => { e.stopPropagation(); setEventResolutionFilter('completed'); }}
+                                    onClick={(e) => { e.stopPropagation(); setEventResolutionFilter(prev => handleFilterToggle(prev, 'completed', e.ctrlKey || e.metaKey)); }}
                                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700/80 shadow-2xs cursor-pointer hover:opacity-80 transition-opacity"
-                                    title="Clic para ver solo realizados"
+                                    title="Clic normal: Solo realizados. Ctrl+Clic: Sumar."
                                   >
                                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                                     <span>Realizado</span>
                                   </button>
                                 ) : (
                                   <button
-                                    onClick={(e) => { e.stopPropagation(); setEventResolutionFilter('pending'); }}
+                                    onClick={(e) => { e.stopPropagation(); setEventResolutionFilter(prev => handleFilterToggle(prev, 'pending', e.ctrlKey || e.metaKey)); }}
                                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700/80 shadow-2xs cursor-pointer hover:opacity-80 transition-opacity"
-                                    title="Clic para ver solo pendientes"
+                                    title="Clic normal: Solo pendientes. Ctrl+Clic: Sumar."
                                   >
                                     <Clock3 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0 animate-pulse" />
                                     <span>Pendiente</span>
@@ -1975,9 +2017,9 @@ export const InventoryDashboard: React.FC = () => {
                                     </span>
                                   ) : eventCat ? (
                                     <button
-                                      onClick={(e) => { e.stopPropagation(); setEventFilter(eventCat); }}
+                                      onClick={(e) => { e.stopPropagation(); setEventFilter(prev => handleFilterToggle(prev, eventCat, e.ctrlKey || e.metaKey)); }}
                                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${EVENT_CATEGORIES[eventCat].badgeBg} ${EVENT_CATEGORIES[eventCat].badgeText} ${EVENT_CATEGORIES[eventCat].badgeBorder} truncate cursor-pointer hover:opacity-80 transition-opacity`}
-                                      title="Clic para filtrar por este tipo de incidencia"
+                                      title="Clic normal: Solo este tipo. Ctrl+Clic: Sumar."
                                     >
                                       {renderEventIcon(eventCat, 'w-3.5 h-3.5 shrink-0')}
                                       <span className="truncate">{String(val)}</span>

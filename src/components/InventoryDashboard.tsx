@@ -65,15 +65,7 @@ import { EventFilterChips } from './views/EventFilterChips';
 import { PmRadarCards } from './views/PmRadarCards';
 import { TicketPrintView } from './views/TicketPrintView';
 import { TicketConfigModal } from './modals/TicketConfigModal';
-import { TicketPrintConfig } from '../types';
-
-const defaultTicketConfig: TicketPrintConfig = {
-  showSku: true, sizeSku: 10, boldSku: true,
-  showDesc: true, sizeDesc: 11, boldDesc: true,
-  showFvc: true, sizeFvc: 10, boldFvc: true,
-  showFretiro: true, sizeFretiro: 10, boldFretiro: true,
-  showPol: true, sizePol: 10, boldPol: true
-};
+import { GlobalTicketConfig, ViewTicketConfig } from '../types';
 
 export const InventoryDashboard: React.FC = () => {
   const [metadata, setMetadata] = useState<SpreadsheetMetadata | null>(null);
@@ -216,23 +208,26 @@ export const InventoryDashboard: React.FC = () => {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
-  const [ticketConfig, setTicketConfig] = useState<TicketPrintConfig>(defaultTicketConfig);
+  const [globalTicketConfig, setGlobalTicketConfig] = useState<GlobalTicketConfig>({});
   const [isTicketConfigOpen, setIsTicketConfigOpen] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem('ticket_print_config');
+    const saved = localStorage.getItem('global_ticket_print_config');
     if (saved) {
       try {
-        setTicketConfig(JSON.parse(saved));
+        setGlobalTicketConfig(JSON.parse(saved));
       } catch (e) {
-        console.error('Failed to parse ticket config', e);
+        console.error('Failed to parse global ticket config', e);
       }
     }
   }, []);
 
-  const handleSaveTicketConfig = (newConfig: TicketPrintConfig) => {
-    setTicketConfig(newConfig);
-    localStorage.setItem('ticket_print_config', JSON.stringify(newConfig));
+  const handleSaveTicketConfig = (view: string, viewConfig: ViewTicketConfig) => {
+    setGlobalTicketConfig(prev => {
+      const updated = { ...prev, [view]: viewConfig };
+      localStorage.setItem('global_ticket_print_config', JSON.stringify(updated));
+      return updated;
+    });
     setIsTicketConfigOpen(false);
   };
 
@@ -2327,7 +2322,9 @@ export const InventoryDashboard: React.FC = () => {
       <TicketConfigModal
         isOpen={isTicketConfigOpen}
         onClose={() => setIsTicketConfigOpen(false)}
-        config={ticketConfig}
+        headers={headers}
+        activeView={activeView}
+        config={globalTicketConfig[activeView] || {}}
         onSave={handleSaveTicketConfig}
       />
     </div>
@@ -2336,7 +2333,7 @@ export const InventoryDashboard: React.FC = () => {
     <TicketPrintView 
       items={selectedRowIds.length > 0 ? filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number)) : filteredItems} 
       headers={headers} 
-      config={ticketConfig} 
+      config={globalTicketConfig[activeView] || {}} 
     />
     </>
   );

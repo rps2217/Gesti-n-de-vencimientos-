@@ -87,10 +87,10 @@ export interface InventoryItem {
 }
 
 
-export interface TicketPrintConfig {
-  showSku: boolean; sizeSku: number; boldSku: boolean;
-  showDesc: boolean; sizeDesc: number; boldDesc: boolean;
-  showFvc: boolean; sizeFvc: number; boldFvc: boolean;
-  showFretiro: boolean; sizeFretiro: number; boldFretiro: boolean;
-  showPol: boolean; sizePol: number; boldPol: boolean;
+export interface TicketColumnConfig {
+  show: boolean;
+  size: number;
+  bold: boolean;
 }
+export type ViewTicketConfig = Record<string, TicketColumnConfig>;
+export type GlobalTicketConfig = Record<string, ViewTicketConfig>;

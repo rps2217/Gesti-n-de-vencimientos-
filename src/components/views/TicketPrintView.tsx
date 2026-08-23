@@ -14,7 +14,7 @@ export const TicketPrintView: React.FC<TicketPrintViewProps> = ({ items, headers
   const visibleHeaders = headers.filter(h => config[h]?.show);
 
   return (
-    <div className="hidden print:block fixed inset-0 bg-white text-black font-mono z-[99999] p-1 w-[76mm] box-border text-[11px] leading-tight print:bg-white print:text-black">
+    <div className="hidden print:block w-[76mm] p-1 text-black font-mono text-[11px] leading-tight print:bg-white print:text-black">
       
       {/* TICKET HEADER */}
       <div className="text-center border-b border-dashed border-black pb-1.5 mb-2">
@@ -26,7 +26,7 @@ export const TicketPrintView: React.FC<TicketPrintViewProps> = ({ items, headers
       {/* TICKET ITEMS */}
       <div className="flex flex-col">
         {items.map((item, idx) => (
-          <div key={idx} className="border-b border-dotted border-gray-500 py-1 break-words">
+          <div key={idx} className="border-b border-dotted border-gray-500 py-1 break-words break-inside-avoid">
             <div className="flex flex-col gap-0.5">
               {visibleHeaders.map(header => {
                 const colConfig = config[header];

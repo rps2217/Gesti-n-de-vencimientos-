@@ -174,8 +174,8 @@ export const InventoryDashboard: React.FC = () => {
 
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const [activeView, setActiveView] = useState<string>('main');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
-  const [areFiltersVisible, setAreFiltersVisible] = useState<boolean>(true);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
+  const [areFiltersVisible, setAreFiltersVisible] = useState<boolean>(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isScriptModalOpen, setIsScriptModalOpen] = useState(false);
@@ -268,6 +268,25 @@ export const InventoryDashboard: React.FC = () => {
     
     return cols;
   }, [headers, activeSheet, sheetConfig.schema, hiddenColumns, columnOrders, activeView]);
+
+  const handleColumnDrop = (targetHeader: string, droppedHeader: string) => {
+    if (targetHeader === droppedHeader) return;
+    const currentOrder = columnOrders[activeView] || visibleHeaders;
+    const newOrder = [...currentOrder];
+    visibleHeaders.forEach(h => {
+      if (!newOrder.includes(h)) newOrder.push(h);
+    });
+    const fromIdx = newOrder.indexOf(droppedHeader);
+    const toIdx = newOrder.indexOf(targetHeader);
+    if (fromIdx !== -1 && toIdx !== -1) {
+      newOrder.splice(fromIdx, 1);
+      newOrder.splice(toIdx, 0, droppedHeader);
+      setColumnOrders(prev => ({
+        ...prev,
+        [activeView]: newOrder
+      }));
+    }
+  };
 
   const searchableHeaders = useMemo(() => {
     if (!activeSheet) return headers;
@@ -1855,7 +1874,24 @@ export const InventoryDashboard: React.FC = () => {
                           <th 
                             key={header} 
                             style={{ width: `${width}px`, minWidth: '70px' }}
-                            className="p-4 bg-slate-50 relative group transition-colors"
+                            className="p-4 bg-slate-50 relative group transition-colors cursor-grab active:cursor-grabbing hover:bg-slate-100/90 select-none"
+                            draggable={true}
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', header);
+                              e.dataTransfer.effectAllowed = 'move';
+                            }}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.dataTransfer.dropEffect = 'move';
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              const droppedHeader = e.dataTransfer.getData('text/plain');
+                              if (droppedHeader) {
+                                handleColumnDrop(header, droppedHeader);
+                              }
+                            }}
+                            title="Mantén presionado y arrastra para reordenar columna"
                           >
                             <div className="flex items-center gap-1.5 truncate pr-2">
                               <span className="truncate">{header}</span>

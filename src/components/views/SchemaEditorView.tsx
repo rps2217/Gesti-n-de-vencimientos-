@@ -47,7 +47,7 @@ export const SchemaEditorView: React.FC<SchemaEditorViewProps> = ({
   activeView
 }) => {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden p-6 max-w-6xl mx-auto">
+    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden p-6 max-w-6xl mx-auto transition-colors">
       
       {/* Cloud Sync Status Banner (PropertiesService vs Sheet vs Local) */}
       {configStorageMode === 'properties' ? (

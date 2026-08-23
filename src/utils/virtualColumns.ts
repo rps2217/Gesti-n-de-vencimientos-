@@ -20,22 +20,30 @@ export const VIRTUAL_COLUMNS: VirtualColumn[] = [
       const sku = skuCol ? item[skuCol] : null;
 
       // 2. RUT_PROVEEDOR_VC = LOOKUP([_THISROW].[SKU_VC], "CATALOGO", "COD PRODUCTO", "RUT PROVEEDOR")
-      const productEntry = products?.find((p: any) => p['COD PRODUCTO'] === sku || p['C'] === sku);
-      const rutProveedor = productEntry ? (productEntry['RUT PROVEEDOR'] || productEntry['F']) : null;
+      const productEntry = products?.find((p: any) => {
+        const pSku = p['COD PRODUCTO'] || p['C'] || p['Código'] || p['Código Producto'];
+        return String(pSku).trim() === String(sku).trim();
+      });
+      const rutProveedor = productEntry ? (productEntry['RUT PROVEEDOR'] || productEntry['F'] || productEntry['RUT']) : null;
 
       // 3. DIAS_RETIRO_VC = [RUT_PROVEEDOR_VC].[RETIRO (DÍAS)]
       // Policies: A is RUT, H is RETIRO (DÍAS)
       let diasRetiro = 30; // Default
       if (rutProveedor) {
-        const policyEntry = policies?.find((p: any) => p['RUT'] === rutProveedor || p['A'] === rutProveedor);
-        if (policyEntry && (policyEntry['RETIRO (DÍAS)'] || policyEntry['H'])) {
-          diasRetiro = parseInt(policyEntry['RETIRO (DÍAS)'] || policyEntry['H']) || 30;
+        const policyEntry = policies?.find((p: any) => {
+          const pRut = p['RUT'] || p['A'];
+          return String(pRut).trim() === String(rutProveedor).trim();
+        });
+        
+        const retiroKey = Object.keys(policyEntry || {}).find(k => k.includes('RETIRO') || k === 'H');
+        if (policyEntry && retiroKey) {
+          diasRetiro = parseInt(policyEntry[retiroKey]) || 30;
         }
       }
       
       // 4. FECHA_RETIRO_VC = EOMONTH([FECHA_VC], -([DIAS RETIRO_VC]/30))
       // AppSheet logic: EOMONTH(date, months_offset)
-      const monthsToSubtract = Math.floor(diasRetiro / 30);
+      const monthsToSubtract = Math.round(diasRetiro / 30);
       const dRet = new Date(dVc.getFullYear(), dVc.getMonth() - monthsToSubtract + 1, 0);
       
       return formatDisplayDate(dRet);

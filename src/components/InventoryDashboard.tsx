@@ -529,7 +529,9 @@ export const InventoryDashboard: React.FC = () => {
         list = list.filter(item => {
           const isResolved = getItemResolutionStatus(item, headers).isResolved;
           const status = isResolved ? 'completed' : 'pending';
-          return eventResolutionFilter.includes(status);
+          const traspasoCol = findColumnBySemantic(headers, 'n_traspaso') || 'N_TRASPASO';
+          const traspasoVal = item[traspasoCol];
+          return eventResolutionFilter.includes(status) || (traspasoVal && eventResolutionFilter.includes(traspasoVal));
         });
       }
     }

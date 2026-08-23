@@ -367,6 +367,26 @@ export function getEndOfMonthDate(): Date {
 
 // ...
 
+export function getExpiryDateFromYm(item: InventoryItem, headers: string[]): Date | null {
+  // Try finding semantic columns for year/month, fallback to user provided defaults
+  const yCol = findColumnBySemantic(headers, 'año') || findColumnBySemantic(headers, 'ano') || 'E';
+  const mCol = findColumnBySemantic(headers, 'mes') || 'D';
+  
+  const year = item[yCol];
+  const month = item[mCol];
+  
+  if (year === undefined || year === null || month === undefined || month === null) return null;
+  
+  const y = parseInt(String(year));
+  const m = parseInt(String(month));
+  
+  if (isNaN(y) || isNaN(m) || m < 1 || m > 12) return null;
+  
+  // AppSheet formula: EOMONTH(...)
+  // Returns last day of month m of year y
+  return new Date(y, m, 0); 
+}
+
 // Helper to compute expiration, retirement and drainage status for an item
 export function getItemStatus(item: InventoryItem, headers: string[]): ItemStatusResult {
   const retCol = findColumnBySemantic(headers, 'fecha_retiro');
@@ -385,18 +405,22 @@ export function getItemStatus(item: InventoryItem, headers: string[]): ItemStatu
     }
   }
 
+  let dVc = null;
   if (vcCol && item[vcCol]) {
-    const dVc = parseAnyDate(item[vcCol]);
-    if (dVc) {
-      daysToExpiry = Math.ceil((dVc.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      
-      // If no retirement date provided, default to 30 days before expiration
-      if (!daysToRetire && daysToExpiry !== null) {
-        // Calculate based on expiry - 30 days
-        const dRet = new Date(dVc);
-        dRet.setDate(dRet.getDate() - 30);
-        daysToRetire = Math.ceil((dRet.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      }
+    dVc = parseAnyDate(item[vcCol]);
+  } else {
+    dVc = getExpiryDateFromYm(item, headers);
+  }
+
+  if (dVc) {
+    daysToExpiry = Math.ceil((dVc.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // If no retirement date provided, default to 30 days before expiration
+    if (!daysToRetire && daysToExpiry !== null) {
+      // Calculate based on expiry - 30 days
+      const dRet = new Date(dVc);
+      dRet.setDate(dRet.getDate() - 30);
+      daysToRetire = Math.ceil((dRet.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     }
   }
 

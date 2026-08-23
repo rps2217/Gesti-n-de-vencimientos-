@@ -35,9 +35,10 @@ export const VIRTUAL_COLUMNS: VirtualColumn[] = [
         }
       }
       
-      const dRet = new Date(dVc);
-      dRet.setDate(dRet.getDate() - daysToSubtract);
-
+      // Adapted to AppSheet logic: EOMONTH([FECHA_VC], -([DIAS RETIRO_VC]/30))
+      const monthsToSubtract = Math.round(daysToSubtract / 30);
+      const dRet = new Date(dVc.getFullYear(), dVc.getMonth() - monthsToSubtract + 1, 0);
+      
       return formatDisplayDate(dRet);
     }
   }

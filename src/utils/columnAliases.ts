@@ -122,6 +122,9 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
     /^days$/i
   ],
   tipo_evento: [
+    /^frc(_|\s)?even(to)?$/i,
+    /^frc_even$/i,
+    /^even$/i,
     /^tipo(_|\s)?(de)?(_|\s)?(evento|registro|incidencia|fallo|novedad)$/i,
     /^evento$/i,
     /^incidencia$/i,

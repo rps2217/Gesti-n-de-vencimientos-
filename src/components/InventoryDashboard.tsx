@@ -23,7 +23,7 @@ import {
   Plus, Edit2, Trash2, RefreshCw, Loader2, Database, AlertCircle, Package, 
   FileSpreadsheet, FileText, Search, X, Truck, RotateCcw, 
   PackageX, Sparkles, Clock, Clock3, Flame, AlertTriangle, CheckCircle2, 
-  Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown, Menu, Scan
+  Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown, Menu, Scan, GripVertical, Tag
 } from 'lucide-react';
 
 // Utilities & Hooks
@@ -32,7 +32,8 @@ import {
   renderEventIcon, 
   parseAnyDate, 
   getEventCategory, 
-  getItemStatus 
+  getItemStatus,
+  getCategoryFromEventValue
 } from '../utils/dateCalculations';
 import { findColumnBySemantic } from '../utils/columnAliases';
 import { useColumnResize } from '../hooks/useColumnResize';
@@ -136,6 +137,8 @@ export const InventoryDashboard: React.FC = () => {
 
   // Column Manager State
   const [isColumnManagerOpen, setIsColumnManagerOpen] = useState(false);
+  const [draggedCol, setDraggedCol] = useState<string | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [columnOrders, setColumnOrders] = useState<Record<string, string[]>>(() => {
     try {
       const saved = localStorage.getItem('appsheet_clone_col_orders');
@@ -319,6 +322,9 @@ export const InventoryDashboard: React.FC = () => {
     let vencimientos = 0;
     let transporte = 0;
     let diferencia = 0;
+    let calInterna = 0;
+    let calExterna = 0;
+    let canjes = 0;
     let averia = 0;
     let devolucion = 0;
     let vencimientoCercano = 0;
@@ -332,6 +338,12 @@ export const InventoryDashboard: React.FC = () => {
         transporte++;
       } else if (cat === 'DIFERENCIA') {
         diferencia++;
+      } else if (cat === 'CAL_INTERNA') {
+        calInterna++;
+      } else if (cat === 'CAL_EXTERNA') {
+        calExterna++;
+      } else if (cat === 'CANJES') {
+        canjes++;
       } else if (cat === 'AVERIA') {
         averia++;
       } else if (cat === 'DEVOLUCION') {
@@ -352,6 +364,9 @@ export const InventoryDashboard: React.FC = () => {
       vencimientos,
       transporte,
       diferencia,
+      calInterna,
+      calExterna,
+      canjes,
       averia,
       devolucion,
       vencimientoCercano,
@@ -377,7 +392,10 @@ export const InventoryDashboard: React.FC = () => {
 
     // Apply Event Category Filter in main or events view
     if (activeView === 'main') {
-      list = list.filter(item => getEventCategory(item, headers) === 'VENCIMIENTO');
+      list = list.filter(item => {
+        const cat = getEventCategory(item, headers);
+        return cat === 'VENCIMIENTO' || cat === 'VENCIMIENTO_CERCANO';
+      });
     } else if (activeView === 'events' && eventFilter !== 'all') {
       list = list.filter(item => getEventCategory(item, headers) === eventFilter);
     }
@@ -678,27 +696,12 @@ export const InventoryDashboard: React.FC = () => {
 
   const handleSelectEventCategory = (cat: EventCategory) => {
     setSelectedEventCategory(cat);
-    const eventCol = headers.find(h => /tipo.*evento|evento|tipo.*registro|incidencia|categor[ií]a/i.test(h));
+    const eventCol = findColumnBySemantic(headers, 'tipo_evento') || headers.find(h => /^frc(_|\s)?even/i.test(h.trim()));
     if (eventCol) {
       setFormData(prev => ({
         ...prev,
-        [eventCol]: EVENT_CATEGORIES[cat].name
+        [eventCol]: EVENT_CATEGORIES[cat].rawCode || EVENT_CATEGORIES[cat].name
       }));
-    }
-  };
-
-  const handleAddEventColumn = async () => {
-    if (!activeSheet || headers.length === 0) return;
-    const colName = 'TIPO_EVENTO';
-    if (headers.includes(colName)) return;
-    try {
-      setLoading(true);
-      const newHeaders = [...headers, colName];
-      await updateRow(activeSheet.title, 1, newHeaders);
-      await fetchData();
-    } catch (err: any) {
-      alert(`Error agregando columna TIPO_EVENTO: ${err.message}`);
-      setLoading(false);
     }
   };
 
@@ -1161,8 +1164,8 @@ export const InventoryDashboard: React.FC = () => {
 
   if (loading && !metadata) {
     return (
-      <div className="flex h-full items-center justify-center bg-[#F8FAFC]">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      <div className="flex h-full items-center justify-center bg-[#F8FAFC] dark:bg-slate-950">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
       </div>
     );
   }
@@ -1173,7 +1176,7 @@ export const InventoryDashboard: React.FC = () => {
     .filter((t: string) => !mappedSheets.includes(t) && !/^_/i.test(t.trim())) || [];
 
   return (
-    <div className="flex h-full overflow-hidden bg-[#F8FAFC]">
+    <div className="flex h-full overflow-hidden bg-[#F8FAFC] dark:bg-slate-950">
       
       {/* DESKTOP SIDEBAR NAVIGATION */}
       <div className="hidden lg:flex">
@@ -1192,10 +1195,10 @@ export const InventoryDashboard: React.FC = () => {
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 lg:hidden flex">
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
-          <div className="relative w-72 bg-white h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-left duration-200">
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-              <span className="font-bold text-slate-800 text-base">Menú de Navegación</span>
-              <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100">
+          <div className="relative w-72 bg-white dark:bg-slate-900 h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-left duration-200">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <span className="font-bold text-slate-800 dark:text-slate-100 text-base">Menú de Navegación</span>
+              <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1218,11 +1221,11 @@ export const InventoryDashboard: React.FC = () => {
       <div className="flex-1 flex flex-col overflow-hidden relative">
         
         {/* MACRO SEARCH NAV (Always top, sticky) */}
-        <div className="bg-white border-b border-slate-200 z-20 sticky top-0 shrink-0 px-4 sm:px-8 py-3 flex items-center justify-between gap-4">
+        <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 z-20 sticky top-0 shrink-0 px-4 sm:px-8 py-3 flex items-center justify-between gap-4">
           {/* Mobile Menu Trigger */}
           <button
             onClick={() => setIsMobileMenuOpen(true)}
-            className="lg:hidden p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-colors shrink-0"
+            className="lg:hidden p-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition-colors shrink-0"
             title="Abrir menú"
           >
             <Menu className="w-5 h-5" />
@@ -1233,18 +1236,18 @@ export const InventoryDashboard: React.FC = () => {
             {(activeView !== 'schema' || searchableHeaders.length > 0) ? (
               <div className="relative w-full max-w-3xl flex items-center gap-2">
                 <div className="relative flex-1">
-                  <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                  <Search className="w-5 h-5 text-slate-400 dark:text-slate-500 absolute left-4 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder={activeView === 'analytics' ? "Explorar y filtrar gráficos por lote, descripción, proveedor..." : `Buscar en todo el inventario (${searchableHeaders.length} columnas)...`}
-                    className="w-full pl-11 pr-10 py-3 bg-slate-100/70 hover:bg-slate-100 border-transparent focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-2xl text-base font-medium text-slate-700 placeholder:text-slate-400 outline-none transition-all"
+                    className="w-full pl-11 pr-10 py-3 bg-slate-100/70 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 border-transparent focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-2xl text-base font-medium text-slate-700 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all"
                   />
                   {searchTerm && (
                     <button
                       onClick={() => setSearchTerm('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1.5 rounded-full hover:bg-slate-200/60 transition-colors"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 p-1.5 rounded-full hover:bg-slate-200/60 dark:hover:bg-slate-700 transition-colors"
                       title="Limpiar búsqueda"
                     >
                       <X className="w-4 h-4" />
@@ -1253,7 +1256,7 @@ export const InventoryDashboard: React.FC = () => {
                 </div>
                 <button
                   onClick={() => setIsScannerOpen(true)}
-                  className="p-3 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-2xl transition-all shrink-0 flex items-center gap-2 border border-blue-200/60 shadow-sm"
+                  className="p-3 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-2xl transition-all shrink-0 flex items-center gap-2 border border-blue-200/60 dark:border-blue-800/60 shadow-sm"
                   title="Escanear código de barras o QR con la cámara"
                 >
                   <Scan className="w-5 h-5" />
@@ -1270,19 +1273,19 @@ export const InventoryDashboard: React.FC = () => {
             {activeView !== 'schema' && (
               <button
                 onClick={() => exportToCSV(`${activeView}_${new Date().toISOString().split('T')[0]}`, headers, filteredItems)}
-                className="text-sm bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-2 hidden md:flex"
+                className="text-sm bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-2 hidden md:flex"
                 title="Exportar la vista actual a CSV"
               >
-                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span>Exportar CSV</span>
               </button>
             )}
             {/* Status & Sync Indicator */}
-            <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-sm">
+            <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-sm">
               <span className={`w-2 h-2 rounded-full ${isOffline ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
-              <span className="text-slate-700">{isOffline ? 'Modo Offline (Caché)' : 'Conectado'}</span>
+              <span className="text-slate-700 dark:text-slate-200">{isOffline ? 'Modo Offline (Caché)' : 'Conectado'}</span>
               {lastCachedAt && (
-                <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">({new Date(lastCachedAt).toLocaleTimeString()})</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono hidden sm:inline">({new Date(lastCachedAt).toLocaleTimeString()})</span>
               )}
               {offlineQueue.length > 0 && (
                 <button 
@@ -1293,16 +1296,16 @@ export const InventoryDashboard: React.FC = () => {
                 </button>
               )}
             </div>
-            <button onClick={() => fetchData()} className="text-sm bg-white border border-slate-200 px-3 py-2.5 rounded-xl font-medium shadow-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700 transition-colors" title="Refrescar datos">
+            <button onClick={() => fetchData()} className="text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2.5 rounded-xl font-medium shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200 transition-colors" title="Refrescar datos">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
 
         {/* CONTEXTUAL PAGE HEADER */}
-        <div className="bg-slate-50/50 border-b border-slate-200 shrink-0 px-8 py-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="bg-slate-50/50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 px-8 py-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
               {activeView === 'main' ? 'Radar de Vencimientos & Drenaje' :
                activeView === 'events' ? 'Registro de Incidencias & FRC' : 
                activeView === 'products' ? 'Catálogo de Productos' : 
@@ -1312,12 +1315,12 @@ export const InventoryDashboard: React.FC = () => {
                activeView}
               
               {isRelationalActive && activeView === 'main' && (
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-emerald-600" /> Modelo Relacional Activo
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-bold flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Modelo Relacional Activo
                 </span>
               )}
             </h1>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               {activeView === 'main' ? 'Monitoreo de lotes críticos, fechas de retiro comercial y solicitud de precio para PM.' :
                activeView === 'events' ? 'Deterioros de transporte, diferencias de pedido, averías de almacén y devoluciones.' :
                activeView === 'products' ? 'Maestro de SKUs con relaciones directas hacia vencimientos e incidencias.' :
@@ -1332,9 +1335,9 @@ export const InventoryDashboard: React.FC = () => {
             {activeView === 'schema' && (
               <button
                 onClick={() => setIsScriptModalOpen(true)}
-                className="text-xs bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-sm"
+                className="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-sm"
               >
-                <Sliders className="w-4 h-4 text-blue-600" />
+                <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 <span>Conector Apps Script</span>
               </button>
             )}
@@ -1342,10 +1345,10 @@ export const InventoryDashboard: React.FC = () => {
             {activeView === 'main' && (
               <button
                 onClick={() => setIsPmReportOpen(true)}
-                className="text-xs bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200 px-3.5 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-1.5"
+                className="text-xs bg-orange-50 dark:bg-orange-950/50 hover:bg-orange-100 dark:hover:bg-orange-900/50 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-800 px-3.5 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-1.5"
                 title="Generar resumen de productos críticos para enviar a Product Manager"
               >
-                <Flame className="w-4 h-4 text-orange-600" />
+                <Flame className="w-4 h-4 text-orange-600 dark:text-orange-400" />
                 <span>Reporte PM ({drainageReportItems.length})</span>
               </button>
             )}
@@ -1353,10 +1356,14 @@ export const InventoryDashboard: React.FC = () => {
             {activeView !== 'schema' && activeView !== 'analytics' && (
               <button
                 onClick={() => setAreFiltersVisible(!areFiltersVisible)}
-                className={`text-xs bg-white border ${areFiltersVisible ? 'border-blue-300 text-blue-700 bg-blue-50/50' : 'border-slate-200 text-slate-700'} hover:bg-slate-50 px-3.5 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-sm`}
+                className={`text-xs border px-3.5 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-sm ${
+                  areFiltersVisible 
+                    ? 'border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 bg-blue-50/50 dark:bg-blue-950/40' 
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
+                }`}
                 title={areFiltersVisible ? "Ocultar paneles de filtros y radar" : "Mostrar paneles de filtros y radar"}
               >
-                <Sliders className="w-4 h-4 text-blue-600" />
+                <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 <span className="hidden sm:inline">{areFiltersVisible ? 'Ocultar Filtros' : 'Mostrar Filtros'}</span>
               </button>
             )}
@@ -1364,9 +1371,9 @@ export const InventoryDashboard: React.FC = () => {
             {activeView !== 'schema' && activeView !== 'analytics' && (
               <button
                 onClick={() => setIsColumnManagerOpen(true)}
-                className="text-xs bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-sm"
+                className="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-sm"
               >
-                <Columns className="w-4 h-4 text-blue-600" />
+                <Columns className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 <span className="hidden sm:inline">Columnas</span>
               </button>
             )}
@@ -1374,7 +1381,7 @@ export const InventoryDashboard: React.FC = () => {
             {hasCustomColWidths && activeView !== 'schema' && activeView !== 'analytics' && (
               <button
                 onClick={handleResetColWidths}
-                className="text-xs bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-3 py-2.5 rounded-xl font-medium shadow-sm transition-colors flex items-center gap-1"
+                className="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 px-3 py-2.5 rounded-xl font-medium shadow-sm transition-colors flex items-center gap-1"
                 title="Restablecer ancho original de todas las columnas de esta tabla"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -1386,7 +1393,7 @@ export const InventoryDashboard: React.FC = () => {
               <button 
                 disabled={!activeSheet || isModalOpen} 
                 onClick={() => handleOpenModal()} 
-                className="text-sm bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-md shadow-blue-200 flex items-center gap-2 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all"
+                className="text-sm bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-md shadow-blue-200 dark:shadow-none flex items-center gap-2 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all"
               >
                 <Plus className="w-4 h-4"/>
                 <span>
@@ -1406,8 +1413,8 @@ export const InventoryDashboard: React.FC = () => {
           <>
             {/* QUICK CHIPS (Píldoras Contextuales) */}
             {quickChips.length > 0 && activeView !== 'schema' && activeView !== 'analytics' && (
-          <div className="bg-slate-50 border-b border-slate-200 px-8 py-2.5 shrink-0 flex items-center gap-2 overflow-x-auto">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider mr-2 shrink-0">Filtros Rápidos:</span>
+          <div className="bg-slate-50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800 px-8 py-2.5 shrink-0 flex items-center gap-2 overflow-x-auto">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mr-2 shrink-0">Filtros Rápidos:</span>
             {quickChips.map((chip, idx) => (
               <button
                 key={idx}
@@ -1415,7 +1422,7 @@ export const InventoryDashboard: React.FC = () => {
                 className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors shrink-0 ${
                   activeQuickChip === chip
                     ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
               >
                 {chip}
@@ -1424,7 +1431,7 @@ export const InventoryDashboard: React.FC = () => {
             {activeQuickChip && (
               <button
                 onClick={() => setActiveQuickChip(null)}
-                className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1.5 rounded-full transition-colors shrink-0 underline"
+                className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 px-2 py-1.5 rounded-full transition-colors shrink-0 underline"
               >
                 Limpiar filtro
               </button>
@@ -1434,25 +1441,105 @@ export const InventoryDashboard: React.FC = () => {
 
         {/* INCIDENCIAS & FRC STRIP (When activeView === 'events') */}
         {activeView === 'events' && activeSheet && (
-          <div className="bg-white border-b border-slate-200 px-8 py-4 shrink-0 flex flex-col gap-4 shadow-sm">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-8 py-4 shrink-0 flex flex-col gap-4 shadow-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <button
+                onClick={() => setEventFilter(eventFilter === 'VENCIMIENTO_CERCANO' ? 'all' : 'VENCIMIENTO_CERCANO')}
+                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
+                  eventFilter === 'VENCIMIENTO_CERCANO'
+                    ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/70 dark:bg-indigo-950/40 shadow-sm'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 flex items-center justify-center">
+                    <Clock3 className="w-4 h-4" />
+                  </div>
+                  <span className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">{eventMetrics.vencimientoCercano}</span>
+                </div>
+                <div className="mt-2.5">
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Venc. Cercano</h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">VENC. CERC.</p>
+                </div>
+              </button>
+
               <button
                 onClick={() => setEventFilter(eventFilter === 'TRANSPORTE' ? 'all' : 'TRANSPORTE')}
                 className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
                   eventFilter === 'TRANSPORTE'
-                    ? 'border-amber-500 ring-2 ring-amber-500/20 bg-amber-50/70 shadow-sm'
-                    : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300'
+                    ? 'border-amber-500 ring-2 ring-amber-500/20 bg-amber-50/70 dark:bg-amber-950/40 shadow-sm'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 flex items-center justify-center">
                     <Truck className="w-4 h-4" />
                   </div>
-                  <span className="text-xl font-black text-slate-800 font-mono">{eventMetrics.transporte}</span>
+                  <span className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">{eventMetrics.transporte}</span>
                 </div>
                 <div className="mt-2.5">
-                  <h4 className="text-xs font-bold text-slate-800">Deterioro Transporte</h4>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Golpe / rotura en flete</p>
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Det. Pedido</h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">DET. PED (Transporte)</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setEventFilter(eventFilter === 'CAL_INTERNA' ? 'all' : 'CAL_INTERNA')}
+                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
+                  eventFilter === 'CAL_INTERNA'
+                    ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/70 dark:bg-emerald-950/40 shadow-sm'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 flex items-center justify-center">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <span className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">{eventMetrics.calInterna}</span>
+                </div>
+                <div className="mt-2.5">
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Cal. Interna</h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">CAL. INTER</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setEventFilter(eventFilter === 'CAL_EXTERNA' ? 'all' : 'CAL_EXTERNA')}
+                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
+                  eventFilter === 'CAL_EXTERNA'
+                    ? 'border-teal-500 ring-2 ring-teal-500/20 bg-teal-50/70 dark:bg-teal-950/40 shadow-sm'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-xl bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-300 flex items-center justify-center">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <span className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">{eventMetrics.calExterna}</span>
+                </div>
+                <div className="mt-2.5">
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Cal. Externa</h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">CAL. EXT.</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setEventFilter(eventFilter === 'CANJES' ? 'all' : 'CANJES')}
+                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
+                  eventFilter === 'CANJES'
+                    ? 'border-pink-500 ring-2 ring-pink-500/20 bg-pink-50/70 dark:bg-pink-950/40 shadow-sm'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-xl bg-pink-100 dark:bg-pink-900/60 text-pink-700 dark:text-pink-300 flex items-center justify-center">
+                    <Tag className="w-4 h-4" />
+                  </div>
+                  <span className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">{eventMetrics.canjes}</span>
+                </div>
+                <div className="mt-2.5">
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Canjes</h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">CANJES</p>
                 </div>
               </button>
 
@@ -1460,149 +1547,122 @@ export const InventoryDashboard: React.FC = () => {
                 onClick={() => setEventFilter(eventFilter === 'DIFERENCIA' ? 'all' : 'DIFERENCIA')}
                 className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
                   eventFilter === 'DIFERENCIA'
-                    ? 'border-purple-500 ring-2 ring-purple-500/20 bg-purple-50/70 shadow-sm'
-                    : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300'
+                    ? 'border-purple-500 ring-2 ring-purple-500/20 bg-purple-50/70 dark:bg-purple-950/40 shadow-sm'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-300 flex items-center justify-center">
                     <FileSpreadsheet className="w-4 h-4" />
                   </div>
-                  <span className="text-xl font-black text-slate-800 font-mono">{eventMetrics.diferencia}</span>
+                  <span className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">{eventMetrics.diferencia}</span>
                 </div>
                 <div className="mt-2.5">
-                  <h4 className="text-xs font-bold text-slate-800">Diferencia Pedido</h4>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Faltante / sobrante / trocado</p>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setEventFilter(eventFilter === 'AVERIA' ? 'all' : 'AVERIA')}
-                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
-                  eventFilter === 'AVERIA'
-                    ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/70 shadow-sm'
-                    : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-800 flex items-center justify-center">
-                    <PackageX className="w-4 h-4" />
-                  </div>
-                  <span className="text-xl font-black text-slate-800 font-mono">{eventMetrics.averia}</span>
-                </div>
-                <div className="mt-2.5">
-                  <h4 className="text-xs font-bold text-slate-800">Avería / Merma</h4>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Derrame o rotura interna</p>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setEventFilter(eventFilter === 'DEVOLUCION' ? 'all' : 'DEVOLUCION')}
-                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
-                  eventFilter === 'DEVOLUCION'
-                    ? 'border-teal-500 ring-2 ring-teal-500/20 bg-teal-50/70 shadow-sm'
-                    : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center">
-                    <RotateCcw className="w-4 h-4" />
-                  </div>
-                  <span className="text-xl font-black text-slate-800 font-mono">{eventMetrics.devolucion}</span>
-                </div>
-                <div className="mt-2.5">
-                  <h4 className="text-xs font-bold text-slate-800">Devolución / Canje</h4>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Gestión con proveedor</p>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setEventFilter(eventFilter === 'VENCIMIENTO_CERCANO' ? 'all' : 'VENCIMIENTO_CERCANO')}
-                className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
-                  eventFilter === 'VENCIMIENTO_CERCANO'
-                    ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/70 shadow-sm'
-                    : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
-                    <Clock3 className="w-4 h-4" />
-                  </div>
-                  <span className="text-xl font-black text-slate-800 font-mono">{eventMetrics.vencimientoCercano}</span>
-                </div>
-                <div className="mt-2.5">
-                  <h4 className="text-xs font-bold text-slate-800">Vencimiento Cercano</h4>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Control de caducidad inminente</p>
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Dif. Pedido</h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">DIF. PED</p>
                 </div>
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-100 text-xs">
-              <span className="font-bold text-slate-400 uppercase tracking-wider text-[10px] mr-1">Filtrar Incidencias:</span>
+            <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-100 dark:border-slate-800 text-xs">
+              <span className="font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider text-[10px] mr-1">Filtrar Incidencias (FRC_EVEN):</span>
               <button 
                 onClick={() => setEventFilter('all')}
                 className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
                   eventFilter === 'all'
-                    ? 'bg-slate-800 text-white shadow-sm' 
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    ? 'bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 shadow-sm' 
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
                 Todos ({items.length})
               </button>
               <button 
+                onClick={() => setEventFilter('VENCIMIENTO_CERCANO')}
+                className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
+                  eventFilter === 'VENCIMIENTO_CERCANO'
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200 dark:shadow-none' 
+                    : 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'
+                }`}
+              >
+                <Clock3 className="w-3.5 h-3.5" />
+                <span>VENC. CERC. ({eventMetrics.vencimientoCercano})</span>
+              </button>
+              <button 
                 onClick={() => setEventFilter('TRANSPORTE')}
                 className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
                   eventFilter === 'TRANSPORTE'
-                    ? 'bg-amber-600 text-white shadow-sm shadow-amber-200' 
-                    : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
+                    ? 'bg-amber-600 text-white shadow-sm shadow-amber-200 dark:shadow-none' 
+                    : 'bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50'
                 }`}
               >
                 <Truck className="w-3.5 h-3.5" />
-                <span>Transporte ({eventMetrics.transporte})</span>
+                <span>DET. PED ({eventMetrics.transporte})</span>
+              </button>
+              <button 
+                onClick={() => setEventFilter('CAL_INTERNA')}
+                className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
+                  eventFilter === 'CAL_INTERNA'
+                    ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-200 dark:shadow-none' 
+                    : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
+                }`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>CAL. INTER ({eventMetrics.calInterna})</span>
+              </button>
+              <button 
+                onClick={() => setEventFilter('CAL_EXTERNA')}
+                className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
+                  eventFilter === 'CAL_EXTERNA'
+                    ? 'bg-teal-600 text-white shadow-sm shadow-teal-200 dark:shadow-none' 
+                    : 'bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/50'
+                }`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>CAL. EXT. ({eventMetrics.calExterna})</span>
+              </button>
+              <button 
+                onClick={() => setEventFilter('CANJES')}
+                className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
+                  eventFilter === 'CANJES'
+                    ? 'bg-pink-600 text-white shadow-sm shadow-pink-200 dark:shadow-none' 
+                    : 'bg-pink-50 dark:bg-pink-950/50 text-pink-800 dark:text-pink-300 hover:bg-pink-100 dark:hover:bg-pink-900/50'
+                }`}
+              >
+                <Tag className="w-3.5 h-3.5" />
+                <span>CANJES ({eventMetrics.canjes})</span>
               </button>
               <button 
                 onClick={() => setEventFilter('DIFERENCIA')}
                 className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
                   eventFilter === 'DIFERENCIA'
-                    ? 'bg-purple-600 text-white shadow-sm shadow-purple-200' 
-                    : 'bg-purple-50 text-purple-800 hover:bg-purple-100'
+                    ? 'bg-purple-600 text-white shadow-sm shadow-purple-200 dark:shadow-none' 
+                    : 'bg-purple-50 dark:bg-purple-950/50 text-purple-800 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50'
                 }`}
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" />
-                <span>Diferencias ({eventMetrics.diferencia})</span>
+                <span>DIF. PED ({eventMetrics.diferencia})</span>
               </button>
               <button 
                 onClick={() => setEventFilter('AVERIA')}
                 className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
                   eventFilter === 'AVERIA'
-                    ? 'bg-rose-600 text-white shadow-sm shadow-rose-200' 
-                    : 'bg-rose-50 text-rose-800 hover:bg-rose-100'
+                    ? 'bg-rose-600 text-white shadow-sm shadow-rose-200 dark:shadow-none' 
+                    : 'bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/50'
                 }`}
               >
                 <PackageX className="w-3.5 h-3.5" />
-                <span>Averías ({eventMetrics.averia})</span>
+                <span>AVERIA ({eventMetrics.averia})</span>
               </button>
               <button 
                 onClick={() => setEventFilter('DEVOLUCION')}
                 className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
                   eventFilter === 'DEVOLUCION'
-                    ? 'bg-teal-600 text-white shadow-sm shadow-teal-200' 
-                    : 'bg-teal-50 text-teal-800 hover:bg-teal-100'
+                    ? 'bg-teal-600 text-white shadow-sm shadow-teal-200 dark:shadow-none' 
+                    : 'bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/50'
                 }`}
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>Devolución ({eventMetrics.devolucion})</span>
-              </button>
-              <button 
-                onClick={() => setEventFilter('VENCIMIENTO_CERCANO')}
-                className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
-                  eventFilter === 'VENCIMIENTO_CERCANO'
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200' 
-                    : 'bg-indigo-50 text-indigo-800 hover:bg-indigo-100'
-                }`}
-              >
-                <Clock3 className="w-3.5 h-3.5" />
-                <span>Venc. Cercano ({eventMetrics.vencimientoCercano})</span>
+                <span>DEVOLUCION ({eventMetrics.devolucion})</span>
               </button>
             </div>
           </div>
@@ -1610,25 +1670,25 @@ export const InventoryDashboard: React.FC = () => {
 
         {/* RADAR COMERCIAL (Only in main view, exclusively for Vencimientos) */}
         {activeView === 'main' && activeSheet && (
-          <div className="bg-white border-b border-slate-200 px-8 py-4 shrink-0 flex flex-col gap-4 shadow-sm">
+          <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-8 py-4 shrink-0 flex flex-col gap-4 shadow-sm">
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
               <button
                 onClick={() => setPmRadarFilter('all')}
                 className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
                   pmRadarFilter === 'all'
-                    ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/70 shadow-sm'
-                    : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300'
+                    ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/70 dark:bg-blue-950/40 shadow-sm'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 flex items-center justify-center">
                     <Clock className="w-4 h-4" />
                   </div>
-                  <span className="text-xl font-black text-slate-800 font-mono">{pmMetrics.total}</span>
+                  <span className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">{pmMetrics.total}</span>
                 </div>
                 <div className="mt-2.5">
-                  <h4 className="text-xs font-bold text-slate-800">Total Vencimientos</h4>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Registros comerciales</p>
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Total Vencimientos</h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Registros comerciales</p>
                 </div>
               </button>
 
@@ -1636,19 +1696,19 @@ export const InventoryDashboard: React.FC = () => {
                 onClick={() => setPmRadarFilter('en_regla')}
                 className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
                   pmRadarFilter === 'en_regla'
-                    ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/70 shadow-sm'
-                    : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300'
+                    ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/70 dark:bg-emerald-950/40 shadow-sm'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 flex items-center justify-center">
                     <CheckCircle2 className="w-4 h-4" />
                   </div>
-                  <span className="text-xl font-black text-slate-800 font-mono">{pmMetrics.enRegla}</span>
+                  <span className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">{pmMetrics.enRegla}</span>
                 </div>
                 <div className="mt-2.5">
-                  <h4 className="text-xs font-bold text-slate-800">En Regla</h4>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Dentro de política</p>
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">En Regla</h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Dentro de política</p>
                 </div>
               </button>
 
@@ -1656,19 +1716,19 @@ export const InventoryDashboard: React.FC = () => {
                 onClick={() => setPmRadarFilter('drainage')}
                 className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
                   pmRadarFilter === 'drainage'
-                    ? 'border-orange-500 ring-2 ring-orange-500/20 bg-orange-50/70 shadow-sm'
-                    : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300'
+                    ? 'border-orange-500 ring-2 ring-orange-500/20 bg-orange-50/70 dark:bg-orange-950/40 shadow-sm'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-800 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-900/60 text-orange-800 dark:text-orange-300 flex items-center justify-center">
                     <Flame className="w-4 h-4" />
                   </div>
-                  <span className="text-xl font-black text-slate-800 font-mono">{pmMetrics.drainage}</span>
+                  <span className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">{pmMetrics.drainage}</span>
                 </div>
                 <div className="mt-2.5">
-                  <h4 className="text-xs font-bold text-slate-800">Drenaje PM</h4>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Prioridad comercial</p>
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Drenaje PM</h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Prioridad comercial</p>
                 </div>
               </button>
 
@@ -1676,19 +1736,19 @@ export const InventoryDashboard: React.FC = () => {
                 onClick={() => setPmRadarFilter('upcoming')}
                 className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
                   pmRadarFilter === 'upcoming'
-                    ? 'border-amber-500 ring-2 ring-amber-500/20 bg-amber-50/70 shadow-sm'
-                    : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300'
+                    ? 'border-amber-500 ring-2 ring-amber-500/20 bg-amber-50/70 dark:bg-amber-950/40 shadow-sm'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 flex items-center justify-center">
                     <Clock3 className="w-4 h-4" />
                   </div>
-                  <span className="text-xl font-black text-slate-800 font-mono">{pmMetrics.upcoming}</span>
+                  <span className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">{pmMetrics.upcoming}</span>
                 </div>
                 <div className="mt-2.5">
-                  <h4 className="text-xs font-bold text-slate-800">Próximo a Retiro</h4>
-                  <p className="text-[10px] text-slate-500 mt-0.5">&lt; 30 días a política</p>
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Próximo a Retiro</h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">&lt; 30 días a política</p>
                 </div>
               </button>
 
@@ -1696,40 +1756,22 @@ export const InventoryDashboard: React.FC = () => {
                 onClick={() => setPmRadarFilter('retire_now')}
                 className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden ${
                   pmRadarFilter === 'retire_now'
-                    ? 'border-red-500 ring-2 ring-red-500/20 bg-red-50/70 shadow-sm'
-                    : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300'
+                    ? 'border-red-500 ring-2 ring-red-500/20 bg-red-50/70 dark:bg-red-950/40 shadow-sm'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-red-100 text-red-800 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-red-100 dark:bg-red-900/60 text-red-800 dark:text-red-300 flex items-center justify-center">
                     <AlertTriangle className="w-4 h-4" />
                   </div>
-                  <span className="text-xl font-black text-slate-800 font-mono">{pmMetrics.retireNow}</span>
+                  <span className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">{pmMetrics.retireNow}</span>
                 </div>
                 <div className="mt-2.5">
-                  <h4 className="text-xs font-bold text-slate-800">Retirar Ya / Vencido</h4>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Acción inmediata</p>
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Retirar Ya / Vencido</h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Acción inmediata</p>
                 </div>
               </button>
             </div>
-
-            {/* Helper notice if TIPO_EVENTO is not in headers */}
-            {!headers.some(h => /tipo.*evento|evento|incidencia/i.test(h)) && (
-              <div className="bg-blue-50/70 border border-blue-200 rounded-xl px-4 py-2.5 flex items-center justify-between gap-3 text-xs text-blue-900">
-                <div className="flex items-center gap-2">
-                  <FileSpreadsheet className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>
-                    <strong>Gestión de Eventos:</strong> Puedes añadir una columna <code className="bg-blue-100 px-1 py-0.5 rounded font-mono font-bold text-blue-800">TIPO_EVENTO</code> para guardar la tipificación automáticamente en Google Sheets.
-                  </span>
-                </div>
-                <button
-                  onClick={handleAddEventColumn}
-                  className="px-3 py-1 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shrink-0 transition-colors shadow-sm"
-                >
-                  + Añadir TIPO_EVENTO
-                </button>
-              </div>
-            )}
           </div>
         )}
           </>
@@ -1770,30 +1812,30 @@ export const InventoryDashboard: React.FC = () => {
           ) : activeView === 'analytics' ? (
             <AnalyticsDashboard items={filteredItems} headers={headers} />
           ) : !activeSheet && !loading ? (
-            <div className="h-full w-full flex items-center justify-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50">
+            <div className="h-full w-full flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl bg-slate-50 dark:bg-slate-900/60">
               <div className="text-center max-w-sm">
-                <div className="w-16 h-16 bg-white border border-slate-100 rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4">
-                  <Package className="w-8 h-8 text-slate-300" />
+                <div className="w-16 h-16 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4">
+                  <Package className="w-8 h-8 text-slate-300 dark:text-slate-600" />
                 </div>
-                <h3 className="text-lg font-bold text-slate-700">Módulo sin asignar</h3>
-                <p className="text-slate-500 mt-2 text-sm">Aún no has seleccionado qué pestaña de tu Google Sheet cumplirá esta función.</p>
-                <button onClick={() => setIsConfigOpen(true)} className="mt-6 bg-white border border-slate-200 text-slate-700 font-bold text-sm px-6 py-2.5 rounded-xl shadow-sm hover:bg-slate-50 transition-all">
+                <h3 className="text-lg font-bold text-slate-700 dark:text-slate-200">Módulo sin asignar</h3>
+                <p className="text-slate-500 dark:text-slate-400 mt-2 text-sm">Aún no has seleccionado qué pestaña de tu Google Sheet cumplirá esta función.</p>
+                <button onClick={() => setIsConfigOpen(true)} className="mt-6 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm px-6 py-2.5 rounded-xl shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
                   Abrir Configuración
                 </button>
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col h-full">
               <div className="flex-1 overflow-auto relative" ref={tableContainerRef}>
                 <table className="text-left border-collapse" style={{ width: 'max-content', minWidth: '100%' }}>
-                  <thead className="bg-slate-50/80 sticky top-0 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider select-none z-10">
+                  <thead className="bg-slate-50 dark:bg-slate-850 sticky top-0 border-b border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none z-10">
                     <tr>
                       {/* Selection Header */}
-                      <th className="p-4 text-center bg-slate-50" style={{ width: '48px', minWidth: '48px' }}>
+                      <th className="p-4 text-center bg-slate-50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800" style={{ width: '48px', minWidth: '48px' }}>
                         <div className="flex items-center justify-center">
                           <input
                             type="checkbox"
-                            className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                            className="w-4 h-4 text-blue-600 rounded border-slate-300 dark:border-slate-700 dark:bg-slate-800 focus:ring-blue-500 cursor-pointer"
                             checked={filteredItems.length > 0 && selectedRowIds.length === filteredItems.length}
                             onChange={(e) => {
                               if (e.target.checked) {
@@ -1809,7 +1851,7 @@ export const InventoryDashboard: React.FC = () => {
                       {/* Fixed Row Index Header */}
                       <th 
                         style={{ width: `${getColWidth('_row', '#')}px`, minWidth: '50px' }} 
-                        className="p-4 text-center text-slate-400 bg-slate-50 relative group"
+                        className="p-4 text-center text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800 relative group"
                       >
                         <span>#</span>
                         <div
@@ -1820,35 +1862,15 @@ export const InventoryDashboard: React.FC = () => {
                             resizingCol?.colId === '_row' ? 'bg-blue-600 w-2.5' : ''
                           }`}
                         >
-                          <div className="w-[1px] h-3 bg-slate-300 group-hover:bg-blue-500"></div>
+                          <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-600 group-hover:bg-blue-500"></div>
                         </div>
                       </th>
 
-                      {/* Event Type Header */}
-                      {(activeView === 'main' || activeView === 'events') && (
-                        <th 
-                          style={{ width: `${getColWidth('_event_type', 'Tipo de Evento')}px`, minWidth: '90px' }} 
-                          className="p-4 bg-slate-50 relative group"
-                        >
-                          <div className="truncate pr-2">Tipo de Evento</div>
-                          <div
-                            onMouseDown={(e) => handleStartResize('_event_type', getColWidth('_event_type', 'Tipo de Evento'), e)}
-                            onDoubleClick={() => handleAutoFitColumn('_event_type', 'Tipo de Evento')}
-                            title="Arrastra para cambiar ancho (Doble clic para autoajustar)"
-                            className={`absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400/80 transition-colors z-20 flex items-center justify-center ${
-                              resizingCol?.colId === '_event_type' ? 'bg-blue-600 w-2.5' : ''
-                            }`}
-                          >
-                            <div className="w-[1px] h-3 bg-slate-300 group-hover:bg-blue-500"></div>
-                          </div>
-                        </th>
-                      )}
-
-                      {/* Expiration Status Header */}
+                      {/* Expiration Status Header (Main view only) */}
                       {activeView === 'main' && (
                         <th 
                           style={{ width: `${getColWidth('_status', 'Estado / Radar PM')}px`, minWidth: '100px' }} 
-                          className="p-4 bg-slate-50 relative group"
+                          className="p-4 bg-slate-50 dark:bg-slate-850 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 relative group"
                         >
                           <div className="truncate pr-2">Estado / Radar PM</div>
                           <div
@@ -1859,7 +1881,7 @@ export const InventoryDashboard: React.FC = () => {
                               resizingCol?.colId === '_status' ? 'bg-blue-600 w-2.5' : ''
                             }`}
                           >
-                            <div className="w-[1px] h-3 bg-slate-300 group-hover:bg-blue-500"></div>
+                            <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-600 group-hover:bg-blue-500"></div>
                           </div>
                         </th>
                       )}
@@ -1869,39 +1891,61 @@ export const InventoryDashboard: React.FC = () => {
                         const colSchema = sheetConfig.schema?.[activeSheet?.title || '']?.[header];
                         const width = getColWidth(header, header, colSchema?.type);
                         const isResizingThis = resizingCol?.colId === header;
+                        const isDraggingThis = draggedCol === header;
+                        const isDropTarget = dragOverCol === header && draggedCol !== header;
 
                         return (
                           <th 
                             key={header} 
                             style={{ width: `${width}px`, minWidth: '70px' }}
-                            className="p-4 bg-slate-50 relative group transition-colors cursor-grab active:cursor-grabbing hover:bg-slate-100/90 select-none"
+                            className={`p-4 bg-slate-50 dark:bg-slate-850 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 relative group transition-all cursor-grab active:cursor-grabbing hover:bg-slate-100/90 dark:hover:bg-slate-800/90 select-none ${
+                              isDraggingThis ? 'opacity-40 scale-[0.98]' : ''
+                            } ${
+                              isDropTarget ? 'ring-2 ring-blue-500 ring-inset bg-blue-50/50 dark:bg-blue-950/50 shadow-inner' : ''
+                            }`}
                             draggable={true}
                             onDragStart={(e) => {
+                              setDraggedCol(header);
                               e.dataTransfer.setData('text/plain', header);
                               e.dataTransfer.effectAllowed = 'move';
                             }}
                             onDragOver={(e) => {
                               e.preventDefault();
                               e.dataTransfer.dropEffect = 'move';
+                              if (dragOverCol !== header) {
+                                setDragOverCol(header);
+                              }
+                            }}
+                            onDragLeave={() => {
+                              if (dragOverCol === header) {
+                                setDragOverCol(null);
+                              }
                             }}
                             onDrop={(e) => {
                               e.preventDefault();
                               const droppedHeader = e.dataTransfer.getData('text/plain');
+                              setDraggedCol(null);
+                              setDragOverCol(null);
                               if (droppedHeader) {
                                 handleColumnDrop(header, droppedHeader);
                               }
                             }}
+                            onDragEnd={() => {
+                              setDraggedCol(null);
+                              setDragOverCol(null);
+                            }}
                             title="Mantén presionado y arrastra para reordenar columna"
                           >
                             <div className="flex items-center gap-1.5 truncate pr-2">
-                              <span className="truncate">{header}</span>
+                              <GripVertical className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-blue-500 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <span className="truncate font-bold">{header}</span>
                               {colSchema?.isKey && (
-                                <span className="text-[9px] bg-amber-100 text-amber-800 px-1 py-0.2 rounded font-mono font-bold shrink-0">
+                                <span className="text-[9px] bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 px-1 py-0.2 rounded font-mono font-bold shrink-0">
                                   ID
                                 </span>
                               )}
                               {colSchema?.type === 'ref' && (
-                                <span className="text-[9px] bg-blue-100 text-blue-800 px-1 py-0.2 rounded font-mono shrink-0">
+                                <span className="text-[9px] bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 px-1 py-0.2 rounded font-mono shrink-0">
                                   REF
                                 </span>
                               )}
@@ -1916,23 +1960,23 @@ export const InventoryDashboard: React.FC = () => {
                                 isResizingThis ? 'bg-blue-600 w-3' : ''
                               }`}
                             >
-                              <div className="w-[1px] h-3 bg-slate-300 group-hover:bg-blue-500"></div>
+                              <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-600 group-hover:bg-blue-500"></div>
                             </div>
                           </th>
                         );
                       })}
                       
                       {/* Fixed Actions Column Header */}
-                      <th className="p-4 text-right bg-slate-50 sticky right-0 z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)] w-24 min-w-[96px]">
+                      <th className="p-4 text-right bg-slate-50 dark:bg-slate-850 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 sticky right-0 z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)] w-24 min-w-[96px]">
                         Acciones
                       </th>
                     </tr>
                   </thead>
                   
-                  <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm text-slate-700 dark:text-slate-200">
                     {filteredItems.length === 0 ? (
                       <tr>
-                        <td colSpan={visibleHeaders.length + 4} className="p-8 text-center text-slate-400">
+                        <td colSpan={visibleHeaders.length + (activeView === 'main' ? 4 : 3)} className="p-8 text-center text-slate-400 dark:text-slate-500">
                           {searchTerm 
                             ? 'No se encontraron resultados que coincidan con la búsqueda.' 
                             : 'No hay datos en esta hoja.'}
@@ -1940,25 +1984,23 @@ export const InventoryDashboard: React.FC = () => {
                       </tr>
                     ) : (<>
                       {paddingTop > 0 && (
-                        <tr><td style={{ height: `${paddingTop}px` }} colSpan={visibleHeaders.length + 3} /></tr>
+                        <tr><td style={{ height: `${paddingTop}px` }} colSpan={visibleHeaders.length + (activeView === 'main' ? 3 : 2)} /></tr>
                       )}
                       {virtualRows.map((virtualRow) => {
                         const item = paginatedItems[virtualRow.index];
                         const idx = virtualRow.index;
 
                         const eventCategory = getEventCategory(item, headers);
-                        const eventCategoryDef = EVENT_CATEGORIES[eventCategory];
                         const status = getItemStatus(item, headers);
-                        const isMainOrEvents = activeView === 'main' || activeView === 'events';
 
                         return (
-                          <tr key={idx} data-index={virtualRow.index} ref={rowVirtualizer.measureElement} className={`transition-colors group ${selectedRowIds.includes(item._rowIndex as number) ? 'bg-blue-50/50 hover:bg-blue-50' : 'hover:bg-slate-50/80'}`}>
+                          <tr key={idx} data-index={virtualRow.index} ref={rowVirtualizer.measureElement} className={`transition-colors group ${selectedRowIds.includes(item._rowIndex as number) ? 'bg-blue-50/50 dark:bg-blue-950/40 hover:bg-blue-50 dark:hover:bg-blue-950/60' : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/60'}`}>
                             {/* Selection Cell */}
                             <td className="p-4 text-center">
                               <div className="flex items-center justify-center">
                                 <input
                                   type="checkbox"
-                                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                                  className="w-4 h-4 text-blue-600 rounded border-slate-300 dark:border-slate-700 dark:bg-slate-800 focus:ring-blue-500 cursor-pointer"
                                   checked={selectedRowIds.includes(item._rowIndex as number)}
                                   onChange={(e) => {
                                     if (e.target.checked) {
@@ -1974,23 +2016,10 @@ export const InventoryDashboard: React.FC = () => {
                             {/* Row Index */}
                             <td 
                               style={{ width: `${getColWidth('_row', '#')}px` }}
-                              className="p-4 text-center font-mono text-xs text-slate-400 truncate"
+                              className="p-4 text-center font-mono text-xs text-slate-400 dark:text-slate-500 truncate"
                             >
                               {item._rowIndex}
                             </td>
-
-                            {/* Event Type Badge */}
-                            {isMainOrEvents && (
-                              <td 
-                                style={{ width: `${getColWidth('_event_type', 'Tipo de Evento')}px` }}
-                                className="p-4 truncate"
-                              >
-                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${eventCategoryDef.badgeBg} ${eventCategoryDef.badgeText} ${eventCategoryDef.badgeBorder} truncate`}>
-                                  {renderEventIcon(eventCategory, 'w-3.5 h-3.5 shrink-0')}
-                                  <span className="truncate">{eventCategoryDef.shortLabel}</span>
-                                </span>
-                              </td>
-                            )}
 
                             {/* Expiration Status Badge (Main view) */}
                             {activeView === 'main' && (
@@ -1998,13 +2027,13 @@ export const InventoryDashboard: React.FC = () => {
                                 style={{ width: `${getColWidth('_status', 'Estado / Radar PM')}px` }}
                                 className="p-4 truncate"
                               >
-                                {eventCategory === 'VENCIMIENTO' ? (
+                                {eventCategory === 'VENCIMIENTO' || eventCategory === 'VENCIMIENTO_CERCANO' ? (
                                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border truncate ${status.color}`}>
                                     <span className="shrink-0">{status.icon}</span>
                                     <span className="truncate">{status.label}</span>
                                   </span>
                                 ) : (
-                                  <span className="text-xs text-slate-400 italic">Incidencia FRC</span>
+                                  <span className="text-xs text-slate-400 dark:text-slate-500 italic">Incidencia FRC</span>
                                 )}
                               </td>
                             )}
@@ -2013,6 +2042,8 @@ export const InventoryDashboard: React.FC = () => {
                             {visibleHeaders.map((header) => {
                               const val = item[header];
                               const isSku = /sku|código|codigo/i.test(header);
+                              const isEventCol = /^frc(_|\s)?even/i.test(header.trim()) || findColumnBySemantic(headers, 'tipo_evento') === header;
+                              const eventCat = isEventCol && val ? getCategoryFromEventValue(val) : null;
                               const isProductsView = activeView === 'products';
                               const colWidth = getColWidth(header, header);
 
@@ -2020,22 +2051,27 @@ export const InventoryDashboard: React.FC = () => {
                                 <td 
                                   key={header} 
                                   style={{ width: `${colWidth}px`, maxWidth: `${colWidth}px` }}
-                                  className="p-4 truncate"
+                                  className="p-4 truncate text-slate-800 dark:text-slate-200"
                                 >
                                   {isProductsView && isSku ? (
                                     <button 
                                       onClick={() => setSelectedProduct(item)}
-                                      className="font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 truncate text-left"
+                                      className="font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline flex items-center gap-1 truncate text-left"
                                       title="Ver detalle del producto y registros relacionados"
                                     >
                                       <span className="truncate">{String(val || '')}</span>
-                                      <span className="text-[10px] bg-blue-100 text-blue-800 px-1 py-0.2 rounded font-mono shrink-0">
+                                      <span className="text-[10px] bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 px-1 py-0.2 rounded font-mono shrink-0">
                                         DETALLE
                                       </span>
                                     </button>
                                   ) : isSku && val ? (
-                                    <span className="font-mono font-semibold text-slate-800 truncate block">
+                                    <span className="font-mono font-semibold text-slate-800 dark:text-slate-100 truncate block">
                                       {String(val)}
+                                    </span>
+                                  ) : eventCat ? (
+                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${EVENT_CATEGORIES[eventCat].badgeBg} ${EVENT_CATEGORIES[eventCat].badgeText} ${EVENT_CATEGORIES[eventCat].badgeBorder} truncate`}>
+                                      {renderEventIcon(eventCat, 'w-3.5 h-3.5 shrink-0')}
+                                      <span className="truncate">{String(val)}</span>
                                     </span>
                                   ) : (
                                     <span className="truncate block">
@@ -2048,18 +2084,18 @@ export const InventoryDashboard: React.FC = () => {
 
 
                             {/* Row Actions */}
-                            <td className="p-4 text-right sticky right-0 bg-white group-hover:bg-slate-50 transition-colors shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)] w-24 min-w-[96px]">
+                            <td className="p-4 text-right sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 transition-colors shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)] w-24 min-w-[96px]">
                               <div className="flex items-center justify-end gap-1">
                                 <button 
                                   onClick={() => handleOpenModal(item)} 
-                                  className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                  className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
                                   title="Editar registro"
                                 >
                                   <Edit2 className="w-4 h-4"/>
                                 </button>
                                 <button 
                                   onClick={() => handleDelete(item)} 
-                                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
                                   title="Eliminar fila"
                                 >
                                   <Trash2 className="w-4 h-4"/>
@@ -2070,7 +2106,7 @@ export const InventoryDashboard: React.FC = () => {
                         );
                       })}
                       {paddingBottom > 0 && (
-                        <tr><td style={{ height: `${paddingBottom}px` }} colSpan={visibleHeaders.length + 3} /></tr>
+                        <tr><td style={{ height: `${paddingBottom}px` }} colSpan={visibleHeaders.length + (activeView === 'main' ? 3 : 2)} /></tr>
                       )}
                     </>
                     )}
@@ -2079,11 +2115,11 @@ export const InventoryDashboard: React.FC = () => {
               </div>
               
               {/* Footer summary bar */}
-              <div className="p-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-2">
+              <div className="p-3 bg-slate-50 dark:bg-slate-850 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 flex flex-col sm:flex-row justify-between items-center gap-2">
                 <span>
                   Mostrando <strong>{filteredItems.length}</strong> de <strong>{items.length}</strong> registros
                 </span>
-                <span className="text-[11px] text-slate-400">
+                <span className="text-[11px] text-slate-400 dark:text-slate-500">
                   Tip: Arrastra las líneas entre columnas para cambiar su tamaño, o haz <strong>doble clic</strong> para auto-ajustar.
                 </span>
               </div>
@@ -2223,13 +2259,13 @@ export const InventoryDashboard: React.FC = () => {
       {/* 6. COLUMN MANAGER MODAL */}
       {isColumnManagerOpen && activeSheet && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-md flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-800">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
               <div>
-                <h3 className="text-lg font-bold text-slate-800">Gestionar Columnas</h3>
-                <p className="text-xs text-slate-500 mt-1">Oculta o reordena las columnas para esta vista.</p>
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Gestionar Columnas</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Oculta o reordena las columnas para esta vista.</p>
               </div>
-              <button onClick={() => setIsColumnManagerOpen(false)} className="text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100 p-2 rounded-xl transition-colors">
+              <button onClick={() => setIsColumnManagerOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 p-2 rounded-xl transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2270,25 +2306,25 @@ export const InventoryDashboard: React.FC = () => {
                   };
 
                   return (
-                    <div key={header} className={`flex items-center justify-between p-3 rounded-xl mb-1 ${isHidden ? 'bg-slate-50/50' : 'hover:bg-slate-50'} transition-colors group`}>
+                    <div key={header} className={`flex items-center justify-between p-3 rounded-xl mb-1 ${isHidden ? 'bg-slate-50/50 dark:bg-slate-800/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800/70'} transition-colors group`}>
                       <div className="flex items-center gap-3 overflow-hidden">
                         <button 
                           onClick={toggleVisibility}
-                          className={`p-1.5 rounded-lg transition-colors shrink-0 ${isHidden ? 'text-slate-400 hover:bg-slate-200' : 'text-blue-600 hover:bg-blue-50'}`}
+                          className={`p-1.5 rounded-lg transition-colors shrink-0 ${isHidden ? 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700' : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50'}`}
                           title={isHidden ? 'Mostrar columna' : 'Ocultar columna'}
                         >
                           {isHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
-                        <span className={`text-sm font-medium truncate ${isHidden ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                        <span className={`text-sm font-medium truncate ${isHidden ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-700 dark:text-slate-200'}`}>
                           {header}
                         </span>
                       </div>
                       
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={moveUp} disabled={index === 0} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-lg disabled:opacity-30">
+                        <button onClick={moveUp} disabled={index === 0} className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg disabled:opacity-30">
                           <ArrowUp className="w-4 h-4" />
                         </button>
-                        <button onClick={moveDown} disabled={index === displayOrder.length - 1} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-lg disabled:opacity-30">
+                        <button onClick={moveDown} disabled={index === displayOrder.length - 1} className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg disabled:opacity-30">
                           <ArrowDown className="w-4 h-4" />
                         </button>
                       </div>
@@ -2298,19 +2334,19 @@ export const InventoryDashboard: React.FC = () => {
               })()}
             </div>
             
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-between shrink-0">
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 flex justify-between shrink-0">
               <button 
                 onClick={() => {
                   setColumnOrders(prev => ({ ...prev, [activeView]: headers }));
                   setHiddenColumns(prev => ({ ...prev, [activeView]: [] }));
                 }}
-                className="text-xs font-semibold text-slate-500 hover:text-slate-700 px-3 py-2"
+                className="text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-3 py-2"
               >
                 Restablecer
               </button>
               <button 
                 onClick={() => setIsColumnManagerOpen(false)}
-                className="text-sm font-bold bg-slate-800 text-white px-5 py-2.5 rounded-xl hover:bg-slate-700 shadow-sm"
+                className="text-sm font-bold bg-slate-800 dark:bg-blue-600 text-white px-5 py-2.5 rounded-xl hover:bg-slate-700 dark:hover:bg-blue-500 shadow-sm"
               >
                 Listo
               </button>

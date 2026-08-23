@@ -6,7 +6,7 @@ export const SAMPLE_HEADERS = [
   "CANTIDAD",
   "PRECIO_COSTO",
   "PROVEEDOR",
-  "TIPO_EVENTO",
+  "FRC_EVEN",
   "OBSERVACION"
 ];
 
@@ -20,7 +20,7 @@ export const SAMPLE_ITEMS = [
     CANTIDAD: "320",
     PRECIO_COSTO: "1.25",
     PROVEEDOR: "Lácteos del Sur S.A.",
-    TIPO_EVENTO: "VENCIMIENTO",
+    FRC_EVEN: "VENC. CERC.",
     OBSERVACION: "Próximo a retiro comercial por política de 15 días"
   },
   {
@@ -32,7 +32,7 @@ export const SAMPLE_ITEMS = [
     CANTIDAD: "85",
     PRECIO_COSTO: "0.60",
     PROVEEDOR: "Lácteos del Sur S.A.",
-    TIPO_EVENTO: "VENCIMIENTO",
+    FRC_EVEN: "VENC. CERC.",
     OBSERVACION: "Alerta crítica: Retiro inmediato o liquidación PM"
   },
   {
@@ -44,7 +44,7 @@ export const SAMPLE_ITEMS = [
     CANTIDAD: "1250",
     PRECIO_COSTO: "2.10",
     PROVEEDOR: "Pesquera Mar Azul",
-    TIPO_EVENTO: "TRANSPORTE",
+    FRC_EVEN: "DET. PED",
     OBSERVACION: "Llegó con 3 latas abolladas por manipulación de transporte"
   },
   {
@@ -56,7 +56,7 @@ export const SAMPLE_ITEMS = [
     CANTIDAD: "410",
     PRECIO_COSTO: "5.80",
     PROVEEDOR: "Kimberly Clean",
-    TIPO_EVENTO: "DIFERENCIAS",
+    FRC_EVEN: "DIF. PED",
     OBSERVACION: "Diferencia de inventario física vs sistema: -5 unidades"
   },
   {
@@ -68,8 +68,8 @@ export const SAMPLE_ITEMS = [
     CANTIDAD: "45",
     PRECIO_COSTO: "1.80",
     PROVEEDOR: "Panificadora Central",
-    TIPO_EVENTO: "MERMAS",
-    OBSERVACION: "Merma por aplastamiento en anaquel"
+    FRC_EVEN: "CAL. INTER",
+    OBSERVACION: "No conformidad en control de calidad interno"
   }
 ];
 

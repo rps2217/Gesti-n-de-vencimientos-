@@ -94,7 +94,7 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
 
           <div>
             <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-              TIPO DE EVENTO
+              FRC_EVEN (Tipo de Evento / Incidencia)
             </label>
             <select
               value={tipo_evento}
@@ -102,13 +102,15 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-800 dark:text-slate-100 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500"
             >
               <option value="">-- No modificar / Mantener actual --</option>
-              <option value="VENCIMIENTO">Vencimiento</option>
-              <option value="VENCIMIENTO_CERCANO">Vencimiento Cercano</option>
-              <option value="TRANSPORTE">Transporte / Logística</option>
-              <option value="DIFERENCIA">Diferencia de Inventario</option>
-              <option value="AVERIA">Avería / Merma Almacén</option>
-              <option value="DEVOLUCION">Reclamo / Devolución</option>
-              <option value="CANJES">Canjes</option>
+              <option value="VENC. CERC.">VENC. CERC. (Vencimiento cercano)</option>
+              <option value="DET. PED">DET. PED (Deterioro de pedido)</option>
+              <option value="CAL. INTER">CAL. INTER (Calidad interna)</option>
+              <option value="CAL. EXT.">CAL. EXT. (Calidad externa)</option>
+              <option value="CANJES">CANJES (Canjes)</option>
+              <option value="DIF. PED">DIF. PED (Diferencia de pedido)</option>
+              <option value="VENCIMIENTO">VENCIMIENTO (Vencimiento regular)</option>
+              <option value="AVERIA">AVERIA (Avería / Merma)</option>
+              <option value="DEVOLUCION">DEVOLUCION (Reclamo / Devolución)</option>
             </select>
           </div>
 

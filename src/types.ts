@@ -31,18 +31,30 @@ export interface SheetConfig {
 export type ColumnType = 'text' | 'longtext' | 'number' | 'date' | 'datetime' | 'enum' | 'enumlist' | 'ref' | 'calculated';
 export type ColumnBehavior = 'none' | 'auto_id' | 'calc_fecha_vc' | 'calc_retiro' | 'sku_lookup';
 
-export type EventCategory = 'VENCIMIENTO' | 'VENCIMIENTO_CERCANO' | 'TRANSPORTE' | 'DIFERENCIA' | 'AVERIA' | 'DEVOLUCION' | 'CANJES';
+export type EventCategory = 
+  | 'VENCIMIENTO' 
+  | 'VENCIMIENTO_CERCANO' 
+  | 'TRANSPORTE' 
+  | 'DIFERENCIA' 
+  | 'CAL_INTERNA'
+  | 'CAL_EXTERNA'
+  | 'AVERIA' 
+  | 'DEVOLUCION' 
+  | 'CANJES';
 
 export interface EventTypeDefinition {
   id: EventCategory;
+  rawCode: string;
   name: string;
   shortLabel: string;
   description: string;
   badgeBg: string;
   badgeText: string;
   badgeBorder: string;
-  colorClass: string;
-  isVencimiento: boolean;
+  cardBorder: string;
+  cardBg: string;
+  iconBg: string;
+  isVencimiento?: boolean;
 }
 
 export interface ColumnSchema {

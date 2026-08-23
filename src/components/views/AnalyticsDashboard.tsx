@@ -28,6 +28,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ items, h
   const incidentData = useMemo(() => {
     let transporte = 0;
     let diferencia = 0;
+    let calInterna = 0;
+    let calExterna = 0;
     let averia = 0;
     let devolucion = 0;
     let vencimientoCercano = 0;
@@ -37,6 +39,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ items, h
       const cat = getEventCategory(item, headers);
       if (cat === 'TRANSPORTE') transporte++;
       if (cat === 'DIFERENCIA') diferencia++;
+      if (cat === 'CAL_INTERNA') calInterna++;
+      if (cat === 'CAL_EXTERNA') calExterna++;
       if (cat === 'AVERIA') averia++;
       if (cat === 'DEVOLUCION') devolucion++;
       if (cat === 'VENCIMIENTO_CERCANO') vencimientoCercano++;
@@ -44,8 +48,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ items, h
     });
 
     return [
-      { name: 'Transporte', value: transporte, color: '#f59e0b' }, // amber
-      { name: 'Diferencia', value: diferencia, color: '#8b5cf6' }, // purple
+      { name: 'Det. Pedido', value: transporte, color: '#f59e0b' }, // amber
+      { name: 'Dif. Pedido', value: diferencia, color: '#8b5cf6' }, // purple
+      { name: 'Cal. Interna', value: calInterna, color: '#10b981' }, // emerald
+      { name: 'Cal. Externa', value: calExterna, color: '#06b6d4' }, // cyan
       { name: 'Avería', value: averia, color: '#f43f5e' }, // rose
       { name: 'Devolución', value: devolucion, color: '#14b8a6' }, // teal
       { name: 'Venc. Cercano', value: vencimientoCercano, color: '#6366f1' }, // indigo

@@ -51,32 +51,32 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
   const incidents = relatedRecords.filter(r => getEventCategory(r, Object.keys(r)) !== 'VENCIMIENTO');
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/30 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-2xl bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
+    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 h-full shadow-2xl border-l border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
         
         {/* Header */}
-        <div className="p-6 border-b border-slate-200 bg-slate-50/70 flex items-start justify-between gap-4">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-850 flex items-start justify-between gap-4">
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-md shadow-blue-200">
+            <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-md shadow-blue-200 dark:shadow-none">
               <Package className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono font-bold bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-lg border border-blue-200">
+                <span className="text-xs font-mono font-bold bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 px-2.5 py-0.5 rounded-lg border border-blue-200 dark:border-blue-800">
                   SKU: {sku}
                 </span>
                 {policyName !== '-' && (
-                  <span className="text-xs font-medium bg-amber-50 text-amber-800 px-2.5 py-0.5 rounded-lg border border-amber-200">
+                  <span className="text-xs font-medium bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 px-2.5 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800">
                     Política: {policyName}
                   </span>
                 )}
               </div>
-              <h2 className="text-xl font-bold text-slate-900 mt-1">{name}</h2>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">{name}</h2>
             </div>
           </div>
           <button 
             onClick={onClose} 
-            className="p-2 text-slate-400 hover:bg-slate-200 rounded-xl hover:text-slate-700 transition-colors"
+            className="p-2 text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -86,14 +86,14 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Product Master Fields */}
           <div>
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Datos Maestros</h4>
+            <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">Datos Maestros</h4>
             <div className="grid grid-cols-2 gap-3">
               {Object.entries(product)
                 .filter(([k]) => !k.startsWith('_'))
                 .map(([key, val]) => (
-                  <div key={key} className="bg-slate-50 p-3 rounded-xl border border-slate-200/80">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">{key}</span>
-                    <span className="text-sm font-semibold text-slate-800 break-words">{String(val || '-')}</span>
+                  <div key={key} className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">{key}</span>
+                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">{String(val || '-')}</span>
                   </div>
                 ))}
             </div>
@@ -102,20 +102,20 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
           {/* Expirations Section */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-blue-600" />
+              <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                 <span>Lotes y Vencimientos ({expirations.length})</span>
               </h4>
               <button 
                 onClick={() => onNewEventForProduct(sku, 'VENCIMIENTO')}
-                className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 hover:underline"
+                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1 hover:underline"
               >
                 <Plus className="w-3.5 h-3.5" /> Registrar Vencimiento
               </button>
             </div>
 
             {expirations.length === 0 ? (
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center text-xs text-slate-400">
+              <div className="p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-center text-xs text-slate-400 dark:text-slate-500">
                 No hay lotes con fecha de vencimiento registrados para este SKU.
               </div>
             ) : (
@@ -134,14 +134,14 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
                   const lote = (loteCol && exp[loteCol]) || '-';
 
                   return (
-                    <div key={idx} className="p-3.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-4 shadow-sm hover:border-slate-300 transition-colors">
+                    <div key={idx} className="p-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center justify-between gap-4 shadow-sm hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-800">Vence: {fVc}</span>
-                          {lote !== '-' && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-mono">Lote: {lote}</span>}
-                          {cant !== '-' && <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-bold">{cant} un.</span>}
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Vence: {fVc}</span>
+                          {lote !== '-' && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300 font-mono">Lote: {lote}</span>}
+                          {cant !== '-' && <span className="text-[10px] bg-blue-50 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-bold">{cant} un.</span>}
                         </div>
-                        <p className="text-[11px] text-slate-500 mt-0.5">Fecha Retiro: {fRet}</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Fecha Retiro: {fRet}</p>
                       </div>
                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border flex items-center gap-1 shrink-0 ${st.color}`}>
                         {st.icon}
@@ -157,20 +157,20 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
           {/* Incidents Section */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+              <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
                 <span>Historial de Incidencias & FRC ({incidents.length})</span>
               </h4>
               <button 
                 onClick={() => onNewEventForProduct(sku, 'TRANSPORTE')}
-                className="text-xs font-bold text-rose-600 hover:text-rose-800 flex items-center gap-1 hover:underline"
+                className="text-xs font-bold text-rose-600 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 flex items-center gap-1 hover:underline"
               >
                 <Plus className="w-3.5 h-3.5" /> Registrar Incidencia
               </button>
             </div>
 
             {incidents.length === 0 ? (
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center text-xs text-slate-400">
+              <div className="p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-center text-xs text-slate-400 dark:text-slate-500">
                 Sin registros de mermas, deterioros o diferencias de pedido.
               </div>
             ) : (
@@ -186,17 +186,17 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
                   const obs = (obsCol && inc[obsCol]) || '-';
 
                   return (
-                    <div key={idx} className="p-3.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-4 shadow-sm">
+                    <div key={idx} className="p-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center justify-between gap-4 shadow-sm">
                       <div className="flex items-start gap-3">
                         <div className={`p-2 rounded-lg ${catDef.iconBg} shrink-0`}>
                           {renderEventIcon(cat, 'w-4 h-4')}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-slate-800">{catDef.shortLabel}</span>
-                            {cant !== '-' && <span className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-bold font-mono">{cant} un.</span>}
+                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100">{catDef.shortLabel}</span>
+                            {cant !== '-' && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-bold font-mono">{cant} un.</span>}
                           </div>
-                          {obs !== '-' && <p className="text-[11px] text-slate-600 mt-0.5 line-clamp-2">{obs}</p>}
+                          {obs !== '-' && <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 line-clamp-2">{obs}</p>}
                         </div>
                       </div>
                     </div>
@@ -208,24 +208,24 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 flex items-center justify-between gap-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100"
+            className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700"
           >
             Cerrar
           </button>
           <div className="flex items-center gap-2">
             <button
               onClick={() => onNewEventForProduct(sku, 'VENCIMIENTO')}
-              className="px-3.5 py-2 bg-blue-600 text-white font-bold text-xs rounded-xl hover:bg-blue-700 shadow-sm shadow-blue-200 flex items-center gap-1.5"
+              className="px-3.5 py-2 bg-blue-600 text-white font-bold text-xs rounded-xl hover:bg-blue-700 shadow-sm shadow-blue-200 dark:shadow-none flex items-center gap-1.5"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>+ Vencimiento</span>
             </button>
             <button
               onClick={() => onNewEventForProduct(sku, 'TRANSPORTE')}
-              className="px-3.5 py-2 bg-amber-600 text-white font-bold text-xs rounded-xl hover:bg-amber-700 shadow-sm shadow-amber-200 flex items-center gap-1.5"
+              className="px-3.5 py-2 bg-amber-600 text-white font-bold text-xs rounded-xl hover:bg-amber-700 shadow-sm shadow-amber-200 dark:shadow-none flex items-center gap-1.5"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>+ Incidencia</span>

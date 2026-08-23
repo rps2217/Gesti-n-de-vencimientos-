@@ -18,7 +18,7 @@ export const TicketPrintView: React.FC<TicketPrintViewProps> = ({ items, headers
       
       {/* TICKET HEADER */}
       <div className="text-center border-b border-dashed border-black pb-1.5 mb-2">
-        <h2 className="text-[13px] m-0 mb-1 uppercase font-bold">REPORTE INVENTARIO</h2>
+        <h2 className="text-[13px] m-0 mb-1 uppercase font-bold">REPORTE</h2>
         <p className="m-0 mt-0.5 text-[10px]">Fecha: {new Date().toLocaleString()}</p>
         <p className="m-0 text-[10px]">Total ítems: {items.length}</p>
       </div>

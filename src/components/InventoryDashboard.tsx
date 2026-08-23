@@ -48,6 +48,7 @@ import {
 } from '../data/sampleInventory';
 
 // Modals & Drawers & Sub-components
+import { BulkImportFRC } from './BulkImportFRC';
 import { Sidebar } from './navigation/Sidebar';
 import { SchemaEditorView } from './views/SchemaEditorView';
 import { AnalyticsDashboard } from './views/AnalyticsDashboard';
@@ -58,6 +59,7 @@ import { ScriptCodeModal } from './modals/ScriptCodeModal';
 import { GlobalConfigModal } from './modals/GlobalConfigModal';
 import { BarcodeScannerModal } from './modals/BarcodeScannerModal';
 import { BulkEditModal } from './modals/BulkEditModal';
+import { BulkImportFRC } from './BulkImportFRC';
 import { QuickTransferModal } from './modals/QuickTransferModal';
 import { exportToExcel } from '../utils/exportUtils';
 import { EventResolutionCards } from './views/EventResolutionCards';
@@ -239,6 +241,7 @@ export const InventoryDashboard: React.FC = () => {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [globalTicketConfig, setGlobalTicketConfig] = useState<GlobalTicketConfig>({});
   const [isTicketConfigOpen, setIsTicketConfigOpen] = useState(false);
 
@@ -1544,6 +1547,16 @@ export const InventoryDashboard: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {activeView === 'events' && (
+              <button
+                onClick={() => setIsBulkImportOpen(true)}
+                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Importación Masiva FRC</span>
+              </button>
+            )}
+            
             {activeView === 'schema' && (
               <button
                 onClick={() => setIsScriptModalOpen(true)}
@@ -2466,6 +2479,23 @@ export const InventoryDashboard: React.FC = () => {
         config={globalTicketConfig[activeView] || {}}
         onSave={handleSaveTicketConfig}
       />
+
+      {/* BULK IMPORT MODAL */}
+      {isBulkImportOpen && (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl w-full max-w-3xl shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Importación Inteligente</h2>
+              <button onClick={() => setIsBulkImportOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+            </div>
+            <BulkImportFRC onImport={(data) => {
+              setItems(prev => [...prev, ...data]);
+              setIsBulkImportOpen(false);
+              alert(`Se importaron ${data.length} registros exitosamente.`);
+            }} />
+          </div>
+        </div>
+      )}
     </div>
 
     {/* HIDDEN UNLESS PRINTING: TICKET PRINT VIEW */}

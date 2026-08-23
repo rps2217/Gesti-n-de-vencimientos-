@@ -1838,10 +1838,22 @@ export const InventoryDashboard: React.FC = () => {
                                 className="p-4 truncate"
                               >
                                 {eventCategory === 'VENCIMIENTO' || eventCategory === 'VENCIMIENTO_CERCANO' ? (
-                                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border truncate ${status.color}`}>
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const code = status.code;
+                                      const targetFilter = 
+                                        (code === 'EXPIRED' || code === 'RETIRE_NOW') ? 'retire_now' :
+                                        (code === 'UPCOMING') ? 'upcoming' :
+                                        (code === 'DRAINAGE_PM') ? 'drainage' : 'en_regla';
+                                      setPmRadarFilter(targetFilter);
+                                    }}
+                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border truncate cursor-pointer hover:opacity-80 transition-opacity ${status.color}`}
+                                    title="Clic para filtrar por este estado"
+                                  >
                                     <span className="shrink-0">{status.icon}</span>
                                     <span className="truncate">{status.label}</span>
-                                  </span>
+                                  </button>
                                 ) : (
                                   <span className="text-xs text-slate-400 dark:text-slate-500 italic">Incidencia FRC</span>
                                 )}
@@ -1855,15 +1867,23 @@ export const InventoryDashboard: React.FC = () => {
                                 className="p-4 truncate"
                               >
                                 {eventResStatus?.isResolved ? (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700/80 shadow-2xs">
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setEventResolutionFilter('completed'); }}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700/80 shadow-2xs cursor-pointer hover:opacity-80 transition-opacity"
+                                    title="Clic para ver solo realizados"
+                                  >
                                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                                     <span>Realizado</span>
-                                  </span>
+                                  </button>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700/80 shadow-2xs">
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setEventResolutionFilter('pending'); }}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700/80 shadow-2xs cursor-pointer hover:opacity-80 transition-opacity"
+                                    title="Clic para ver solo pendientes"
+                                  >
                                     <Clock3 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0 animate-pulse" />
                                     <span>Pendiente</span>
-                                  </span>
+                                  </button>
                                 )}
                               </td>
                             )}
@@ -1900,10 +1920,14 @@ export const InventoryDashboard: React.FC = () => {
                                       {String(val)}
                                     </span>
                                   ) : eventCat ? (
-                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${EVENT_CATEGORIES[eventCat].badgeBg} ${EVENT_CATEGORIES[eventCat].badgeText} ${EVENT_CATEGORIES[eventCat].badgeBorder} truncate`}>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setEventFilter(eventCat); }}
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${EVENT_CATEGORIES[eventCat].badgeBg} ${EVENT_CATEGORIES[eventCat].badgeText} ${EVENT_CATEGORIES[eventCat].badgeBorder} truncate cursor-pointer hover:opacity-80 transition-opacity`}
+                                      title="Clic para filtrar por este tipo de incidencia"
+                                    >
                                       {renderEventIcon(eventCat, 'w-3.5 h-3.5 shrink-0')}
                                       <span className="truncate">{String(val)}</span>
-                                    </span>
+                                    </button>
                                   ) : isEventView && isTraspasoCol ? (
                                     val !== undefined && val !== null && String(val).trim() !== '' ? (
                                       <div className="flex items-center gap-1.5 group/traspaso">

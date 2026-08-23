@@ -1,38 +1,21 @@
-export function exportToCSV(filename: string, headers: string[], items: any[], delimiter = ',') {
+import * as XLSX from 'xlsx';
+
+export function exportToExcel(filename: string, headers: string[], items: any[]) {
   if (!items || !items.length) return;
 
-  const csvRows: string[] = [];
-  
-  // Format cell value escaping quotes and newlines
-  const formatCell = (val: any): string => {
-    if (val === null || val === undefined) return '""';
-    const str = String(val).replace(/"/g, '""');
-    return `"${str}"`;
-  };
+  // Format data array: each row is an array of values mapping to the headers
+  const worksheetData = [
+    headers,
+    ...items.map(item => headers.map(header => {
+      const val = item[header];
+      return val === null || val === undefined ? '' : val;
+    }))
+  ];
 
-  // Create headers row
-  csvRows.push(headers.map(h => formatCell(h)).join(delimiter));
+  const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Export');
 
-  // Create data rows
-  for (const item of items) {
-    const row = headers.map(header => formatCell(item[header]));
-    csvRows.push(row.join(delimiter));
-  }
-
-  const csvContent = csvRows.join('\r\n');
-  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' }); // BOM for Excel compatibility
-  
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  link.setAttribute('href', url);
-  link.setAttribute('download', `${filename.endsWith('.csv') ? filename : `${filename}.csv`}`);
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-
-  // Prevent memory leak by revoking the Blob URL after download trigger
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-  }, 1000);
+  // Generate Excel file and trigger download
+  XLSX.writeFile(workbook, `${filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`}`);
 }

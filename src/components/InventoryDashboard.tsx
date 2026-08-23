@@ -59,7 +59,7 @@ import { GlobalConfigModal } from './modals/GlobalConfigModal';
 import { BarcodeScannerModal } from './modals/BarcodeScannerModal';
 import { BulkEditModal } from './modals/BulkEditModal';
 import { QuickTransferModal } from './modals/QuickTransferModal';
-import { exportToCSV } from '../utils/exportUtils';
+import { exportToExcel } from '../utils/exportUtils';
 import { EventResolutionCards } from './views/EventResolutionCards';
 import { EventFilterChips } from './views/EventFilterChips';
 import { PmRadarCards } from './views/PmRadarCards';
@@ -1352,12 +1352,12 @@ export const InventoryDashboard: React.FC = () => {
           <div className="flex items-center gap-2 shrink-0">
             {activeView !== 'schema' && (
               <button
-                onClick={() => exportToCSV(`${activeView}_${new Date().toISOString().split('T')[0]}`, headers, filteredItems)}
+                onClick={() => exportToExcel(`${activeView}_${new Date().toISOString().split('T')[0]}`, headers, filteredItems)}
                 className="text-sm bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-2 hidden md:flex"
-                title="Exportar la vista actual a CSV"
+                title="Exportar la vista actual a Excel"
               >
                 <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                <span>Exportar CSV</span>
+                <span>Exportar Excel</span>
               </button>
             )}
             {/* Status & Sync Indicator */}
@@ -2001,11 +2001,11 @@ export const InventoryDashboard: React.FC = () => {
                 <button 
                   onClick={() => {
                     const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
-                    exportToCSV(`Seleccion_${new Date().toISOString().split('T')[0]}`, headers, selectedItems);
+                    exportToExcel(`Seleccion_${new Date().toISOString().split('T')[0]}`, headers, selectedItems);
                   }}
                   className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
                 >
-                  <Download className="w-3.5 h-3.5 text-blue-400" /> Exportar
+                  <Download className="w-3.5 h-3.5 text-blue-400" /> Exportar a Excel
                 </button>
                 
                 {activeView === 'main' && (

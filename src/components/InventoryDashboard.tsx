@@ -1911,10 +1911,13 @@ export const InventoryDashboard: React.FC = () => {
                                 />
                               ) : isTraspasoCol ? (
                                 <ColumnFilterMenu
-                                  title="Estado Gestión"
+                                  title="Traspaso / Estado"
                                   options={[
+                                    { label: '--- Estado ---', value: 'header_status', disabled: true },
                                     { label: 'Pendientes', value: 'pending', badgeClass: 'text-amber-600 dark:text-amber-400' },
-                                    { label: 'Realizados', value: 'completed', badgeClass: 'text-emerald-600 dark:text-emerald-400' }
+                                    { label: 'Realizados', value: 'completed', badgeClass: 'text-emerald-600 dark:text-emerald-400' },
+                                    { label: '--- Documentos ---', value: 'header_docs', disabled: true },
+                                    ...(columnOptionsMap[header] || [])
                                   ]}
                                   selectedValues={eventResolutionFilter}
                                   onToggle={(val, isMulti) => setEventResolutionFilter(prev => handleFilterToggle(prev, val, isMulti))}

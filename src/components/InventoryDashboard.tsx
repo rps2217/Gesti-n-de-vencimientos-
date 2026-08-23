@@ -354,8 +354,12 @@ export const InventoryDashboard: React.FC = () => {
       });
     }
     
-    return cols;
-  }, [headers, activeSheet, sheetConfig.schema, hiddenColumns, columnOrders, activeView]);
+    // Finally, append active virtual columns
+    const activeVCs = sheetConfig.activeVirtualColumns || [];
+    const virtualColHeaders = VIRTUAL_COLUMNS.filter(vc => activeVCs.includes(vc.id)).map(vc => vc.id);
+    
+    return [...cols, ...virtualColHeaders];
+  }, [headers, activeSheet, sheetConfig.schema, hiddenColumns, columnOrders, activeView, sheetConfig.activeVirtualColumns]);
 
   const handleColumnDrop = (targetHeader: string, droppedHeader: string) => {
     if (targetHeader === droppedHeader) return;
@@ -514,11 +518,12 @@ export const InventoryDashboard: React.FC = () => {
       const virtualData: Record<string, any> = {};
       const activeVCs = sheetConfig.activeVirtualColumns || [];
       VIRTUAL_COLUMNS.filter(col => activeVCs.includes(col.id)).forEach(col => {
-        virtualData[col.id] = col.calculate(item, headers);
+        // Pass products and policies as allData
+        virtualData[col.id] = col.calculate(item, headers, { products, policies });
       });
       return { ...item, ...virtualData };
     });
-  }, [items, headers, sheetConfig.activeVirtualColumns]);
+  }, [items, headers, sheetConfig.activeVirtualColumns, products, policies]);
 
   const filteredItems = useMemo(() => {
     let list = augmentedItems;

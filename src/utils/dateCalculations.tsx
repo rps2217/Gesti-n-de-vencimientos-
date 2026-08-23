@@ -360,12 +360,19 @@ export interface ItemStatusResult {
   daysToExpiry: number | null;
 }
 
+export function getEndOfMonthDate(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() + 1, 0);
+}
+
+// ...
+
 // Helper to compute expiration, retirement and drainage status for an item
 export function getItemStatus(item: InventoryItem, headers: string[]): ItemStatusResult {
   const retCol = findColumnBySemantic(headers, 'fecha_retiro');
   const vcCol = findColumnBySemantic(headers, 'fecha_vc');
   
-  const today = new Date();
+  const today = getEndOfMonthDate();
   today.setHours(0, 0, 0, 0);
 
   let daysToRetire: number | null = null;
@@ -382,6 +389,14 @@ export function getItemStatus(item: InventoryItem, headers: string[]): ItemStatu
     const dVc = parseAnyDate(item[vcCol]);
     if (dVc) {
       daysToExpiry = Math.ceil((dVc.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // If no retirement date provided, default to 30 days before expiration
+      if (!daysToRetire && daysToExpiry !== null) {
+        // Calculate based on expiry - 30 days
+        const dRet = new Date(dVc);
+        dRet.setDate(dRet.getDate() - 30);
+        daysToRetire = Math.ceil((dRet.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      }
     }
   }
 

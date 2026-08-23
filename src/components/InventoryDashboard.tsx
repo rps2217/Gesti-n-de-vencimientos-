@@ -63,6 +63,7 @@ import { exportToExcel } from '../utils/exportUtils';
 import { EventResolutionCards } from './views/EventResolutionCards';
 import { EventFilterChips } from './views/EventFilterChips';
 import { PmRadarCards } from './views/PmRadarCards';
+import { ColumnFilterMenu } from './views/ColumnFilterMenu';
 import { TicketPrintView } from './views/TicketPrintView';
 import { TicketConfigModal } from './modals/TicketConfigModal';
 import { GlobalTicketConfig, ViewTicketConfig } from '../types';
@@ -151,6 +152,7 @@ export const InventoryDashboard: React.FC = () => {
   const [quickTraspasoItem, setQuickTraspasoItem] = useState<InventoryItem | null>(null);
   const [isQuickTraspasoOpen, setIsQuickTraspasoOpen] = useState<boolean>(false);
   const [pmRadarFilter, setPmRadarFilter] = useState<string[]>([]);
+  const [columnFilters, setColumnFilters] = useState<Record<string, string[]>>({});
 
   // Multiselect toggle helper (Ctrl/Cmd + Click)
   const handleFilterToggle = (current: string[], value: string, isMulti: boolean): string[] => {
@@ -170,13 +172,15 @@ export const InventoryDashboard: React.FC = () => {
     eventFilter.length > 0 || 
     eventResolutionFilter.length > 0 || 
     pmRadarFilter.length > 0 || 
-    activeQuickChip !== null;
+    activeQuickChip !== null ||
+    Object.values(columnFilters).some((vals: string[]) => vals && vals.length > 0);
 
   const clearAllFilters = () => {
     setSearchTerm('');
     setEventFilter([]);
     setEventResolutionFilter([]);
     setPmRadarFilter([]);
+    setColumnFilters({});
     setActiveQuickChip(null);
   };
 
@@ -481,6 +485,27 @@ export const InventoryDashboard: React.FC = () => {
     };
   }, [items, headers]);
 
+  // Memoized unique options per column for ColumnFilterMenu
+  const columnOptionsMap = useMemo(() => {
+    const map: Record<string, { label: string; value: string }[]> = {};
+    headers.forEach(h => {
+      const uniqueVals = new Set<string>();
+      items.forEach(item => {
+        const val = item[h];
+        if (val !== undefined && val !== null && String(val).trim() !== '') {
+          uniqueVals.add(String(val).trim());
+        } else {
+          uniqueVals.add('(Vacío)');
+        }
+      });
+      map[h] = Array.from(uniqueVals)
+        .sort((a, b) => a.localeCompare(b))
+        .slice(0, 100)
+        .map(v => ({ label: v, value: v }));
+    });
+    return map;
+  }, [items, headers]);
+
   const filteredItems = useMemo(() => {
     let list = items;
 
@@ -518,6 +543,17 @@ export const InventoryDashboard: React.FC = () => {
       });
     }
 
+    // Apply generic column filters
+    (Object.entries(columnFilters) as [string, string[]][]).forEach(([colName, selectedVals]) => {
+      if (selectedVals && selectedVals.length > 0) {
+        list = list.filter(item => {
+          const val = item[colName];
+          const valStr = val !== undefined && val !== null && String(val).trim() !== '' ? String(val).trim() : '(Vacío)';
+          return selectedVals.includes(valStr);
+        });
+      }
+    });
+
     if (!deferredSearchTerm.trim() && !activeQuickChip) return list;
     const term = (deferredSearchTerm.trim() || activeQuickChip || '').toLowerCase();
     return list.filter(item => {
@@ -527,7 +563,7 @@ export const InventoryDashboard: React.FC = () => {
         return String(val).toLowerCase().includes(term);
       });
     });
-  }, [items, deferredSearchTerm, activeQuickChip, searchableHeaders, activeView, eventFilter, eventResolutionFilter, pmRadarFilter, headers]);
+  }, [items, deferredSearchTerm, activeQuickChip, searchableHeaders, activeView, eventFilter, eventResolutionFilter, pmRadarFilter, columnFilters, headers]);
 
   const paginatedItems = useMemo(() => {
     if (pageSize === 'all') return filteredItems;
@@ -1776,18 +1812,24 @@ export const InventoryDashboard: React.FC = () => {
                       )}
 
                       {/* Visible Column Headers */}
-                      {visibleHeaders.map((header) => {
+                      {visibleHeaders.map((header, idx) => {
                         const colSchema = sheetConfig.schema?.[activeSheet?.title || '']?.[header];
                         const width = getColWidth(header, header, colSchema?.type);
                         const isResizingThis = resizingCol?.colId === header;
                         const isDraggingThis = draggedCol === header;
                         const isDropTarget = dragOverCol === header && draggedCol !== header;
+                        
+                        const isEventCol = /^frc(_|\s)?even/i.test(header.trim()) || findColumnBySemantic(headers, 'tipo_evento') === header;
+                        const isTraspasoCol = /traspaso/i.test(header) || findColumnBySemantic(headers, 'n_traspaso') === header;
+                        const isFechaVcCol = findColumnBySemantic(headers, 'fecha_vc') === header;
+
+                        const alignRight = idx > visibleHeaders.length - 3;
 
                         return (
                           <th 
                             key={header} 
-                            style={{ width: `${width}px`, minWidth: '70px' }}
-                            className={`p-4 bg-slate-100 dark:bg-slate-700/90 text-slate-700 dark:text-slate-100 border-b border-slate-200 dark:border-slate-600/80 relative group transition-all cursor-grab active:cursor-grabbing hover:bg-slate-200/90 dark:hover:bg-slate-600/90 dark:hover:text-white select-none ${
+                            style={{ width: `${width}px`, minWidth: '85px' }}
+                            className={`p-3 bg-slate-100 dark:bg-slate-700/90 text-slate-700 dark:text-slate-100 border-b border-slate-200 dark:border-slate-600/80 relative group transition-all cursor-grab active:cursor-grabbing hover:bg-slate-200/90 dark:hover:bg-slate-600/90 dark:hover:text-white select-none ${
                               isDraggingThis ? 'opacity-40 scale-[0.98]' : ''
                             } ${
                               isDropTarget ? 'ring-2 ring-blue-500 ring-inset bg-blue-50/50 dark:bg-blue-950/50 shadow-inner' : ''
@@ -1825,18 +1867,73 @@ export const InventoryDashboard: React.FC = () => {
                             }}
                             title="Mantén presionado y arrastra para reordenar columna"
                           >
-                            <div className="flex items-center gap-1.5 truncate pr-2">
-                              <GripVertical className="w-3.5 h-3.5 text-slate-400 dark:text-slate-400 group-hover:text-blue-400 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                              <span className="truncate font-bold tracking-tight">{header}</span>
-                              {colSchema?.isKey && (
-                                <span className="text-[9px] bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 px-1 py-0.2 rounded font-mono font-bold shrink-0">
-                                  ID
-                                </span>
-                              )}
-                              {colSchema?.type === 'ref' && (
-                                <span className="text-[9px] bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 px-1 py-0.2 rounded font-mono shrink-0">
-                                  REF
-                                </span>
+                            <div className="flex items-center justify-between gap-1 w-full min-w-0 pr-1">
+                              <div className="flex items-center gap-1 min-w-0 truncate">
+                                <GripVertical className="w-3.5 h-3.5 text-slate-400 dark:text-slate-400 group-hover:text-blue-400 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <span className="truncate font-bold tracking-tight">{header}</span>
+                                {colSchema?.isKey && (
+                                  <span className="text-[9px] bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 px-1 py-0.2 rounded font-mono font-bold shrink-0">
+                                    ID
+                                  </span>
+                                )}
+                                {colSchema?.type === 'ref' && (
+                                  <span className="text-[9px] bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 px-1 py-0.2 rounded font-mono shrink-0">
+                                    REF
+                                  </span>
+                                )}
+                              </div>
+
+                              {isEventCol ? (
+                                <ColumnFilterMenu
+                                  title="Incidencias"
+                                  options={(Object.keys(EVENT_CATEGORIES) as EventCategory[]).map(cat => ({
+                                    label: EVENT_CATEGORIES[cat].name,
+                                    value: cat,
+                                    badgeClass: EVENT_CATEGORIES[cat].badgeText
+                                  }))}
+                                  selectedValues={eventFilter}
+                                  onToggle={(val, isMulti) => setEventFilter(prev => handleFilterToggle(prev, val, isMulti))}
+                                  onClear={() => setEventFilter([])}
+                                  alignRight={alignRight}
+                                />
+                              ) : isTraspasoCol ? (
+                                <ColumnFilterMenu
+                                  title="Estado Gestión"
+                                  options={[
+                                    { label: 'Pendientes', value: 'pending', badgeClass: 'text-amber-600 dark:text-amber-400' },
+                                    { label: 'Realizados', value: 'completed', badgeClass: 'text-emerald-600 dark:text-emerald-400' }
+                                  ]}
+                                  selectedValues={eventResolutionFilter}
+                                  onToggle={(val, isMulti) => setEventResolutionFilter(prev => handleFilterToggle(prev, val, isMulti))}
+                                  onClear={() => setEventResolutionFilter([])}
+                                  alignRight={alignRight}
+                                />
+                              ) : isFechaVcCol ? (
+                                <ColumnFilterMenu
+                                  title="Radar Comercial"
+                                  options={[
+                                    { label: 'En Regla', value: 'en_regla', badgeClass: 'text-emerald-600 dark:text-emerald-400' },
+                                    { label: 'Drenaje', value: 'drainage', badgeClass: 'text-amber-600 dark:text-amber-400' },
+                                    { label: 'Próximo a Retiro', value: 'upcoming', badgeClass: 'text-rose-600 dark:text-rose-400' },
+                                    { label: 'Retirar YA', value: 'retire_now', badgeClass: 'text-red-600 dark:text-red-400' }
+                                  ]}
+                                  selectedValues={pmRadarFilter}
+                                  onToggle={(val, isMulti) => setPmRadarFilter(prev => handleFilterToggle(prev, val, isMulti))}
+                                  onClear={() => setPmRadarFilter([])}
+                                  alignRight={alignRight}
+                                />
+                              ) : (
+                                <ColumnFilterMenu
+                                  title={header}
+                                  options={columnOptionsMap[header] || []}
+                                  selectedValues={columnFilters[header] || []}
+                                  onToggle={(val, isMulti) => setColumnFilters(prev => ({
+                                    ...prev,
+                                    [header]: handleFilterToggle(prev[header] || [], val, isMulti)
+                                  }))}
+                                  onClear={() => setColumnFilters(prev => ({ ...prev, [header]: [] }))}
+                                  alignRight={alignRight}
+                                />
                               )}
                             </div>
 

@@ -132,7 +132,7 @@ export const SchemaEditorView: React.FC<SchemaEditorViewProps> = ({
           </div>
         </div>
       ) : (
-        <div className="mb-6 bg-slate-900 dark:bg-slate-850 text-white rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md border border-slate-800">
+        <div className="mb-6 bg-slate-900 dark:bg-slate-900 text-white rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md border border-slate-800">
           <div className="flex items-start sm:items-center gap-3.5">
             <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-400/30 flex items-center justify-center shrink-0">
               <Sliders className="w-5 h-5" />
@@ -176,7 +176,7 @@ export const SchemaEditorView: React.FC<SchemaEditorViewProps> = ({
         </div>
       )}
 
-      <div className="mb-6 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+      <div className="mb-6 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
         <p className="text-sm text-slate-700 dark:text-slate-300 font-medium leading-relaxed">
           <strong>Editor de Metadatos y Relaciones Relacionales:</strong> Define claves primarias (ID Key), referencias entre tablas (Ref), columnas indexables para el buscador, y reglas de cálculo para cada pestaña de tu Google Sheet.
         </p>
@@ -238,17 +238,17 @@ export const SchemaEditorView: React.FC<SchemaEditorViewProps> = ({
       )}
 
       {!isSchemaLoading && activeSheet && headers.length > 0 && (
-        <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-x-auto">
+        <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto shadow-sm">
           <table className="w-full text-left border-collapse min-w-[850px]">
-            <thead className="bg-slate-50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800">
+            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
               <tr>
-                <th className="px-5 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Columna</th>
-                <th className="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase text-center w-24">ID Key</th>
-                <th className="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase text-center w-24">Visible</th>
-                <th className="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase text-center w-28">Indexable</th>
-                <th className="px-5 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase w-48">Tipo de Dato</th>
-                <th className="px-5 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Opciones / Referencia</th>
-                <th className="px-5 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase w-56">Automatización</th>
+                <th className="px-5 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase">Columna</th>
+                <th className="px-4 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase text-center w-24">ID Key</th>
+                <th className="px-4 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase text-center w-24">Visible</th>
+                <th className="px-4 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase text-center w-28">Indexable</th>
+                <th className="px-5 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase w-48">Tipo de Dato</th>
+                <th className="px-5 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase">Opciones / Referencia</th>
+                <th className="px-5 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase w-56">Automatización</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-200">

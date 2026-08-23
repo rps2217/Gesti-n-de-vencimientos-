@@ -27,7 +27,7 @@ export const ScriptCodeModal: React.FC<ScriptCodeModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="w-full max-w-4xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-850">
+        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-200 dark:shadow-none">
               <Code2 className="w-6 h-6" />
@@ -101,7 +101,7 @@ export const ScriptCodeModal: React.FC<ScriptCodeModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 flex items-center justify-between">
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex items-center justify-between">
           <span className="text-xs text-slate-500 dark:text-slate-400">
             Recuerda desplegar como <strong>Aplicación Web</strong> con acceso para <strong>Cualquiera (Anyone)</strong>.
           </span>

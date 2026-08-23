@@ -1,31 +1,69 @@
 export const SPREADSHEET_ID = '1a4jGo-7pduH4fue73F_67sQYJS0LJqI7hiXYpyWVA8o';
 
-function getScriptUrl() {
-  return localStorage.getItem('appsheet_clone_scriptUrl');
+function getScriptUrl(): string | null {
+  const url = localStorage.getItem('appsheet_clone_scriptUrl');
+  return url ? url.trim() : null;
 }
 
-async function fetchFromScript(payload: any) {
+export interface ScriptResponse<T = any> {
+  success?: boolean;
+  error?: string;
+  values?: any[][];
+  sheets?: any[];
+  config?: any;
+  [key: string]: any;
+}
+
+async function fetchFromScript<T = ScriptResponse>(payload: Record<string, any>, timeoutMs = 25000): Promise<T> {
   const url = getScriptUrl();
-  if (!url) throw new Error('La URL del script no está configurada.');
-
-  // By omitting the Content-Type header or setting it to text/plain, 
-  // fetch sends a simple request that bypasses CORS preflight (OPTIONS).
-  // Apps Script receives it natively.
-  const response = await fetch(url, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-    headers: {
-      'Content-Type': 'text/plain;charset=utf-8'
-    }
-  });
-
-  if (!response.ok) {
-    throw new Error(`Error del servidor: ${response.status}`);
+  if (!url) {
+    throw new Error('La URL del script no está configurada. Ve a Configuración para ingresar tu Web App URL.');
   }
 
-  const data = await response.json();
-  if (data.error) throw new Error(data.error);
-  return data;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    // By omitting the Content-Type header or setting it to text/plain, 
+    // fetch sends a simple request that bypasses CORS preflight (OPTIONS).
+    // Apps Script receives it natively.
+    const response = await fetch(url, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8'
+      },
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Error de servidor Apps Script (HTTP ${response.status}: ${response.statusText})`);
+    }
+
+    const text = await response.text();
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error('La respuesta de Google Apps Script no tiene formato JSON válido. Verifica que el Web App esté desplegado con acceso para "Cualquiera" (Anyone).');
+    }
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+    return data as T;
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error('La solicitud a Google Apps Script excedió el tiempo límite (25s). Verifica tu conexión a internet.');
+    }
+    if (err.message && err.message.includes('Failed to fetch')) {
+      throw new Error('Error de conexión con Google Apps Script. Asegúrate de que el Web App esté publicado con acceso "Cualquiera" (Anyone) y no requiera inicio de sesión de Google en el navegador.');
+    }
+    throw err;
+  }
 }
 
 export async function getSpreadsheetMetadata() {

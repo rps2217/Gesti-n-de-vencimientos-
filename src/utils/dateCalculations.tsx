@@ -190,25 +190,33 @@ export function getCategoryFromEventValue(rawVal: any): EventCategory | null {
 /**
  * Universal Date Parser supporting:
  * - Google Sheets / Excel serial numbers (e.g. 45321)
- * - ISO format: YYYY-MM-DD, YYYY/MM/DD
+ * - ISO format: YYYY-MM-DD, YYYY/MM/DD, YYYY-MM-DDTHH:mm:ss
  * - Latin format: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
  * - Month/Year: MM/YYYY (evaluates to last day of the month)
  * - Native Date objects or timestamps
  */
 export function parseAnyDate(dateVal: any): Date | null {
   if (dateVal === null || dateVal === undefined) return null;
-  if (dateVal instanceof Date) return isNaN(dateVal.getTime()) ? null : dateVal;
+  if (dateVal instanceof Date) {
+    if (isNaN(dateVal.getTime())) return null;
+    const clean = new Date(dateVal.getTime());
+    clean.setHours(0, 0, 0, 0);
+    return clean;
+  }
   
   // 1. Google Sheets / Excel Serial Date number check (e.g. 45321)
   if (typeof dateVal === 'number' && !isNaN(dateVal) && dateVal > 20000 && dateVal < 70000) {
     // 25569 = Days between 1899-12-30 and 1970-01-01 (Unix epoch)
     const ms = Math.round((dateVal - 25569) * 86400 * 1000);
     const d = new Date(ms);
-    if (!isNaN(d.getTime())) return d;
+    if (!isNaN(d.getTime())) {
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
   }
 
   const str = String(dateVal).trim();
-  if (!str) return null;
+  if (!str || str === '-' || str === 'N/A') return null;
 
   // Numeric string check for Excel serial
   if (/^\d{5}(\.\d+)?$/.test(str)) {
@@ -216,28 +224,31 @@ export function parseAnyDate(dateVal: any): Date | null {
     if (num > 20000 && num < 70000) {
       const ms = Math.round((num - 25569) * 86400 * 1000);
       const d = new Date(ms);
-      if (!isNaN(d.getTime())) return d;
+      if (!isNaN(d.getTime())) {
+        d.setHours(0, 0, 0, 0);
+        return d;
+      }
     }
   }
 
-  // 2. ISO format: YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
+  // 2. ISO format: YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD (with optional time T... or space...)
   const ymd = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (ymd) {
-    const d = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+    const d = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]), 0, 0, 0, 0);
     if (!isNaN(d.getTime())) return d;
   }
 
   // 3. Latin format: DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
   const dmy = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
   if (dmy) {
-    const d = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+    const d = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]), 0, 0, 0, 0);
     if (!isNaN(d.getTime())) return d;
   }
 
   // 4. Compact numeric date format YYYYMMDD
   const ymdCompact = str.match(/^(\d{4})(\d{2})(\d{2})$/);
   if (ymdCompact) {
-    const d = new Date(Number(ymdCompact[1]), Number(ymdCompact[2]) - 1, Number(ymdCompact[3]));
+    const d = new Date(Number(ymdCompact[1]), Number(ymdCompact[2]) - 1, Number(ymdCompact[3]), 0, 0, 0, 0);
     if (!isNaN(d.getTime())) return d;
   }
 
@@ -247,14 +258,17 @@ export function parseAnyDate(dateVal: any): Date | null {
     const m = Number(my[1]);
     const y = Number(my[2]);
     if (m >= 1 && m <= 12) {
-      const lastDay = new Date(y, m, 0);
+      const lastDay = new Date(y, m, 0, 0, 0, 0, 0);
       if (!isNaN(lastDay.getTime())) return lastDay;
     }
   }
 
   // 6. Standard Date fallback
   const standard = new Date(str);
-  if (!isNaN(standard.getTime())) return standard;
+  if (!isNaN(standard.getTime())) {
+    standard.setHours(0, 0, 0, 0);
+    return standard;
+  }
 
   return null;
 }

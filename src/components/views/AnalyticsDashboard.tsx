@@ -13,7 +13,8 @@ import {
   Cell
 } from 'recharts';
 import { InventoryItem, EventCategory } from '../../types';
-import { getEventCategory, getItemStatus } from '../../utils/dateCalculations';
+import { getEventCategory, getItemStatus, parseAnyDate } from '../../utils/dateCalculations';
+import { findColumnBySemantic } from '../../utils/columnAliases';
 import { Activity, AlertTriangle, TrendingUp, PackageX } from 'lucide-react';
 
 interface AnalyticsDashboardProps {
@@ -62,7 +63,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ items, h
   // Aggregate data for expirations by month/year
   const expirationData = useMemo(() => {
     const monthsMap: Record<string, number> = {};
-    const vcHeader = headers.find(h => /^FECHA_VC$|vencimiento|caducidad/i.test(h));
+    const vcHeader = findColumnBySemantic(headers, 'fecha_vc') || headers.find(h => /^FECHA_VC$|vencimiento|caducidad/i.test(h));
 
     if (!vcHeader) return [];
 
@@ -70,10 +71,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ items, h
       const cat = getEventCategory(item, headers);
       if (cat !== 'VENCIMIENTO') return;
 
-      const dateStr = item[vcHeader];
-      if (!dateStr) return;
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return;
+      const dateVal = item[vcHeader];
+      if (!dateVal) return;
+      const d = parseAnyDate(dateVal);
+      if (!d || isNaN(d.getTime())) return;
 
       const monthYear = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       monthsMap[monthYear] = (monthsMap[monthYear] || 0) + 1;

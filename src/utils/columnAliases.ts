@@ -17,6 +17,7 @@ export type KnownFieldSemantic =
   | 'observacion'
   | 'proveedor'
   | 'dias_anticipacion'
+  | 'dias_retiro'
   | 'n_traspaso';
 
 const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
@@ -34,12 +35,12 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
     /^nro_registro$/i
   ],
   sku: [
-    /^sku$/i,
-    /^cod(_|\s)?(prod|producto|art|articulo|item|mat|material)?$/i,
-    /^codigo(_|\s)?(de)?(_|\s)?(producto|articulo|item|material)?$/i,
-    /^item(_|\s)?(code|id|num)?$/i,
-    /^product(_|\s)?(id|code)?$/i,
-    /^clave(_|\s)?(prod|producto)?$/i
+    /^sku(_|\s)?(vc|calculado)?$/i,
+    /^cod(_|\s)?(prod|producto|art|articulo|item|mat|material)?(_|\s)?(vc|calculado)?$/i,
+    /^codigo(_|\s)?(de)?(_|\s)?(producto|articulo|item|material)?(_|\s)?(vc|calculado)?$/i,
+    /^item(_|\s)?(code|id|num)?(_|\s)?(vc|calculado)?$/i,
+    /^product(_|\s)?(id|code)?(_|\s)?(vc|calculado)?$/i,
+    /^clave(_|\s)?(prod|producto)?(_|\s)?(vc|calculado)?$/i
   ],
   descripcion: [
     /^descripci[oó]n(_|\s)?(de)?(_|\s)?(producto|articulo|item|material)?$/i,
@@ -114,13 +115,11 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
     /^regla(_|\s)?(canje|retiro)?$/i,
     /^policy$/i
   ],
-  dias_anticipacion: [
-    /^d[ií]as(_|\s)?(de)?(_|\s)?(anticipaci[oó]n|anticipacion|canje|retiro)?$/i,
-    /^dias$/i,
-    /^d[ií]as$/i,
-    /^anticipaci[oó]n$/i,
-    /^lead(_|\s)?time$/i,
-    /^days$/i
+  dias_retiro: [
+    /^d[ií]as(_|\s)?(de)?(_|\s)?(retiro|canje|limite|l[ií]mite)?(_|\s)?(vc|calculado)?$/i,
+    /^retiro(_|\s)?d[ií]as(_|\s)?(vc|calculado)?$/i,
+    /^dias(_|\s)?retiro(_|\s)?(vc|calculado)?$/i,
+    /^days(_|\s)?withdrawal$/i
   ],
   tipo_evento: [
     /^frc(_|\s)?even(to)?$/i,
@@ -231,7 +230,7 @@ export function detectAllColumnSemantics(headers: string[]): Partial<Record<Know
   const map: Partial<Record<KnownFieldSemantic, string>> = {};
   const semantics: KnownFieldSemantic[] = [
     'id', 'sku', 'descripcion', 'fecha_vc', 'fecha_retiro', 'mes', 'anio', 
-    'cantidad', 'lote', 'politica', 'dias_anticipacion', 'tipo_evento', 
+    'cantidad', 'lote', 'politica', 'dias_anticipacion', 'dias_retiro', 'tipo_evento', 
     'precio', 'observacion', 'proveedor', 'n_traspaso'
   ];
 

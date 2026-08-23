@@ -46,18 +46,8 @@ export const VIRTUAL_COLUMNS: VirtualColumn[] = [
         }
       }
       
-      // LOGGING FOR DIAGNOSTICS
-      console.log('--- FECHA_RETIRO_CALC DIAGNOSTIC ---');
-      console.log('SKU:', sku);
-      console.log('FECHA_VC (original):', item[vcCol]);
-      console.log('FECHA_VC (parsed):', dVc);
-      console.log('DIAS_RETIRO (detected):', diasRetiro);
-      
       // 4. FECHA_RETIRO_VC = FECHA_VC - DIAS_RETIRO_VC
       const dRet = new Date(dVc.getTime() - (diasRetiro * 24 * 60 * 60 * 1000));
-      
-      console.log('RESULTADO (dRet):', dRet);
-      console.log('RESULTADO (formatted):', formatDisplayDate(dRet));
       
       return formatDisplayDate(dRet);
     }

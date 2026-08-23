@@ -59,7 +59,6 @@ import { ScriptCodeModal } from './modals/ScriptCodeModal';
 import { GlobalConfigModal } from './modals/GlobalConfigModal';
 import { BarcodeScannerModal } from './modals/BarcodeScannerModal';
 import { BulkEditModal } from './modals/BulkEditModal';
-import { BulkImportFRC } from './BulkImportFRC';
 import { QuickTransferModal } from './modals/QuickTransferModal';
 import { exportToExcel } from '../utils/exportUtils';
 import { EventResolutionCards } from './views/EventResolutionCards';

@@ -21,7 +21,7 @@ import { z } from 'zod';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
   Plus, Edit2, Trash2, RefreshCw, Loader2, Database, AlertCircle, Package, 
-  FileSpreadsheet, FileText, Search, X, Truck, RotateCcw, 
+  FileSpreadsheet, Printer, Settings, FileText, Search, X, Truck, RotateCcw, 
   PackageX, Sparkles, Clock, Clock3, Flame, AlertTriangle, CheckCircle2, 
   Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown, Menu, Scan, GripVertical, Tag
 } from 'lucide-react';
@@ -63,6 +63,17 @@ import { exportToExcel } from '../utils/exportUtils';
 import { EventResolutionCards } from './views/EventResolutionCards';
 import { EventFilterChips } from './views/EventFilterChips';
 import { PmRadarCards } from './views/PmRadarCards';
+import { TicketPrintView } from './views/TicketPrintView';
+import { TicketConfigModal } from './modals/TicketConfigModal';
+import { TicketPrintConfig } from '../types';
+
+const defaultTicketConfig: TicketPrintConfig = {
+  showSku: true, sizeSku: 10, boldSku: true,
+  showDesc: true, sizeDesc: 11, boldDesc: true,
+  showFvc: true, sizeFvc: 10, boldFvc: true,
+  showFretiro: true, sizeFretiro: 10, boldFretiro: true,
+  showPol: true, sizePol: 10, boldPol: true
+};
 
 export const InventoryDashboard: React.FC = () => {
   const [metadata, setMetadata] = useState<SpreadsheetMetadata | null>(null);
@@ -205,6 +216,36 @@ export const InventoryDashboard: React.FC = () => {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
+  const [ticketConfig, setTicketConfig] = useState<TicketPrintConfig>(defaultTicketConfig);
+  const [isTicketConfigOpen, setIsTicketConfigOpen] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('ticket_print_config');
+    if (saved) {
+      try {
+        setTicketConfig(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to parse ticket config', e);
+      }
+    }
+  }, []);
+
+  const handleSaveTicketConfig = (newConfig: TicketPrintConfig) => {
+    setTicketConfig(newConfig);
+    localStorage.setItem('ticket_print_config', JSON.stringify(newConfig));
+    setIsTicketConfigOpen(false);
+  };
+
+  const handlePrintTicket = (itemsToPrint: InventoryItem[]) => {
+    if (itemsToPrint.length === 0) {
+      alert("No hay registros para imprimir.");
+      return;
+    }
+    // El renderizado de TicketPrintView se encarga de mostrar solo el ticket en modo @media print
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
 
   // Column Resizing Custom Hook
   const activeSheetKey = activeSheet?.title || activeView;
@@ -1256,7 +1297,8 @@ export const InventoryDashboard: React.FC = () => {
     .filter((t: string) => !mappedSheets.includes(t) && !/^_/i.test(t.trim())) || [];
 
   return (
-    <div className="flex h-full overflow-hidden bg-[#F8FAFC] dark:bg-slate-950">
+    <>
+    <div className="flex h-full overflow-hidden bg-[#F8FAFC] dark:bg-slate-950 print:hidden">
       
       {/* DESKTOP SIDEBAR NAVIGATION */}
       <div className="hidden lg:flex">
@@ -1351,14 +1393,31 @@ export const InventoryDashboard: React.FC = () => {
           {/* Global Utils (Refresh, Export) */}
           <div className="flex items-center gap-2 shrink-0">
             {activeView !== 'schema' && (
-              <button
-                onClick={() => exportToExcel(`${activeView}_${new Date().toISOString().split('T')[0]}`, headers, filteredItems)}
-                className="text-sm bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-2 hidden md:flex"
-                title="Exportar la vista actual a Excel"
-              >
-                <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                <span>Exportar Excel</span>
-              </button>
+              <>
+                <button
+                  onClick={() => setIsTicketConfigOpen(true)}
+                  className="text-sm bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 p-2.5 rounded-xl font-bold shadow-sm transition-all hidden md:block"
+                  title="Configurar opciones de impresión de Ticket"
+                >
+                  <Settings className="w-4 h-4 text-slate-500" />
+                </button>
+                <button
+                  onClick={() => handlePrintTicket(filteredItems)}
+                  className="text-sm bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-700 px-3 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-2 hidden md:flex"
+                  title="Imprimir ticket térmico con los registros mostrados"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Imprimir Ticket</span>
+                </button>
+                <button
+                  onClick={() => exportToExcel(`${activeView}_${new Date().toISOString().split('T')[0]}`, headers, filteredItems)}
+                  className="text-sm bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-700 px-3 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-2 hidden md:flex"
+                  title="Exportar la vista actual a Excel"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>Excel</span>
+                </button>
+              </>
             )}
             {/* Status & Sync Indicator */}
             <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-sm">
@@ -2025,6 +2084,16 @@ export const InventoryDashboard: React.FC = () => {
                 <button 
                   onClick={() => {
                     const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
+                    handlePrintTicket(selectedItems);
+                  }}
+                  className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
+                >
+                  <Printer className="w-3.5 h-3.5 text-indigo-400" /> Imprimir Ticket
+                </button>
+                
+                <button 
+                  onClick={() => {
+                    const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
                     exportToExcel(`Seleccion_${new Date().toISOString().split('T')[0]}`, headers, selectedItems);
                   }}
                   className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
@@ -2253,7 +2322,23 @@ export const InventoryDashboard: React.FC = () => {
         headers={headers}
         onSave={handleSaveQuickTraspaso}
       />
+      
+      {/* TICKET CONFIG MODAL */}
+      <TicketConfigModal
+        isOpen={isTicketConfigOpen}
+        onClose={() => setIsTicketConfigOpen(false)}
+        config={ticketConfig}
+        onSave={handleSaveTicketConfig}
+      />
     </div>
+
+    {/* HIDDEN UNLESS PRINTING: TICKET PRINT VIEW */}
+    <TicketPrintView 
+      items={selectedRowIds.length > 0 ? filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number)) : filteredItems} 
+      headers={headers} 
+      config={ticketConfig} 
+    />
+    </>
   );
 };
 

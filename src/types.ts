@@ -86,3 +86,11 @@ export interface InventoryItem {
   [key: string]: any; // Dynamic columns based on the sheet's headers
 }
 
+
+export interface TicketPrintConfig {
+  showSku: boolean; sizeSku: number; boldSku: boolean;
+  showDesc: boolean; sizeDesc: number; boldDesc: boolean;
+  showFvc: boolean; sizeFvc: number; boldFvc: boolean;
+  showFretiro: boolean; sizeFretiro: number; boldFretiro: boolean;
+  showPol: boolean; sizePol: number; boldPol: boolean;
+}

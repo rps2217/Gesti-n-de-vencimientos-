@@ -16,27 +16,26 @@ export const VIRTUAL_COLUMNS: VirtualColumn[] = [
       const dVc = parseAnyDate(item[vcCol]);
       if (!dVc) return '-';
 
-      // 1. Get SKU
+      // 1. Get SKU (Use semantic search or direct lookup)
       const sku = skuCol ? item[skuCol] : null;
 
-      // 2. Cross-reference to get RUTE (Vendor) from 'products' (Catálogo)
-      // Assuming 'products' is an array of items and has a structure we can query.
-      // User said: Catálogo Col F is RUTE, Col C is SKU.
-      const productEntry = products?.find((p: any) => p['Código'] === sku || p['C'] === sku); // Need to handle semantic headers
-      const rute = productEntry ? (productEntry['RUTE'] || productEntry['F']) : null;
+      // 2. RUT_PROVEEDOR_VC = LOOKUP([_THISROW].[SKU_VC], "CATALOGO", "COD PRODUCTO", "RUT PROVEEDOR")
+      const productEntry = products?.find((p: any) => p['COD PRODUCTO'] === sku || p['C'] === sku);
+      const rutProveedor = productEntry ? (productEntry['RUT PROVEEDOR'] || productEntry['F']) : null;
 
-      // 3. Search for withdrawal days in 'policies' using RUTE
-      // User said: Políticas Col A is RUT, Col H is days.
-      let daysToSubtract = 30; // Default
-      if (rute) {
-        const policyEntry = policies?.find((p: any) => p['RUT'] === rute || p['A'] === rute);
-        if (policyEntry && policyEntry['Días de retiro'] || policyEntry['H']) {
-          daysToSubtract = parseInt(policyEntry['Días de retiro'] || policyEntry['H']) || 30;
+      // 3. DIAS_RETIRO_VC = [RUT_PROVEEDOR_VC].[RETIRO (DÍAS)]
+      // Policies: A is RUT, H is RETIRO (DÍAS)
+      let diasRetiro = 30; // Default
+      if (rutProveedor) {
+        const policyEntry = policies?.find((p: any) => p['RUT'] === rutProveedor || p['A'] === rutProveedor);
+        if (policyEntry && (policyEntry['RETIRO (DÍAS)'] || policyEntry['H'])) {
+          diasRetiro = parseInt(policyEntry['RETIRO (DÍAS)'] || policyEntry['H']) || 30;
         }
       }
       
-      // Adapted to AppSheet logic: EOMONTH([FECHA_VC], -([DIAS RETIRO_VC]/30))
-      const monthsToSubtract = Math.round(daysToSubtract / 30);
+      // 4. FECHA_RETIRO_VC = EOMONTH([FECHA_VC], -([DIAS RETIRO_VC]/30))
+      // AppSheet logic: EOMONTH(date, months_offset)
+      const monthsToSubtract = Math.floor(diasRetiro / 30);
       const dRet = new Date(dVc.getFullYear(), dVc.getMonth() - monthsToSubtract + 1, 0);
       
       return formatDisplayDate(dRet);

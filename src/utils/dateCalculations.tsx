@@ -382,8 +382,8 @@ export function getExpiryDateFromYm(item: InventoryItem, headers: string[]): Dat
   
   if (isNaN(y) || isNaN(m) || m < 1 || m > 12) return null;
   
-  // AppSheet formula: EOMONTH(...)
-  // Returns last day of month m of year y
+  // AppSheet formula: EOMONTH(DATE([YYYY] & "-01-01") + ((NUMBER([MM]) - 1) * 31), 0)
+  // Replicated logic: Returns last day of month m of year y
   return new Date(y, m, 0); 
 }
 

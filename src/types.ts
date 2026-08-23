@@ -26,9 +26,16 @@ export interface SheetConfig {
   products?: string;
   policies?: string;
   schema?: Record<string, Record<string, ColumnSchema>>;
+  activeVirtualColumns?: string[];
 }
 
-export type ColumnType = 'text' | 'longtext' | 'number' | 'date' | 'datetime' | 'enum' | 'enumlist' | 'ref' | 'calculated';
+export type ColumnType = 'text' | 'longtext' | 'number' | 'date' | 'datetime' | 'enum' | 'enumlist' | 'ref' | 'calculated' | 'virtual';
+
+export interface VirtualColumn {
+  id: string;
+  label: string;
+  calculate: (item: any, headers: any) => any;
+}
 export type ColumnBehavior = 'none' | 'auto_id' | 'calc_fecha_vc' | 'calc_retiro' | 'sku_lookup';
 
 export type EventCategory = 

@@ -1,6 +1,7 @@
 import React from 'react';
+import { VIRTUAL_COLUMNS } from '../../utils/virtualColumns';
 import { 
-  Sparkles, Code2, UploadCloud, Cloud, Sliders, CheckCircle2, Loader2, Key, Eye, EyeOff, Search, Link2 
+  Sparkles, Code2, UploadCloud, Cloud, Sliders, CheckCircle2, Loader2, Key, Eye, EyeOff, Search, Link2, CheckSquare, Square
 } from 'lucide-react';
 import { SheetConfig, SpreadsheetMetadata, SheetProperties, ColumnSchema, ColumnType, ColumnBehavior } from '../../types';
 import { getSheetData } from '../../lib/sheets';
@@ -238,170 +239,204 @@ export const SchemaEditorView: React.FC<SchemaEditorViewProps> = ({
       )}
 
       {!isSchemaLoading && activeSheet && headers.length > 0 && (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto shadow-sm">
-          <table className="w-full text-left border-collapse min-w-[850px]">
-            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-              <tr>
-                <th className="px-5 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase">Columna</th>
-                <th className="px-4 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase text-center w-24">ID Key</th>
-                <th className="px-4 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase text-center w-24">Visible</th>
-                <th className="px-4 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase text-center w-28">Indexable</th>
-                <th className="px-5 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase w-48">Tipo de Dato</th>
-                <th className="px-5 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase">Opciones / Referencia</th>
-                <th className="px-5 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase w-56">Automatización</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-200">
-              {headers.map((header) => {
-                const isNaturalKey = /^ID_VC$|^ID_EVENTO$|^ID$|^SKU$/i.test(header.trim());
-                const schema: ColumnSchema = sheetConfig.schema?.[activeSheet.title]?.[header] || { 
-                  visible: true, 
-                  searchable: true, 
-                  type: (/fecha|vencimiento|retiro/i.test(header) ? 'date' : (/sku/i.test(header) && activeView === 'main' ? 'ref' : 'text')), 
-                  behavior: (isNaturalKey && /^ID_VC$/i.test(header.trim()) ? 'auto_id' : 'none'),
-                  isKey: isNaturalKey,
-                  options: '',
-                  refTable: sheetConfig.products || ''
-                };
-                
-                const updateCol = (key: keyof ColumnSchema, value: any) => {
-                  const newSchema = { ...sheetConfig.schema };
-                  if (!newSchema[activeSheet.title]) newSchema[activeSheet.title] = {};
-                  newSchema[activeSheet.title][header] = { ...schema, [key]: value };
-                  saveConfig({ ...sheetConfig, schema: newSchema });
-                };
+        <>
+          <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto shadow-sm mb-6">
+            <table className="w-full text-left border-collapse min-w-[850px]">
+              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                <tr>
+                  <th className="px-5 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase">Columna</th>
+                  <th className="px-4 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase text-center w-24">ID Key</th>
+                  <th className="px-4 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase text-center w-24">Visible</th>
+                  <th className="px-4 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase text-center w-28">Indexable</th>
+                  <th className="px-5 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase w-48">Tipo de Dato</th>
+                  <th className="px-5 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase">Opciones / Referencia</th>
+                  <th className="px-5 py-4 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase w-56">Automatización</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-200">
+                {headers.map((header) => {
+                  const isNaturalKey = /^ID_VC$|^ID_EVENTO$|^ID$|^SKU$/i.test(header.trim());
+                  const schema: ColumnSchema = sheetConfig.schema?.[activeSheet.title]?.[header] || { 
+                    visible: true, 
+                    searchable: true, 
+                    type: (/fecha|vencimiento|retiro/i.test(header) ? 'date' : (/sku/i.test(header) && activeView === 'main' ? 'ref' : 'text')), 
+                    behavior: (isNaturalKey && /^ID_VC$/i.test(header.trim()) ? 'auto_id' : 'none'),
+                    isKey: isNaturalKey,
+                    options: '',
+                    refTable: sheetConfig.products || ''
+                  };
+                  
+                  const updateCol = (key: keyof ColumnSchema, value: any) => {
+                    const newSchema = { ...sheetConfig.schema };
+                    if (!newSchema[activeSheet.title]) newSchema[activeSheet.title] = {};
+                    newSchema[activeSheet.title][header] = { ...schema, [key]: value };
+                    saveConfig({ ...sheetConfig, schema: newSchema });
+                  };
 
-                const isEnum = schema.type === 'enum' || schema.type === 'enumlist';
-                const isRef = schema.type === 'ref';
+                  const isEnum = schema.type === 'enum' || schema.type === 'enumlist';
+                  const isRef = schema.type === 'ref';
 
+                  return (
+                    <tr key={header} className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
+                      <td className="px-5 py-4 text-sm font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <span>{header}</span>
+                          {schema.isKey && (
+                            <span className="text-[10px] bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-1.5 py-0.5 rounded font-mono font-bold flex items-center gap-1">
+                              <Key className="w-3 h-3 text-amber-600 dark:text-amber-400" /> KEY
+                            </span>
+                          )}
+                          {schema.behavior !== 'none' && (
+                            <span className="text-[10px] bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono font-bold">
+                              {schema.behavior}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      
+                      {/* Key Toggle */}
+                      <td className="px-4 py-4 text-center">
+                        <button 
+                          onClick={() => updateCol('isKey', !schema.isKey)}
+                          title={schema.isKey ? "Columna clave primaria (ID)" : "Marcar como clave primaria"}
+                          className={`p-2 rounded-lg transition-colors ${schema.isKey ? 'text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/50 bg-amber-50/60 dark:bg-amber-900/30' : 'text-slate-300 dark:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                        >
+                          <Key className="w-4 h-4" />
+                        </button>
+                      </td>
+
+                      {/* Visible Toggle */}
+                      <td className="px-4 py-4 text-center">
+                        <button 
+                          onClick={() => updateCol('visible', schema.visible === false ? true : false)}
+                          title={schema.visible !== false ? "Visible en la tabla principal" : "Oculto en la tabla principal"}
+                          className={`p-2 rounded-lg transition-colors ${schema.visible !== false ? 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50' : 'text-slate-300 dark:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                        >
+                          {schema.visible !== false ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+                        </button>
+                      </td>
+
+                      {/* Searchable Toggle */}
+                      <td className="px-4 py-4 text-center">
+                        <button 
+                          onClick={() => updateCol('searchable', schema.searchable === false ? true : false)}
+                          title={schema.searchable !== false ? "Indexado en el buscador universal" : "Ignorado en el buscador"}
+                          className={`p-2 rounded-lg transition-colors ${schema.searchable !== false ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 bg-emerald-50/50 dark:bg-emerald-900/30' : 'text-slate-300 dark:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                        >
+                          <Search className="w-4 h-4 inline" />
+                        </button>
+                      </td>
+
+                      {/* Data Type */}
+                      <td className="px-5 py-4">
+                        <select 
+                          value={schema.type || 'text'}
+                          onChange={(e) => updateCol('type', e.target.value as ColumnType)}
+                          className="w-full border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:border-blue-500 outline-none font-medium"
+                        >
+                          <option value="text">Texto (Text)</option>
+                          <option value="longtext">Texto Largo (LongText)</option>
+                          <option value="number">Número (Number)</option>
+                          <option value="date">Fecha (Date)</option>
+                          <option value="datetime">Fecha y Hora (DateTime)</option>
+                          <option value="enum">Selección Única (Enum)</option>
+                          <option value="enumlist">Selección Múltiple (EnumList)</option>
+                          <option value="ref">Referencia / Relación (Ref)</option>
+                          <option value="calculated">Calculada (Calculated)</option>
+                        </select>
+                      </td>
+
+                      {/* Options / Ref Config */}
+                      <td className="px-5 py-4">
+                        {isRef ? (
+                          <div>
+                            <select
+                              value={schema.refTable || ''}
+                              onChange={(e) => updateCol('refTable', e.target.value)}
+                              className="w-full border border-blue-200 dark:border-blue-800 rounded-lg px-2.5 py-1.5 text-xs bg-blue-50/50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 focus:border-blue-500 outline-none font-medium"
+                            >
+                              <option value="">-- Tabla Destino (Ref) --</option>
+                              {metadata?.sheets.map((s: any) => (
+                                <option key={s.properties.sheetId} value={s.properties.title}>
+                                  {s.properties.title}
+                                </option>
+                              ))}
+                            </select>
+                            <span className="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5 block flex items-center gap-1">
+                              <Link2 className="w-3 h-3" /> Relacionada por clave ID
+                            </span>
+                          </div>
+                        ) : isEnum ? (
+                          <div>
+                            <input 
+                              type="text"
+                              placeholder="Ej: Activo, Pendiente, Cancelado"
+                              value={schema.options || ''}
+                              onChange={(e) => updateCol('options', e.target.value)}
+                              className="w-full border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:border-blue-500 outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                            />
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 block">Separadas por coma</span>
+                          </div>
+                        ) : schema.type === 'calculated' ? (
+                          <span className="text-xs text-slate-400 dark:text-slate-500 italic">Definida por automatización</span>
+                        ) : (
+                          <span className="text-xs text-slate-300 dark:text-slate-600 font-mono">-</span>
+                        )}
+                      </td>
+
+                      {/* Behavior */}
+                      <td className="px-5 py-4">
+                        <select 
+                          value={schema.behavior || 'none'}
+                          onChange={(e) => updateCol('behavior', e.target.value as ColumnBehavior)}
+                          className="w-full border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:border-blue-500 outline-none"
+                        >
+                          <option value="none">-- Sin automatización --</option>
+                          <option value="auto_id">Generar ID Único (auto_id)</option>
+                          <option value="calc_fecha_vc">Calcular Fecha VC (MM/YYYY)</option>
+                          <option value="calc_retiro">Calcular Retiro (Política)</option>
+                          <option value="sku_lookup">Autocompletar Relacional</option>
+                        </select>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Virtual Columns Configuration */}
+          <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-blue-600" />
+              Columnas Virtuales Activas
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {VIRTUAL_COLUMNS.map((col) => {
+                const isActive = sheetConfig.activeVirtualColumns?.includes(col.id);
                 return (
-                  <tr key={header} className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
-                    <td className="px-5 py-4 text-sm font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <span>{header}</span>
-                        {schema.isKey && (
-                          <span className="text-[10px] bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-1.5 py-0.5 rounded font-mono font-bold flex items-center gap-1">
-                            <Key className="w-3 h-3 text-amber-600 dark:text-amber-400" /> KEY
-                          </span>
-                        )}
-                        {schema.behavior !== 'none' && (
-                          <span className="text-[10px] bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono font-bold">
-                            {schema.behavior}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    
-                    {/* Key Toggle */}
-                    <td className="px-4 py-4 text-center">
-                      <button 
-                        onClick={() => updateCol('isKey', !schema.isKey)}
-                        title={schema.isKey ? "Columna clave primaria (ID)" : "Marcar como clave primaria"}
-                        className={`p-2 rounded-lg transition-colors ${schema.isKey ? 'text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/50 bg-amber-50/60 dark:bg-amber-900/30' : 'text-slate-300 dark:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-                      >
-                        <Key className="w-4 h-4" />
-                      </button>
-                    </td>
-
-                    {/* Visible Toggle */}
-                    <td className="px-4 py-4 text-center">
-                      <button 
-                        onClick={() => updateCol('visible', schema.visible === false ? true : false)}
-                        title={schema.visible !== false ? "Visible en la tabla principal" : "Oculto en la tabla principal"}
-                        className={`p-2 rounded-lg transition-colors ${schema.visible !== false ? 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50' : 'text-slate-300 dark:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-                      >
-                        {schema.visible !== false ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
-                      </button>
-                    </td>
-
-                    {/* Searchable Toggle */}
-                    <td className="px-4 py-4 text-center">
-                      <button 
-                        onClick={() => updateCol('searchable', schema.searchable === false ? true : false)}
-                        title={schema.searchable !== false ? "Indexado en el buscador universal" : "Ignorado en el buscador"}
-                        className={`p-2 rounded-lg transition-colors ${schema.searchable !== false ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 bg-emerald-50/50 dark:bg-emerald-900/30' : 'text-slate-300 dark:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-                      >
-                        <Search className="w-4 h-4 inline" />
-                      </button>
-                    </td>
-
-                    {/* Data Type */}
-                    <td className="px-5 py-4">
-                      <select 
-                        value={schema.type || 'text'}
-                        onChange={(e) => updateCol('type', e.target.value as ColumnType)}
-                        className="w-full border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:border-blue-500 outline-none font-medium"
-                      >
-                        <option value="text">Texto (Text)</option>
-                        <option value="longtext">Texto Largo (LongText)</option>
-                        <option value="number">Número (Number)</option>
-                        <option value="date">Fecha (Date)</option>
-                        <option value="datetime">Fecha y Hora (DateTime)</option>
-                        <option value="enum">Selección Única (Enum)</option>
-                        <option value="enumlist">Selección Múltiple (EnumList)</option>
-                        <option value="ref">Referencia / Relación (Ref)</option>
-                        <option value="calculated">Calculada (Calculated)</option>
-                      </select>
-                    </td>
-
-                    {/* Options / Ref Config */}
-                    <td className="px-5 py-4">
-                      {isRef ? (
-                        <div>
-                          <select
-                            value={schema.refTable || ''}
-                            onChange={(e) => updateCol('refTable', e.target.value)}
-                            className="w-full border border-blue-200 dark:border-blue-800 rounded-lg px-2.5 py-1.5 text-xs bg-blue-50/50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 focus:border-blue-500 outline-none font-medium"
-                          >
-                            <option value="">-- Tabla Destino (Ref) --</option>
-                            {metadata?.sheets.map((s: any) => (
-                              <option key={s.properties.sheetId} value={s.properties.title}>
-                                {s.properties.title}
-                              </option>
-                            ))}
-                          </select>
-                          <span className="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5 block flex items-center gap-1">
-                            <Link2 className="w-3 h-3" /> Relacionada por clave ID
-                          </span>
-                        </div>
-                      ) : isEnum ? (
-                        <div>
-                          <input 
-                            type="text"
-                            placeholder="Ej: Activo, Pendiente, Cancelado"
-                            value={schema.options || ''}
-                            onChange={(e) => updateCol('options', e.target.value)}
-                            className="w-full border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:border-blue-500 outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600"
-                          />
-                          <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 block">Separadas por coma</span>
-                        </div>
-                      ) : schema.type === 'calculated' ? (
-                        <span className="text-xs text-slate-400 dark:text-slate-500 italic">Definida por automatización</span>
-                      ) : (
-                        <span className="text-xs text-slate-300 dark:text-slate-600 font-mono">-</span>
-                      )}
-                    </td>
-
-                    {/* Behavior */}
-                    <td className="px-5 py-4">
-                      <select 
-                        value={schema.behavior || 'none'}
-                        onChange={(e) => updateCol('behavior', e.target.value as ColumnBehavior)}
-                        className="w-full border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:border-blue-500 outline-none"
-                      >
-                        <option value="none">-- Sin automatización --</option>
-                        <option value="auto_id">Generar ID Único (auto_id)</option>
-                        <option value="calc_fecha_vc">Calcular Fecha VC (MM/YYYY)</option>
-                        <option value="calc_retiro">Calcular Retiro (Política)</option>
-                        <option value="sku_lookup">Autocompletar Relacional</option>
-                      </select>
-                    </td>
-                  </tr>
+                  <button
+                    key={col.id}
+                    onClick={() => {
+                      const newActive = isActive
+                        ? (sheetConfig.activeVirtualColumns || []).filter(id => id !== col.id)
+                        : [...(sheetConfig.activeVirtualColumns || []), col.id];
+                      saveConfig({ ...sheetConfig, activeVirtualColumns: newActive });
+                    }}
+                    className={`flex items-center gap-3 p-3 rounded-lg border text-sm font-bold transition-all ${
+                      isActive 
+                        ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200' 
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                    }`}
+                  >
+                    {isActive ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                    {col.label}
+                  </button>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

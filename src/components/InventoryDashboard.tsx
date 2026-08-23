@@ -37,6 +37,7 @@ import {
   getItemResolutionStatus
 } from '../utils/dateCalculations';
 import { findColumnBySemantic } from '../utils/columnAliases';
+import { VIRTUAL_COLUMNS } from '../utils/virtualColumns';
 import { useColumnResize } from '../hooks/useColumnResize';
 import { 
   SAMPLE_HEADERS, 
@@ -508,8 +509,19 @@ export const InventoryDashboard: React.FC = () => {
     return map;
   }, [items, headers]);
 
+  const augmentedItems = useMemo(() => {
+    return items.map(item => {
+      const virtualData: Record<string, any> = {};
+      const activeVCs = sheetConfig.activeVirtualColumns || [];
+      VIRTUAL_COLUMNS.filter(col => activeVCs.includes(col.id)).forEach(col => {
+        virtualData[col.id] = col.calculate(item, headers);
+      });
+      return { ...item, ...virtualData };
+    });
+  }, [items, headers, sheetConfig.activeVirtualColumns]);
+
   const filteredItems = useMemo(() => {
-    let list = items;
+    let list = augmentedItems;
 
     // Apply Event Category Filter in main or events view
     if (activeView === 'main') {

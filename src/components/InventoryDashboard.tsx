@@ -1808,10 +1808,24 @@ export const InventoryDashboard: React.FC = () => {
                       {/* Expiration Status Header (Main view only) */}
                       {activeView === 'main' && (
                         <th 
-                          style={{ width: `${getColWidth('_status', 'Estado / Radar PM')}px`, minWidth: '100px' }} 
-                          className="p-4 bg-slate-100 dark:bg-slate-700/90 text-slate-700 dark:text-slate-100 border-b border-slate-200 dark:border-slate-600/80 relative group font-bold"
+                          style={{ width: `${getColWidth('_status', 'Estado / Radar PM')}px`, minWidth: '130px' }} 
+                          className="p-3 bg-slate-100 dark:bg-slate-700/90 text-slate-700 dark:text-slate-100 border-b border-slate-200 dark:border-slate-600/80 relative group font-bold"
                         >
-                          <div className="truncate pr-2">Estado / Radar PM</div>
+                          <div className="flex items-center justify-between gap-1 w-full min-w-0 pr-1">
+                            <span className="truncate pr-1">Estado / Radar PM</span>
+                            <ColumnFilterMenu
+                              title="Estado Radar PM"
+                              options={[
+                                { label: 'En Regla', value: 'en_regla', badgeClass: 'text-emerald-600 dark:text-emerald-400' },
+                                { label: 'Drenaje', value: 'drainage', badgeClass: 'text-amber-600 dark:text-amber-400' },
+                                { label: 'Próximo a Retiro', value: 'upcoming', badgeClass: 'text-rose-600 dark:text-rose-400' },
+                                { label: 'Retirar YA', value: 'retire_now', badgeClass: 'text-red-600 dark:text-red-400' }
+                              ]}
+                              selectedValues={pmRadarFilter}
+                              onToggle={(val, isMulti) => setPmRadarFilter(prev => handleFilterToggle(prev, val, isMulti))}
+                              onClear={() => setPmRadarFilter([])}
+                            />
+                          </div>
                           <div
                             onMouseDown={(e) => handleStartResize('_status', getColWidth('_status', 'Estado / Radar PM'), e)}
                             onDoubleClick={() => handleAutoFitColumn('_status', 'Estado / Radar PM')}
@@ -1855,7 +1869,6 @@ export const InventoryDashboard: React.FC = () => {
                         
                         const isEventCol = /^frc(_|\s)?even/i.test(header.trim()) || findColumnBySemantic(headers, 'tipo_evento') === header;
                         const isTraspasoCol = /traspaso/i.test(header) || findColumnBySemantic(headers, 'n_traspaso') === header;
-                        const isFechaVcCol = findColumnBySemantic(headers, 'fecha_vc') === header;
 
                         const alignRight = idx > visibleHeaders.length - 3;
 
@@ -1943,20 +1956,6 @@ export const InventoryDashboard: React.FC = () => {
                                   selectedValues={eventResolutionFilter}
                                   onToggle={(val, isMulti) => setEventResolutionFilter(prev => handleFilterToggle(prev, val, isMulti))}
                                   onClear={() => setEventResolutionFilter([])}
-                                  alignRight={alignRight}
-                                />
-                              ) : isFechaVcCol ? (
-                                <ColumnFilterMenu
-                                  title="Radar Comercial"
-                                  options={[
-                                    { label: 'En Regla', value: 'en_regla', badgeClass: 'text-emerald-600 dark:text-emerald-400' },
-                                    { label: 'Drenaje', value: 'drainage', badgeClass: 'text-amber-600 dark:text-amber-400' },
-                                    { label: 'Próximo a Retiro', value: 'upcoming', badgeClass: 'text-rose-600 dark:text-rose-400' },
-                                    { label: 'Retirar YA', value: 'retire_now', badgeClass: 'text-red-600 dark:text-red-400' }
-                                  ]}
-                                  selectedValues={pmRadarFilter}
-                                  onToggle={(val, isMulti) => setPmRadarFilter(prev => handleFilterToggle(prev, val, isMulti))}
-                                  onClear={() => setPmRadarFilter([])}
                                   alignRight={alignRight}
                                 />
                               ) : (

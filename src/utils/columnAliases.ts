@@ -115,6 +115,14 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
     /^regla(_|\s)?(canje|retiro)?$/i,
     /^policy$/i
   ],
+  dias_anticipacion: [
+    /^d[ií]as(_|\s)?(de)?(_|\s)?(anticipaci[oó]n|anticipacion|canje|retiro)?$/i,
+    /^dias$/i,
+    /^d[ií]as$/i,
+    /^anticipaci[oó]n$/i,
+    /^lead(_|\s)?time$/i,
+    /^days$/i
+  ],
   dias_retiro: [
     /^d[ií]as(_|\s)?(de)?(_|\s)?(retiro|canje|limite|l[ií]mite)?(_|\s)?(vc|calculado)?$/i,
     /^retiro(_|\s)?d[ií]as(_|\s)?(vc|calculado)?$/i,

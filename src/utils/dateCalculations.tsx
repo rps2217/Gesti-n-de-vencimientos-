@@ -369,7 +369,7 @@ export function getEndOfMonthDate(): Date {
 
 export function getExpiryDateFromYm(item: InventoryItem, headers: string[]): Date | null {
   // Try finding semantic columns for year/month, fallback to user provided defaults
-  const yCol = findColumnBySemantic(headers, 'año') || findColumnBySemantic(headers, 'ano') || 'E';
+  const yCol = findColumnBySemantic(headers, 'anio') || 'E';
   const mCol = findColumnBySemantic(headers, 'mes') || 'D';
   
   const year = item[yCol];

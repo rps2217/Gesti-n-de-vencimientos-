@@ -9,7 +9,7 @@ export const VIRTUAL_COLUMNS: VirtualColumn[] = [
     calculate: (item, headers, allData) => {
       const { products, policies } = allData || {};
       const vcCol = findColumnBySemantic(headers, 'fecha_vc');
-      const skuCol = findColumnBySemantic(headers, 'sku') || findColumnBySemantic(headers, 'código');
+      const skuCol = findColumnBySemantic(headers, 'sku');
 
       if (!vcCol || !item[vcCol]) return '-';
 

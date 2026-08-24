@@ -69,6 +69,7 @@ import { ColumnFilterMenu } from './views/ColumnFilterMenu';
 import { TicketPrintView } from './views/TicketPrintView';
 import { TicketConfigModal } from './modals/TicketConfigModal';
 import { GlobalTicketConfig, ViewTicketConfig } from '../types';
+import { SkeletonLoader } from './common/SkeletonLoader';
 
 export const InventoryDashboard: React.FC = () => {
   const [metadata, setMetadata] = useState<SpreadsheetMetadata | null>(null);
@@ -1390,11 +1391,7 @@ export const InventoryDashboard: React.FC = () => {
   };
 
   if (loading && !metadata) {
-    return (
-      <div className="flex h-full items-center justify-center bg-[#F8FAFC] dark:bg-slate-950">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
-      </div>
-    );
+    return <SkeletonLoader />;
   }
 
   const mappedSheets = [sheetConfig.main, sheetConfig.events, sheetConfig.products, sheetConfig.policies].filter(Boolean);

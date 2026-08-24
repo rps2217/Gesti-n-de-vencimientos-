@@ -495,4 +495,13 @@ export function getItemResolutionStatus(item: InventoryItem, headers: string[]):
   };
 }
 
+/**
+ * Calculates the withdrawal date based on expiration date and withdrawal days policy.
+ * Converts withdrawal days to months (days / 30) and projects to the end of the target month (EOMONTH logic).
+ */
+export function calculateWithdrawalDate(dVc: Date, diasRetiro: number): Date {
+  const monthsToSubtract = Math.round(diasRetiro / 30);
+  return new Date(dVc.getFullYear(), dVc.getMonth() - monthsToSubtract + 1, 0);
+}
+
 

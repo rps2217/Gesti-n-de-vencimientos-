@@ -1,6 +1,6 @@
 import { VirtualColumn } from '../types';
 import { findColumnBySemantic } from './columnAliases';
-import { parseAnyDate, formatDisplayDate } from './dateCalculations';
+import { parseAnyDate, formatDisplayDate, calculateWithdrawalDate } from './dateCalculations';
 
 export const VIRTUAL_COLUMNS: VirtualColumn[] = [
   {
@@ -48,8 +48,7 @@ export const VIRTUAL_COLUMNS: VirtualColumn[] = [
       
       // 4. FECHA_RETIRO_VC = EOMONTH(FECHA_VC, -(DIAS_RETIRO_VC / 30))
       // Logic: Subtract months based on policy (days/30), project to end of month.
-      const monthsToSubtract = Math.round(diasRetiro / 30);
-      const dRet = new Date(dVc.getFullYear(), dVc.getMonth() - monthsToSubtract + 1, 0);
+      const dRet = calculateWithdrawalDate(dVc, diasRetiro);
       
       return formatDisplayDate(dRet);
     }

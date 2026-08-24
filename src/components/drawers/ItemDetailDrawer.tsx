@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
-  Package, X, AlertCircle, CheckCircle2, Clock, Truck, FileSpreadsheet, PackageX, RotateCcw, Plus, ExternalLink 
+  Package, X, AlertCircle, CheckCircle2, Clock, Truck, FileSpreadsheet, PackageX, RotateCcw, Plus, ExternalLink, Edit2, Eye, EyeOff, SlidersHorizontal 
 } from 'lucide-react';
 import { InventoryItem, EventCategory } from '../../types';
 import { 
@@ -17,6 +17,7 @@ import { findColumnBySemantic } from '../../utils/columnAliases';
 interface ItemDetailDrawerProps {
   product: InventoryItem | null;
   onClose: () => void;
+  onEdit: (product: InventoryItem) => void;
   onNewEventForProduct: (sku: string, category?: EventCategory) => void;
   allMainItems: InventoryItem[];
   policies: any[];
@@ -25,13 +26,17 @@ interface ItemDetailDrawerProps {
 export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
   product,
   onClose,
+  onEdit,
   onNewEventForProduct,
   allMainItems,
   policies
 }) => {
+  const [hiddenFields, setHiddenFields] = useState<Record<string, boolean>>({});
+  const [isConfiguringFields, setIsConfiguringFields] = useState(false);
+
   if (!product) return null;
 
-  const productKeys = Object.keys(product);
+  const productKeys = Object.keys(product).filter(k => !k.startsWith('_'));
   const skuKey = findColumnBySemantic(productKeys, 'sku') || 'SKU';
   const nameKey = findColumnBySemantic(productKeys, 'descripcion') || '';
   const policyKey = findColumnBySemantic(productKeys, 'politica') || '';
@@ -50,6 +55,13 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
 
   const expirations = relatedRecords.filter(r => getEventCategory(r, Object.keys(r)) === 'VENCIMIENTO');
   const incidents = relatedRecords.filter(r => getEventCategory(r, Object.keys(r)) !== 'VENCIMIENTO');
+
+  const toggleFieldVisibility = (key: string) => {
+    setHiddenFields(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -75,28 +87,97 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
               <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">{name}</h2>
             </div>
           </div>
-          <button 
-            onClick={onClose} 
-            className="p-2 text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onEdit(product)}
+              className="px-3 py-2 bg-blue-600 text-white font-bold text-xs rounded-xl hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1.5"
+              title="Editar registro"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+              <span>Editar</span>
+            </button>
+            <button 
+              onClick={onClose} 
+              className="p-2 text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+              title="Cerrar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Product Master Fields */}
           <div>
-            <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">Datos Maestros</h4>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                <span>Datos Maestros ({productKeys.filter(k => !hiddenFields[k]).length}/{productKeys.length})</span>
+              </h4>
+              <button
+                onClick={() => setIsConfiguringFields(!isConfiguringFields)}
+                className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 bg-blue-50 dark:bg-blue-950/50 px-2.5 py-1 rounded-lg border border-blue-200 dark:border-blue-800/80"
+              >
+                <SlidersHorizontal className="w-3 h-3" />
+                <span>{isConfiguringFields ? 'Ocultar Configuración' : 'Personalizar Vista (AppSheet)'}</span>
+              </button>
+            </div>
+
+            {/* AppSheet Field Visibility Config Panel */}
+            {isConfiguringFields && (
+              <div className="mb-4 p-4 bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-2xl animate-in fade-in duration-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Visibilidad de Campos (Vista Detalle)</span>
+                  <button 
+                    onClick={() => setHiddenFields({})}
+                    className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-semibold"
+                  >
+                    Mostrar Todos
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto pr-1">
+                  {productKeys.map(key => {
+                    const isHidden = !!hiddenFields[key];
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => toggleFieldVisibility(key)}
+                        className={`flex items-center justify-between gap-2 p-2 rounded-xl text-xs font-medium border text-left transition-colors ${
+                          isHidden 
+                            ? 'bg-slate-200/60 dark:bg-slate-700/50 border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 line-through' 
+                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-blue-300'
+                        }`}
+                      >
+                        <span className="truncate">{key}</span>
+                        {isHidden ? <EyeOff className="w-3.5 h-3.5 shrink-0 text-slate-400" /> : <Eye className="w-3.5 h-3.5 shrink-0 text-blue-600 dark:text-blue-400" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
-              {Object.entries(product)
-                .filter(([k]) => !k.startsWith('_'))
-                .map(([key, val]) => (
-                  <div key={key} className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">{key}</span>
-                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">{String(val || '-')}</span>
-                  </div>
-                ))}
+              {productKeys
+                .filter(k => !hiddenFields[k])
+                .map((key) => {
+                  const val = product[key];
+                  return (
+                    <div key={key} className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700/80 group relative">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">{key}</span>
+                        <button
+                          onClick={() => toggleFieldVisibility(key)}
+                          className="text-slate-300 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                          title="Ocultar campo en esta vista"
+                        >
+                          <EyeOff className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 break-words mt-0.5 block">{String(val || '-')}</span>
+                    </div>
+                  );
+                })}
             </div>
           </div>
 

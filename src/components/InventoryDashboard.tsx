@@ -671,6 +671,11 @@ export const InventoryDashboard: React.FC = () => {
       setLoading(true);
       setError(null);
       
+      const scriptUrl = localStorage.getItem('appsheet_clone_scriptUrl');
+      if (!scriptUrl || !scriptUrl.trim()) {
+        throw new Error('No script URL configured, loading demo mode');
+      }
+
       const meta = await getSpreadsheetMetadata();
       setMetadata(meta);
       const allSheets = meta.sheets.map((s: any) => s.properties.title);
@@ -2032,10 +2037,12 @@ export const InventoryDashboard: React.FC = () => {
                             key={idx} 
                             data-index={virtualRow.index} 
                             ref={rowVirtualizer.measureElement} 
-                            className={`transition-colors group ${rowBgClass}`}
+                            onClick={() => setSelectedProduct(item)}
+                            className={`transition-colors group cursor-pointer ${rowBgClass}`}
+                            title="Haz clic para ver detalles del registro"
                           >
                             {/* Selection Cell */}
-                            <td className="p-4 text-center">
+                            <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-center">
                                 <input
                                   type="checkbox"
@@ -2200,15 +2207,8 @@ export const InventoryDashboard: React.FC = () => {
 
 
                             {/* Row Actions */}
-                            <td className="p-4 text-right sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 transition-colors shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)] w-24 min-w-[96px]">
+                            <td className="p-4 text-right sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 transition-colors shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)] w-20 min-w-[80px]" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-1">
-                                <button 
-                                  onClick={() => handleOpenModal(item)} 
-                                  className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                                  title="Editar registro"
-                                >
-                                  <Edit2 className="w-4 h-4"/>
-                                </button>
                                 <button 
                                   onClick={() => handleDelete(item)} 
                                   className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
@@ -2316,6 +2316,10 @@ export const InventoryDashboard: React.FC = () => {
       <ItemDetailDrawer
         product={selectedProduct}
         onClose={() => setSelectedProduct(null)}
+        onEdit={(prod) => {
+          setSelectedProduct(null);
+          handleOpenModal(prod);
+        }}
         onNewEventForProduct={(sku, category) => {
           handleOpenModal(undefined, sku, category);
         }}

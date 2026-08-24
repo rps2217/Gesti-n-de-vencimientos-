@@ -202,11 +202,26 @@ export function normalizeHeaderString(str: string): string {
 /**
  * Finds the first column in the provided headers array that matches a semantic field
  */
-export function findColumnBySemantic(headers: string[], semantic: KnownFieldSemantic): string | undefined {
+export function findColumnBySemantic(
+  headers: string[], 
+  semantic: KnownFieldSemantic, 
+  customAliases?: Record<string, string[]>
+): string | undefined {
   if (!headers || headers.length === 0) return undefined;
   
-  const patterns = FIELD_PATTERNS[semantic];
-  if (!patterns) return undefined;
+  const patterns = [...(FIELD_PATTERNS[semantic] || [])];
+  
+  if (customAliases && customAliases[semantic]) {
+    for (const alias of customAliases[semantic]) {
+      if (alias && alias.trim()) {
+        const trimmed = alias.trim();
+        // Exact match regex and case-insensitive substring regex
+        const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        patterns.push(new RegExp(`^${escaped}$`, 'i'));
+        patterns.push(new RegExp(escaped, 'i'));
+      }
+    }
+  }
 
   // 1. Direct regex match
   for (const header of headers) {
@@ -234,7 +249,10 @@ export function findColumnBySemantic(headers: string[], semantic: KnownFieldSema
 /**
  * Extract a map of all detected semantic fields from headers
  */
-export function detectAllColumnSemantics(headers: string[]): Partial<Record<KnownFieldSemantic, string>> {
+export function detectAllColumnSemantics(
+  headers: string[], 
+  customAliases?: Record<string, string[]>
+): Partial<Record<KnownFieldSemantic, string>> {
   const map: Partial<Record<KnownFieldSemantic, string>> = {};
   const semantics: KnownFieldSemantic[] = [
     'id', 'sku', 'descripcion', 'fecha_vc', 'fecha_retiro', 'mes', 'anio', 
@@ -243,7 +261,7 @@ export function detectAllColumnSemantics(headers: string[]): Partial<Record<Know
   ];
 
   semantics.forEach(semantic => {
-    const matched = findColumnBySemantic(headers, semantic);
+    const matched = findColumnBySemantic(headers, semantic, customAliases);
     if (matched) {
       map[semantic] = matched;
     }

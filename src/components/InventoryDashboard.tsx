@@ -186,7 +186,8 @@ export const InventoryDashboard: React.FC = () => {
     setActiveQuickChip(null);
   };
 
-  // Column Manager State
+  const [groupByColumn, setGroupByColumn] = useState<string>('none');
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [isColumnManagerOpen, setIsColumnManagerOpen] = useState(false);
   const [draggedCol, setDraggedCol] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
@@ -588,6 +589,19 @@ export const InventoryDashboard: React.FC = () => {
       });
     });
   }, [items, deferredSearchTerm, activeQuickChip, searchableHeaders, activeView, eventFilter, eventResolutionFilter, pmRadarFilter, columnFilters, headers]);
+
+  const groupedItems = useMemo(() => {
+    if (groupByColumn === 'none') return null;
+    const map = new Map<string, InventoryItem[]>();
+    for (const item of filteredItems) {
+      const val = String(item[groupByColumn] || '(Sin asignar)');
+      if (!map.has(val)) {
+        map.set(val, []);
+      }
+      map.get(val)!.push(item);
+    }
+    return Array.from(map.entries());
+  }, [filteredItems, groupByColumn]);
 
   const paginatedItems = useMemo(() => {
     if (pageSize === 'all') return filteredItems;
@@ -1617,6 +1631,24 @@ export const InventoryDashboard: React.FC = () => {
                 <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 <span className="hidden sm:inline">{areFiltersVisible ? 'Ocultar Filtros' : 'Mostrar Filtros'}</span>
               </button>
+            )}
+
+            {activeView !== 'schema' && activeView !== 'analytics' && (
+              <div className="hidden xl:flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 shadow-sm">
+                <Tag className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 mr-2 shrink-0" />
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 mr-2">Agrupar por:</span>
+                <select
+                  value={groupByColumn}
+                  onChange={(e) => setGroupByColumn(e.target.value)}
+                  className="text-xs font-bold text-slate-700 dark:text-slate-200 bg-transparent border-none focus:outline-none cursor-pointer"
+                  title="Agrupar registros por columna (estilo AppSheet)"
+                >
+                  <option value="none">Sin agrupación</option>
+                  {visibleHeaders.map(h => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+              </div>
             )}
 
             {activeView !== 'schema' && activeView !== 'analytics' && (

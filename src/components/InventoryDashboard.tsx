@@ -856,14 +856,14 @@ export const InventoryDashboard: React.FC = () => {
       setMetadata({
         sheets: [
           { properties: { sheetId: 1, title: 'Vencimientos_Inventario', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } } },
-          { properties: { sheetId: 2, title: 'Incidencias_FRC', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } } },
+          { properties: { sheetId: 2, title: 'FRC', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } } },
           { properties: { sheetId: 3, title: 'Catalogo_Productos', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } } },
           { properties: { sheetId: 4, title: 'Politicas_Canje', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } } }
         ]
       });
 
       if (currentView === 'events') {
-        setActiveSheet({ sheetId: 2, title: 'Incidencias_FRC', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } });
+        setActiveSheet({ sheetId: 2, title: 'FRC', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } });
         setHeaders(SAMPLE_EVENTS_HEADERS);
         setItems(SAMPLE_EVENTS_ITEMS);
       } else if (currentView === 'products') {
@@ -2547,10 +2547,45 @@ export const InventoryDashboard: React.FC = () => {
               <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Importación Inteligente</h2>
               <button onClick={() => setIsBulkImportOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
             </div>
-            <BulkImportFRC onImport={(data) => {
-              setItems(prev => [...prev, ...data]);
-              setIsBulkImportOpen(false);
-              alert(`Se importaron ${data.length} registros exitosamente.`);
+            <BulkImportFRC onImport={async (data) => {
+              if (!activeSheet || headers.length === 0) {
+                alert('No hay una hoja activa configurada.');
+                return;
+              }
+              try {
+                setIsSaving(true);
+                const nowIso = new Date().toISOString();
+                let nextRowIndex = items.length ? Math.max(...items.map(i => i._rowIndex || 2)) + 1 : 2;
+
+                for (const item of data) {
+                  const rowValues = headers.map(h => item[h] || '');
+                  const newItem: InventoryItem = { _rowIndex: nextRowIndex++ };
+                  headers.forEach((h, i) => newItem[h] = rowValues[i]);
+
+                  setItems(prev => [...prev, newItem]);
+
+                  try {
+                    await appendRow(activeSheet.title, rowValues);
+                  } catch (saveErr) {
+                    console.warn('Network error during bulk import append, adding to offline queue:', saveErr);
+                    setOfflineQueue(prev => [...prev, {
+                      type: 'append',
+                      sheetTitle: activeSheet.title,
+                      values: rowValues,
+                      timestamp: nowIso
+                    }]);
+                    setIsOffline(true);
+                  }
+                }
+
+                setIsBulkImportOpen(false);
+                alert(`Se importaron y guardaron ${data.length} registros exitosamente en la hoja "${activeSheet.title}".`);
+                await fetchData();
+              } catch (err: any) {
+                alert(`Error al importar registros: ${err.message}`);
+              } finally {
+                setIsSaving(false);
+              }
             }} />
           </div>
         </div>

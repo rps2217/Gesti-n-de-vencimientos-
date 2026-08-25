@@ -234,22 +234,37 @@ export function parseAnyDate(dateVal: any): Date | null {
   // 2. ISO format: YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD (with optional time T... or space...)
   const ymd = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (ymd) {
-    const d = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]), 0, 0, 0, 0);
-    if (!isNaN(d.getTime())) return d;
+    const y = Number(ymd[1]);
+    const m = Number(ymd[2]);
+    const day = Number(ymd[3]);
+    if (y >= 1900 && y <= 2100 && m >= 1 && m <= 12 && day >= 1 && day <= 31) {
+      const d = new Date(y, m - 1, day, 0, 0, 0, 0);
+      if (!isNaN(d.getTime())) return d;
+    }
   }
 
   // 3. Latin format: DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
   const dmy = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
   if (dmy) {
-    const d = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]), 0, 0, 0, 0);
-    if (!isNaN(d.getTime())) return d;
+    const day = Number(dmy[1]);
+    const m = Number(dmy[2]);
+    const y = Number(dmy[3]);
+    if (y >= 1900 && y <= 2100 && m >= 1 && m <= 12 && day >= 1 && day <= 31) {
+      const d = new Date(y, m - 1, day, 0, 0, 0, 0);
+      if (!isNaN(d.getTime())) return d;
+    }
   }
 
   // 4. Compact numeric date format YYYYMMDD
   const ymdCompact = str.match(/^(\d{4})(\d{2})(\d{2})$/);
   if (ymdCompact) {
-    const d = new Date(Number(ymdCompact[1]), Number(ymdCompact[2]) - 1, Number(ymdCompact[3]), 0, 0, 0, 0);
-    if (!isNaN(d.getTime())) return d;
+    const y = Number(ymdCompact[1]);
+    const m = Number(ymdCompact[2]);
+    const day = Number(ymdCompact[3]);
+    if (y >= 1900 && y <= 2100 && m >= 1 && m <= 12 && day >= 1 && day <= 31) {
+      const d = new Date(y, m - 1, day, 0, 0, 0, 0);
+      if (!isNaN(d.getTime())) return d;
+    }
   }
 
   // 5. Month/Year format: MM/YYYY (evaluates to last day of that month)
@@ -257,17 +272,10 @@ export function parseAnyDate(dateVal: any): Date | null {
   if (my) {
     const m = Number(my[1]);
     const y = Number(my[2]);
-    if (m >= 1 && m <= 12) {
+    if (y >= 1900 && y <= 2100 && m >= 1 && m <= 12) {
       const lastDay = new Date(y, m, 0, 0, 0, 0, 0);
       if (!isNaN(lastDay.getTime())) return lastDay;
     }
-  }
-
-  // 6. Standard Date fallback
-  const standard = new Date(str);
-  if (!isNaN(standard.getTime())) {
-    standard.setHours(0, 0, 0, 0);
-    return standard;
   }
 
   return null;
@@ -280,6 +288,7 @@ export function formatInputDate(dateVal: any): string {
   const d = parseAnyDate(dateVal);
   if (!d) return '';
   const yyyy = d.getFullYear();
+  if (yyyy < 1900 || yyyy > 2100) return '';
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
@@ -292,6 +301,7 @@ export function formatDisplayDate(dateVal: any, fallback = '-'): string {
   const d = parseAnyDate(dateVal);
   if (!d) return String(dateVal || fallback);
   const yyyy = d.getFullYear();
+  if (yyyy < 1900 || yyyy > 2100) return String(dateVal || fallback);
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${dd}/${mm}/${yyyy}`;

@@ -329,8 +329,9 @@ export function generateItemsHtmlTable(
       const isDescCol = findColumnBySemantic([header], 'descripcion', customAliases) !== null || /desc|producto|nombre.*art|detalle/i.test(header);
       const isSkuCol = findColumnBySemantic([header], 'sku', customAliases) !== null || /^sku$|^c[oó]digo/i.test(header);
       const isLoteCol = findColumnBySemantic([header], 'lote', customAliases) !== null || /^lote$|^batch$/i.test(header);
-      const isDateCol = findColumnBySemantic([header], 'fecha_vc', customAliases) !== null || findColumnBySemantic([header], 'fecha_retiro', customAliases) !== null || /fecha|venc|retiro|caduc/i.test(header);
+      const isDateCol = findColumnBySemantic([header], 'fecha_vc', customAliases) !== null || findColumnBySemantic([header], 'fecha_retiro', customAliases) !== null || (/^fecha/i.test(header) && !/evento|incidencia|tipo/i.test(header));
       const isCantCol = findColumnBySemantic([header], 'cantidad', customAliases) !== null || /cant|stock|qty|unidades/i.test(header);
+      const isTraspasoCol = findColumnBySemantic([header], 'n_traspaso', customAliases) !== null || /traspaso/i.test(header);
       const isPriceCol = findColumnBySemantic([header], 'precio', customAliases) !== null || /precio|costo|val_unit/i.test(header);
       const isEventCol = findColumnBySemantic([header], 'tipo_evento', customAliases) !== null || /frc_even|evento|incidencia|motivo/i.test(header);
 
@@ -373,7 +374,7 @@ export function generateItemsHtmlTable(
         }
       }
 
-      // Format Date values
+      // Format Date values strictly only if it is a real date column
       if (cellVal && isDateCol) {
         const parsed = parseAnyDate(cellVal);
         if (parsed) {
@@ -385,6 +386,9 @@ export function generateItemsHtmlTable(
       const displayVal = cellVal !== '' ? cellVal : '-';
 
       // Style cell based on type
+      if (isTraspasoCol && displayVal !== '-') {
+        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center;"><span style="background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 6px; font-weight: bold; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 12px; display: inline-block;">${displayVal}</span></td>`;
+      }
       if (isSkuCol) {
         return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-weight: bold; color: #0f172a; white-space: nowrap;">${displayVal}</td>`;
       }

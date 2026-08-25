@@ -200,17 +200,56 @@ export interface RelationalContext {
   policies?: any[];
 }
 
+export type DraftTableColumnKey = 
+  | 'sku' 
+  | 'desc' 
+  | 'lote' 
+  | 'fechaVc' 
+  | 'fechaRetiro' 
+  | 'cant' 
+  | 'status' 
+  | 'prov' 
+  | 'event' 
+  | 'nTraspaso'
+  | 'precio';
+
+export interface DraftColumnDefinition {
+  key: DraftTableColumnKey;
+  label: string;
+  defaultVisible: boolean;
+}
+
+export const DRAFT_AVAILABLE_COLUMNS: DraftColumnDefinition[] = [
+  { key: 'sku', label: 'SKU', defaultVisible: true },
+  { key: 'desc', label: 'Descripción', defaultVisible: true },
+  { key: 'lote', label: 'Lote', defaultVisible: true },
+  { key: 'fechaVc', label: 'F. Vencimiento', defaultVisible: true },
+  { key: 'fechaRetiro', label: 'F. Retiro', defaultVisible: true },
+  { key: 'cant', label: 'Cantidad', defaultVisible: true },
+  { key: 'status', label: 'Estado', defaultVisible: true },
+  { key: 'prov', label: 'Proveedor', defaultVisible: false },
+  { key: 'event', label: 'Incidencia / Detalle', defaultVisible: true },
+  { key: 'nTraspaso', label: 'N° Traspaso', defaultVisible: false },
+  { key: 'precio', label: 'Precio / Costo', defaultVisible: false }
+];
+
 export function generateItemsHtmlTable(
   items: any[],
   headers: string[] = [],
   customAliases?: Record<string, string[]>,
-  relationalContext?: RelationalContext
+  relationalContext?: RelationalContext,
+  visibleColumnKeys?: DraftTableColumnKey[]
 ): string {
   if (!items || items.length === 0) {
     return `<p style="color: #64748b; font-style: italic;">(No hay productos seleccionados)</p>`;
   }
 
   const { allMainItems = [], products = [] } = relationalContext || {};
+
+  // Default visible columns if not provided
+  const activeColumns: DraftTableColumnKey[] = visibleColumnKeys && visibleColumnKeys.length > 0
+    ? visibleColumnKeys
+    : DRAFT_AVAILABLE_COLUMNS.filter(c => c.defaultVisible).map(c => c.key);
 
   // Process and normalize each item
   const processedData = items.map((item, index) => {
@@ -265,12 +304,17 @@ export function generateItemsHtmlTable(
       /^n(_|\s)?traspaso$/i, /^nro(_|\s)?traspaso$/i, /^num(_|\s)?traspaso$/i, /^traspaso$/i, /^folio$/i
     ]);
 
+    // 9. Extract Price / Cost
+    let precio = extractFieldValue(item, candidateKeys, 'precio', customAliases, [
+      /^precio$/i, /^costo$/i, /^val(_|\s)?unit$/i, /^p(_|\.)?unit$/i, /^valor$/i
+    ]);
+
     // Relational Enrichment if any core field was missing
     if (sku) {
       const cleanSku = String(sku).trim().toLowerCase();
 
       // 1. Look up product in catalog
-      if (!desc || !prov) {
+      if (!desc || !prov || !precio) {
         const prodMatch = products.find(p => {
           const pKeys = Object.keys(p);
           const pSku = extractFieldValue(p, pKeys, 'sku', customAliases) || p['COD PRODUCTO'] || p['C'] || p['Código'] || p['SKU'] || p['sku'];
@@ -280,11 +324,12 @@ export function generateItemsHtmlTable(
           const pKeys = Object.keys(prodMatch);
           if (!desc) desc = extractFieldValue(prodMatch, pKeys, 'descripcion', customAliases) || prodMatch['DESCRIPCION'] || prodMatch['Nombre'] || prodMatch['PRODUCTO'] || '';
           if (!prov) prov = extractFieldValue(prodMatch, pKeys, 'proveedor', customAliases) || prodMatch['PROVEEDOR'] || prodMatch['RUT PROVEEDOR'] || prodMatch['Marca'] || '';
+          if (!precio) precio = extractFieldValue(prodMatch, pKeys, 'precio', customAliases) || prodMatch['PRECIO'] || prodMatch['COSTO'] || '';
         }
       }
 
       // 2. Look up in allMainItems
-      if (!desc || !fechaVcRaw || !lote || !prov) {
+      if (!desc || !fechaVcRaw || !lote || !prov || !precio) {
         const mainMatch = allMainItems.find(m => {
           const mKeys = Object.keys(m);
           const mSku = extractFieldValue(m, mKeys, 'sku', customAliases) || m['SKU'] || m['COD PRODUCTO'];
@@ -297,6 +342,7 @@ export function generateItemsHtmlTable(
           if (!fechaVcRaw) fechaVcRaw = extractFieldValue(mainMatch, mKeys, 'fecha_vc', customAliases) || mainMatch['FECHA_VENCIMIENTO'] || mainMatch['FECHA_VC'];
           if (!prov) prov = extractFieldValue(mainMatch, mKeys, 'proveedor', customAliases) || mainMatch['PROVEEDOR'] || mainMatch['Proveedor'];
           if (!fechaRetRaw) fechaRetRaw = extractFieldValue(mainMatch, mKeys, 'fecha_retiro', customAliases) || mainMatch['FECHA_RETIRO'] || mainMatch['FECHA RETIRO'];
+          if (!precio) precio = extractFieldValue(mainMatch, mKeys, 'precio', customAliases) || mainMatch['PRECIO'] || mainMatch['COSTO'];
         }
       }
     }
@@ -396,58 +442,99 @@ export function generateItemsHtmlTable(
       cant: cant !== '' ? cant : '-',
       fechaVc: fechaVcFormatted,
       fechaRetiro: fechaRetFormatted,
-      prov: prov || '',
+      prov: prov || '-',
       eventLabel: eventLabel || '',
       obs: obs || '',
+      nTraspaso: traspaso || '-',
+      precio: precio ? `$${precio}` : '-',
       statusHtml
     };
   });
 
-  // Determine which optional columns to render
-  const hasLote = processedData.some(d => d.lote !== '-');
-  const hasVc = processedData.some(d => d.fechaVc !== '-');
-  const hasRet = processedData.some(d => d.fechaRetiro !== '-');
-  const hasCant = processedData.some(d => d.cant !== '-');
-  const hasProv = processedData.some(d => d.prov !== '');
-  const hasEventOrObs = processedData.some(d => d.eventLabel !== '' || d.obs !== '');
+  // Map of column headers and render functions
+  const columnRenderMap: Record<DraftTableColumnKey, { header: string; thAlign?: string; renderCell: (row: typeof processedData[0]) => string }> = {
+    sku: {
+      header: 'SKU',
+      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-weight: bold; color: #0f172a; white-space: nowrap;">${row.sku}</td>`
+    },
+    desc: {
+      header: 'Descripción',
+      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-weight: 600; color: #1e293b;">${row.desc}</td>`
+    },
+    lote: {
+      header: 'Lote',
+      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-family: monospace; color: #475569;">${row.lote}</td>`
+    },
+    fechaVc: {
+      header: 'F. Venc.',
+      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; color: #dc2626; font-weight: 600; white-space: nowrap;">${row.fechaVc}</td>`
+    },
+    fechaRetiro: {
+      header: 'F. Retiro',
+      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; color: #d97706; font-weight: 600; white-space: nowrap;">${row.fechaRetiro}</td>`
+    },
+    cant: {
+      header: 'Cant.',
+      thAlign: 'center',
+      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center; font-weight: bold; color: #0284c7;">${row.cant}</td>`
+    },
+    status: {
+      header: 'Estado',
+      thAlign: 'center',
+      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center; white-space: nowrap;">${row.statusHtml}</td>`
+    },
+    prov: {
+      header: 'Proveedor',
+      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; color: #475569;">${row.prov}</td>`
+    },
+    event: {
+      header: 'Incidencia / Detalle',
+      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-size: 12px;">
+        ${row.eventLabel ? `<strong style="color: #334155;">${row.eventLabel}</strong>` : ''}
+        ${row.eventLabel && row.obs ? `<br/>` : ''}
+        ${row.obs ? `<span style="color: #64748b; font-style: italic;">${row.obs}</span>` : ''}
+        ${!row.eventLabel && !row.obs ? '-' : ''}
+      </td>`
+    },
+    nTraspaso: {
+      header: 'N° Traspaso',
+      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-family: monospace; color: #475569;">${row.nTraspaso}</td>`
+    },
+    precio: {
+      header: 'Precio/Costo',
+      thAlign: 'right',
+      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: right; font-weight: 600; color: #16a34a;">${row.precio}</td>`
+    }
+  };
 
+  // Filter columns according to active selection
+  const selectedDefs = activeColumns
+    .filter(k => columnRenderMap[k])
+    .map(k => ({ key: k, ...columnRenderMap[k] }));
+
+  // Build the table rows
   let tableRows = '';
-
   processedData.forEach((row, index) => {
     const bgClass = index % 2 === 0 ? '#ffffff' : '#f8fafc';
-
+    const cells = selectedDefs.map(col => col.renderCell(row)).join('');
     tableRows += `
       <tr style="background-color: ${bgClass}; font-size: 13px; color: #334155;">
-        <td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-weight: bold; color: #0f172a; white-space: nowrap;">${row.sku}</td>
-        <td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-weight: 600; color: #1e293b;">${row.desc}</td>
-        ${hasLote ? `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-family: monospace; color: #475569;">${row.lote}</td>` : ''}
-        ${hasVc ? `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; color: #dc2626; font-weight: 600; white-space: nowrap;">${row.fechaVc}</td>` : ''}
-        ${hasRet ? `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; color: #d97706; font-weight: 600; white-space: nowrap;">${row.fechaRetiro}</td>` : ''}
-        ${hasCant ? `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center; font-weight: bold; color: #0284c7;">${row.cant}</td>` : ''}
-        <td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center; white-space: nowrap;">${row.statusHtml}</td>
-        ${hasProv ? `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; color: #475569;">${row.prov}</td>` : ''}
-        ${hasEventOrObs ? `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-size: 12px;">
-          ${row.eventLabel ? `<strong style="color: #334155;">${row.eventLabel}</strong>` : ''}
-          ${row.eventLabel && row.obs ? `<br/>` : ''}
-          ${row.obs ? `<span style="color: #64748b; font-style: italic;">${row.obs}</span>` : ''}
-        </td>` : ''}
+        ${cells}
       </tr>
     `;
   });
 
+  // Build the table headers
+  const headerThs = selectedDefs.map(col => {
+    const align = col.thAlign ? `text-align: ${col.thAlign};` : 'text-align: left;';
+    return `<th style="padding: 12px; border: 1px solid #1e293b; ${align}">${col.header}</th>`;
+  }).join('');
+
   return `
     <table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden;">
       <thead>
-        <tr style="background-color: #0f172a; color: #ffffff; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; text-align: left;">
-          <th style="padding: 12px; border: 1px solid #1e293b;">SKU</th>
-          <th style="padding: 12px; border: 1px solid #1e293b;">Descripción</th>
-          ${hasLote ? `<th style="padding: 12px; border: 1px solid #1e293b;">Lote</th>` : ''}
-          ${hasVc ? `<th style="padding: 12px; border: 1px solid #1e293b;">F. Venc.</th>` : ''}
-          ${hasRet ? `<th style="padding: 12px; border: 1px solid #1e293b;">F. Retiro</th>` : ''}
-          ${hasCant ? `<th style="padding: 12px; border: 1px solid #1e293b; text-align: center;">Cant.</th>` : ''}
-          <th style="padding: 12px; border: 1px solid #1e293b; text-align: center;">Estado</th>
-          ${hasProv ? `<th style="padding: 12px; border: 1px solid #1e293b;">Proveedor</th>` : ''}
-          ${hasEventOrObs ? `<th style="padding: 12px; border: 1px solid #1e293b;">Incidencia / Detalle</th>` : ''}
+        <tr style="background-color: #0f172a; color: #ffffff; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">
+          ${headerThs}
         </tr>
       </thead>
       <tbody>

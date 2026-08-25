@@ -267,58 +267,64 @@ export function generateItemsHtmlTable(
 
     // Relational Enrichment if any core field was missing
     if (sku) {
-      // Look up product in catalog
+      const cleanSku = String(sku).trim().toLowerCase();
+
+      // 1. Look up product in catalog
       if (!desc || !prov) {
         const prodMatch = products.find(p => {
-          const pSku = p['COD PRODUCTO'] || p['C'] || p['Código'] || p['SKU'] || p['sku'];
-          return pSku && String(pSku).trim().toLowerCase() === String(sku).trim().toLowerCase();
+          const pKeys = Object.keys(p);
+          const pSku = extractFieldValue(p, pKeys, 'sku', customAliases) || p['COD PRODUCTO'] || p['C'] || p['Código'] || p['SKU'] || p['sku'];
+          return pSku && String(pSku).trim().toLowerCase() === cleanSku;
         });
         if (prodMatch) {
-          if (!desc) desc = prodMatch['DESCRIPCION'] || prodMatch['Nombre'] || prodMatch['PRODUCTO'] || prodMatch['D'] || '';
-          if (!prov) prov = prodMatch['PROVEEDOR'] || prodMatch['RUT PROVEEDOR'] || prodMatch['Marca'] || '';
+          const pKeys = Object.keys(prodMatch);
+          if (!desc) desc = extractFieldValue(prodMatch, pKeys, 'descripcion', customAliases) || prodMatch['DESCRIPCION'] || prodMatch['Nombre'] || prodMatch['PRODUCTO'] || '';
+          if (!prov) prov = extractFieldValue(prodMatch, pKeys, 'proveedor', customAliases) || prodMatch['PROVEEDOR'] || prodMatch['RUT PROVEEDOR'] || prodMatch['Marca'] || '';
         }
       }
 
-      // Look up in allMainItems
+      // 2. Look up in allMainItems
       if (!desc || !fechaVcRaw || !lote || !prov) {
         const mainMatch = allMainItems.find(m => {
           const mKeys = Object.keys(m);
-          const mSkuCol = findColumnBySemantic(mKeys, 'sku') || 'SKU';
-          return m[mSkuCol] && String(m[mSkuCol]).trim().toLowerCase() === String(sku).trim().toLowerCase();
+          const mSku = extractFieldValue(m, mKeys, 'sku', customAliases) || m['SKU'] || m['COD PRODUCTO'];
+          return mSku && String(mSku).trim().toLowerCase() === cleanSku;
         });
         if (mainMatch) {
           const mKeys = Object.keys(mainMatch);
-          if (!desc) {
-            const mDescCol = findColumnBySemantic(mKeys, 'descripcion');
-            if (mDescCol && mainMatch[mDescCol]) desc = String(mainMatch[mDescCol]);
-          }
-          if (!lote) {
-            const mLoteCol = findColumnBySemantic(mKeys, 'lote');
-            if (mLoteCol && mainMatch[mLoteCol]) lote = String(mainMatch[mLoteCol]);
-          }
-          if (!fechaVcRaw) {
-            const mVcCol = findColumnBySemantic(mKeys, 'fecha_vc');
-            if (mVcCol && mainMatch[mVcCol]) fechaVcRaw = String(mainMatch[mVcCol]);
-          }
-          if (!prov) {
-            const mProvCol = findColumnBySemantic(mKeys, 'proveedor');
-            if (mProvCol && mainMatch[mProvCol]) prov = String(mainMatch[mProvCol]);
-          }
+          if (!desc) desc = extractFieldValue(mainMatch, mKeys, 'descripcion', customAliases) || mainMatch['DESCRIPCION'] || mainMatch['DESCRIPCIÓN'] || mainMatch['Producto'];
+          if (!lote) lote = extractFieldValue(mainMatch, mKeys, 'lote', customAliases) || mainMatch['LOTE'] || mainMatch['Lote'];
+          if (!fechaVcRaw) fechaVcRaw = extractFieldValue(mainMatch, mKeys, 'fecha_vc', customAliases) || mainMatch['FECHA_VENCIMIENTO'] || mainMatch['FECHA_VC'];
+          if (!prov) prov = extractFieldValue(mainMatch, mKeys, 'proveedor', customAliases) || mainMatch['PROVEEDOR'] || mainMatch['Proveedor'];
+          if (!fechaRetRaw) fechaRetRaw = extractFieldValue(mainMatch, mKeys, 'fecha_retiro', customAliases) || mainMatch['FECHA_RETIRO'] || mainMatch['FECHA RETIRO'];
         }
       }
     }
 
-    // Fallback: If still no description but lote exists, look up by lote in allMainItems
+    // 3. Fallback: If still no description but lote exists, look up by lote in allMainItems
     if (!desc && lote && lote !== '-') {
+      const cleanLote = String(lote).trim().toLowerCase();
       const matchByLote = allMainItems.find(m => {
-        const mLote = m['LOTE'] || m['Lote'] || m['batch'] || m['Batch'];
-        return mLote && String(mLote).trim().toLowerCase() === String(lote).trim().toLowerCase();
+        const mKeys = Object.keys(m);
+        const mLote = extractFieldValue(m, mKeys, 'lote', customAliases) || m['LOTE'] || m['Lote'] || m['batch'] || m['Batch'];
+        return mLote && String(mLote).trim().toLowerCase() === cleanLote;
       });
       if (matchByLote) {
-        desc = matchByLote['DESCRIPCION'] || matchByLote['DESCRIPCIÓN'] || matchByLote['Producto'] || matchByLote['PRODUCTO'] || '';
-        if (!prov) prov = matchByLote['PROVEEDOR'] || matchByLote['Proveedor'] || '';
-        if (!sku) sku = matchByLote['SKU'] || matchByLote['sku'] || matchByLote['COD PRODUCTO'] || '';
-        if (!fechaVcRaw) fechaVcRaw = matchByLote['FECHA_VC'] || matchByLote['FECHA_VENCIMIENTO'] || '';
+        const mKeys = Object.keys(matchByLote);
+        desc = extractFieldValue(matchByLote, mKeys, 'descripcion', customAliases) || matchByLote['DESCRIPCION'] || matchByLote['DESCRIPCIÓN'] || matchByLote['Producto'] || '';
+        if (!prov) prov = extractFieldValue(matchByLote, mKeys, 'proveedor', customAliases) || matchByLote['PROVEEDOR'] || matchByLote['Proveedor'] || '';
+        if (!sku || sku === '-') sku = extractFieldValue(matchByLote, mKeys, 'sku', customAliases) || matchByLote['SKU'] || matchByLote['sku'] || '';
+        if (!fechaVcRaw) fechaVcRaw = extractFieldValue(matchByLote, mKeys, 'fecha_vc', customAliases) || matchByLote['FECHA_VC'] || matchByLote['FECHA_VENCIMIENTO'] || '';
+      }
+    }
+
+    // 4. Last fallback on the item itself for any description or product column
+    if (!desc) {
+      for (const k of itemKeys) {
+        if (/desc|prod|nom|art|denominaci/i.test(k) && item[k] && typeof item[k] === 'string' && item[k].trim() !== '') {
+          desc = item[k].trim();
+          break;
+        }
       }
     }
 

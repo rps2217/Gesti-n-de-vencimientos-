@@ -200,45 +200,31 @@ export interface RelationalContext {
   policies?: any[];
 }
 
-export type DraftTableColumnKey = 
-  | 'sku' 
-  | 'desc' 
-  | 'lote' 
-  | 'fechaVc' 
-  | 'fechaRetiro' 
-  | 'cant' 
-  | 'status' 
-  | 'prov' 
-  | 'event' 
-  | 'nTraspaso'
-  | 'precio';
-
-export interface DraftColumnDefinition {
-  key: DraftTableColumnKey;
-  label: string;
-  defaultVisible: boolean;
+export function formatVirtualHeaderLabel(header: string): string {
+  switch (header) {
+    case '_virtual_dias_vencimiento':
+      return 'Días Vto';
+    case '_virtual_estado_vencimiento':
+      return 'Estado';
+    case '_virtual_dias_retiro':
+      return 'Días Retiro';
+    case '_virtual_fecha_retiro':
+      return 'F. Retiro';
+    case '_virtual_politica':
+      return 'Política';
+    case '_virtual_estado_resolucion':
+      return 'Resolución';
+    default:
+      return header.replace(/^_virtual_/, '').replace(/_/g, ' ');
+  }
 }
-
-export const DRAFT_AVAILABLE_COLUMNS: DraftColumnDefinition[] = [
-  { key: 'sku', label: 'SKU', defaultVisible: true },
-  { key: 'desc', label: 'Descripción', defaultVisible: true },
-  { key: 'lote', label: 'Lote', defaultVisible: true },
-  { key: 'fechaVc', label: 'F. Vencimiento', defaultVisible: true },
-  { key: 'fechaRetiro', label: 'F. Retiro', defaultVisible: true },
-  { key: 'cant', label: 'Cantidad', defaultVisible: true },
-  { key: 'status', label: 'Estado', defaultVisible: true },
-  { key: 'prov', label: 'Proveedor', defaultVisible: false },
-  { key: 'event', label: 'Incidencia / Detalle', defaultVisible: true },
-  { key: 'nTraspaso', label: 'N° Traspaso', defaultVisible: false },
-  { key: 'precio', label: 'Precio / Costo', defaultVisible: false }
-];
 
 export function generateItemsHtmlTable(
   items: any[],
   headers: string[] = [],
   customAliases?: Record<string, string[]>,
   relationalContext?: RelationalContext,
-  visibleColumnKeys?: DraftTableColumnKey[]
+  visibleColumns?: string[]
 ): string {
   if (!items || items.length === 0) {
     return `<p style="color: #64748b; font-style: italic;">(No hay productos seleccionados)</p>`;
@@ -246,288 +232,202 @@ export function generateItemsHtmlTable(
 
   const { allMainItems = [], products = [] } = relationalContext || {};
 
-  // Default visible columns if not provided
-  const activeColumns: DraftTableColumnKey[] = visibleColumnKeys && visibleColumnKeys.length > 0
-    ? visibleColumnKeys
-    : DRAFT_AVAILABLE_COLUMNS.filter(c => c.defaultVisible).map(c => c.key);
+  // Clean candidate headers (ignore internal non-renderable keys)
+  const candidateHeaders = (headers && headers.length > 0)
+    ? headers.filter(h => !h.startsWith('_virtual_acciones') && h !== '_rowIndex')
+    : (items[0] ? Object.keys(items[0]).filter(k => !k.startsWith('_')) : []);
 
-  // Process and normalize each item
-  const processedData = items.map((item, index) => {
-    const itemKeys = Object.keys(item || {}).filter(k => !k.startsWith('_'));
-    const candidateKeys = Array.from(new Set([...(headers || []), ...itemKeys]));
+  // Determine active columns
+  const activeHeaders = (visibleColumns && visibleColumns.length > 0)
+    ? visibleColumns.filter(c => candidateHeaders.includes(c) || c.startsWith('_virtual_'))
+    : candidateHeaders;
 
-    // 1. Extract SKU
-    let sku = extractFieldValue(item, candidateKeys, 'sku', customAliases, [
-      /^sku$/i, /^c[oó]digo(_|\s)?(art([ií]culo)?|prod(ucto)?)?$/i, /^cod$/i, /^art[ií]culo$/i, /^item$/i, /^frc_n$/i, /^id$/i
-    ]);
+  if (activeHeaders.length === 0) {
+    return `<p style="color: #64748b; font-style: italic;">(No hay columnas seleccionadas para la tabla)</p>`;
+  }
 
-    // 2. Extract Description
-    let desc = extractFieldValue(item, candidateKeys, 'descripcion', customAliases, [
-      /^desc(ripci[oó]n)?(_|\s)?(prod(ucto)?|art[ií]culo)?$/i, /^producto$/i, /^nombre(_|\s)?(prod(ucto)?)?$/i, /^detalle$/i
-    ]);
-
-    // 3. Extract Lote
-    let lote = extractFieldValue(item, candidateKeys, 'lote', customAliases, [
-      /^lote$/i, /^batch$/i, /^lot(_|\s)?(no|num)?$/i, /^nro(_|\s)?lote$/i
-    ]);
-
-    // 4. Extract Quantity
-    let cant = extractFieldValue(item, candidateKeys, 'cantidad', customAliases, [
-      /^cant(idad)?$/i, /^stock$/i, /^unidades$/i, /^qty$/i, /^saldo$/i
-    ]);
-
-    // 5. Extract Expiry Date
-    let fechaVcRaw = extractFieldValue(item, candidateKeys, 'fecha_vc', customAliases, [
-      /^f(echa)?(_|\s)?(v(en)?c(imiento)?|vto|cad(ucidad)?)$/i, /^vencimiento$/i, /^caducidad$/i, /^f(_|\.)?vto$/i, /^f(_|\.)?venc$/i
-    ]);
-
-    // 6. Extract Retirement Date
-    let fechaRetRaw = extractFieldValue(item, candidateKeys, 'fecha_retiro', customAliases, [
-      /^f(echa)?(_|\s)?retiro$/i, /^retiro$/i, /^fecha_retiro_calc$/i, /^_virtual_fecha_retiro$/i
-    ]);
-
-    // 7. Extract Provider
-    let prov = extractFieldValue(item, candidateKeys, 'proveedor', customAliases, [
-      /^proveedor$/i, /^laboratorio$/i, /^marca$/i, /^fabricante$/i, /^vendor$/i, /^supplier$/i
-    ]);
-
-    // 8. Extract Event / Observation / Traspaso
-    const obs = extractFieldValue(item, candidateKeys, 'observacion', customAliases, [
-      /^observaci[oó]n(es)?$/i, /^obs$/i, /^comentario(s)?$/i, /^nota(s)?$/i
-    ]);
-
-    const eventRaw = extractFieldValue(item, candidateKeys, 'tipo_evento', customAliases, [
-      /^frc(_|\s)?even(to)?$/i, /^tipo(_|\s)?evento$/i, /^evento$/i, /^incidencia$/i, /^motivo$/i
-    ]);
-
-    const traspaso = extractFieldValue(item, candidateKeys, 'n_traspaso', customAliases, [
-      /^n(_|\s)?traspaso$/i, /^nro(_|\s)?traspaso$/i, /^num(_|\s)?traspaso$/i, /^traspaso$/i, /^folio$/i
-    ]);
-
-    // 9. Extract Price / Cost
-    let precio = extractFieldValue(item, candidateKeys, 'precio', customAliases, [
-      /^precio$/i, /^costo$/i, /^val(_|\s)?unit$/i, /^p(_|\.)?unit$/i, /^valor$/i
-    ]);
-
-    // Relational Enrichment if any core field was missing
-    if (sku) {
-      const cleanSku = String(sku).trim().toLowerCase();
-
-      // 1. Look up product in catalog
-      if (!desc || !prov || !precio) {
-        const prodMatch = products.find(p => {
-          const pKeys = Object.keys(p);
-          const pSku = extractFieldValue(p, pKeys, 'sku', customAliases) || p['COD PRODUCTO'] || p['C'] || p['Código'] || p['SKU'] || p['sku'];
-          return pSku && String(pSku).trim().toLowerCase() === cleanSku;
-        });
-        if (prodMatch) {
-          const pKeys = Object.keys(prodMatch);
-          if (!desc) desc = extractFieldValue(prodMatch, pKeys, 'descripcion', customAliases) || prodMatch['DESCRIPCION'] || prodMatch['Nombre'] || prodMatch['PRODUCTO'] || '';
-          if (!prov) prov = extractFieldValue(prodMatch, pKeys, 'proveedor', customAliases) || prodMatch['PROVEEDOR'] || prodMatch['RUT PROVEEDOR'] || prodMatch['Marca'] || '';
-          if (!precio) precio = extractFieldValue(prodMatch, pKeys, 'precio', customAliases) || prodMatch['PRECIO'] || prodMatch['COSTO'] || '';
-        }
-      }
-
-      // 2. Look up in allMainItems
-      if (!desc || !fechaVcRaw || !lote || !prov || !precio) {
-        const mainMatch = allMainItems.find(m => {
-          const mKeys = Object.keys(m);
-          const mSku = extractFieldValue(m, mKeys, 'sku', customAliases) || m['SKU'] || m['COD PRODUCTO'];
-          return mSku && String(mSku).trim().toLowerCase() === cleanSku;
-        });
-        if (mainMatch) {
-          const mKeys = Object.keys(mainMatch);
-          if (!desc) desc = extractFieldValue(mainMatch, mKeys, 'descripcion', customAliases) || mainMatch['DESCRIPCION'] || mainMatch['DESCRIPCIÓN'] || mainMatch['Producto'];
-          if (!lote) lote = extractFieldValue(mainMatch, mKeys, 'lote', customAliases) || mainMatch['LOTE'] || mainMatch['Lote'];
-          if (!fechaVcRaw) fechaVcRaw = extractFieldValue(mainMatch, mKeys, 'fecha_vc', customAliases) || mainMatch['FECHA_VENCIMIENTO'] || mainMatch['FECHA_VC'];
-          if (!prov) prov = extractFieldValue(mainMatch, mKeys, 'proveedor', customAliases) || mainMatch['PROVEEDOR'] || mainMatch['Proveedor'];
-          if (!fechaRetRaw) fechaRetRaw = extractFieldValue(mainMatch, mKeys, 'fecha_retiro', customAliases) || mainMatch['FECHA_RETIRO'] || mainMatch['FECHA RETIRO'];
-          if (!precio) precio = extractFieldValue(mainMatch, mKeys, 'precio', customAliases) || mainMatch['PRECIO'] || mainMatch['COSTO'];
-        }
-      }
-    }
-
-    // 3. Fallback: If still no description but lote exists, look up by lote in allMainItems
-    if (!desc && lote && lote !== '-') {
-      const cleanLote = String(lote).trim().toLowerCase();
-      const matchByLote = allMainItems.find(m => {
-        const mKeys = Object.keys(m);
-        const mLote = extractFieldValue(m, mKeys, 'lote', customAliases) || m['LOTE'] || m['Lote'] || m['batch'] || m['Batch'];
-        return mLote && String(mLote).trim().toLowerCase() === cleanLote;
-      });
-      if (matchByLote) {
-        const mKeys = Object.keys(matchByLote);
-        desc = extractFieldValue(matchByLote, mKeys, 'descripcion', customAliases) || matchByLote['DESCRIPCION'] || matchByLote['DESCRIPCIÓN'] || matchByLote['Producto'] || '';
-        if (!prov) prov = extractFieldValue(matchByLote, mKeys, 'proveedor', customAliases) || matchByLote['PROVEEDOR'] || matchByLote['Proveedor'] || '';
-        if (!sku || sku === '-') sku = extractFieldValue(matchByLote, mKeys, 'sku', customAliases) || matchByLote['SKU'] || matchByLote['sku'] || '';
-        if (!fechaVcRaw) fechaVcRaw = extractFieldValue(matchByLote, mKeys, 'fecha_vc', customAliases) || matchByLote['FECHA_VC'] || matchByLote['FECHA_VENCIMIENTO'] || '';
-      }
-    }
-
-    // 4. Last fallback on the item itself for any description or product column
-    if (!desc) {
-      for (const k of itemKeys) {
-        if (/desc|prod|nom|art|denominaci/i.test(k) && item[k] && typeof item[k] === 'string' && item[k].trim() !== '') {
-          desc = item[k].trim();
-          break;
-        }
-      }
-    }
-
-    // Date formatting & Retirement date calculation
-    let fechaVcFormatted = '-';
-    let fechaRetFormatted = '-';
-
-    if (fechaVcRaw) {
-      const dVc = parseAnyDate(fechaVcRaw);
-      if (dVc) {
-        fechaVcFormatted = formatDisplayDate(dVc);
-
-        if (!fechaRetRaw) {
-          // If no retirement date provided, compute 30 days before expiration
-          const dRet = new Date(dVc);
-          dRet.setDate(dRet.getDate() - 30);
-          fechaRetFormatted = formatDisplayDate(dRet);
-        }
-      } else {
-        fechaVcFormatted = fechaVcRaw;
-      }
-    }
-
-    if (fechaRetRaw) {
-      const dRet = parseAnyDate(fechaRetRaw);
-      fechaRetFormatted = dRet ? formatDisplayDate(dRet) : fechaRetRaw;
-    }
-
-    // Status Badges
-    const eventCategory = getEventCategory(item, candidateKeys);
-    const eventDefinition = EVENT_CATEGORIES[eventCategory];
-    const itemStatus = getItemStatus(item, candidateKeys);
-    const resolutionStatus = getItemResolutionStatus(item, candidateKeys);
-
-    let statusHtml = '';
-    if (eventRaw || traspaso || eventCategory !== 'VENCIMIENTO') {
-      // Incident view status
-      if (resolutionStatus.isResolved) {
-        statusHtml = `<span style="background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; display: inline-block;">Realizado</span>`;
-      } else {
-        statusHtml = `<span style="background-color: #fffbeb; color: #b45309; border: 1px solid #fde68a; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; display: inline-block;">Pendiente</span>`;
-      }
-    } else {
-      // Expiration view status
-      if (itemStatus.code === 'EXPIRED') {
-        statusHtml = `<span style="background-color: #fff1f2; color: #be123c; border: 1px solid #fecdd3; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; display: inline-block;">Vencido</span>`;
-      } else if (itemStatus.code === 'RETIRE_NOW') {
-        statusHtml = `<span style="background-color: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; display: inline-block;">Retirar Ahora</span>`;
-      } else if (itemStatus.code === 'UPCOMING') {
-        statusHtml = `<span style="background-color: #fffbeb; color: #b45309; border: 1px solid #fde68a; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; display: inline-block;">Próximo Retiro</span>`;
-      } else if (itemStatus.code === 'DRAINAGE_PM') {
-        statusHtml = `<span style="background-color: #fff7ed; color: #c2410c; border: 1px solid #ffedd5; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; display: inline-block;">Alerta Drenaje PM</span>`;
-      } else {
-        statusHtml = `<span style="background-color: #f8fafc; color: #475569; border: 1px solid #e2e8f0; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; display: inline-block;">En Regla</span>`;
-      }
-    }
-
-    // Incident / Event label
-    let eventLabel = eventRaw || (eventDefinition ? eventDefinition.shortLabel : '');
-    if (traspaso && !eventLabel.includes(traspaso)) {
-      eventLabel = eventLabel ? `${eventLabel} (${traspaso})` : `Traspaso: ${traspaso}`;
-    }
-
-    return {
-      index,
-      sku: sku || '-',
-      desc: desc || '-',
-      lote: lote || '-',
-      cant: cant !== '' ? cant : '-',
-      fechaVc: fechaVcFormatted,
-      fechaRetiro: fechaRetFormatted,
-      prov: prov || '-',
-      eventLabel: eventLabel || '',
-      obs: obs || '',
-      nTraspaso: traspaso || '-',
-      precio: precio ? `$${precio}` : '-',
-      statusHtml
-    };
-  });
-
-  // Map of column headers and render functions
-  const columnRenderMap: Record<DraftTableColumnKey, { header: string; thAlign?: string; renderCell: (row: typeof processedData[0]) => string }> = {
-    sku: {
-      header: 'SKU',
-      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-weight: bold; color: #0f172a; white-space: nowrap;">${row.sku}</td>`
-    },
-    desc: {
-      header: 'Descripción',
-      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-weight: 600; color: #1e293b;">${row.desc}</td>`
-    },
-    lote: {
-      header: 'Lote',
-      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-family: monospace; color: #475569;">${row.lote}</td>`
-    },
-    fechaVc: {
-      header: 'F. Venc.',
-      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; color: #dc2626; font-weight: 600; white-space: nowrap;">${row.fechaVc}</td>`
-    },
-    fechaRetiro: {
-      header: 'F. Retiro',
-      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; color: #d97706; font-weight: 600; white-space: nowrap;">${row.fechaRetiro}</td>`
-    },
-    cant: {
-      header: 'Cant.',
-      thAlign: 'center',
-      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center; font-weight: bold; color: #0284c7;">${row.cant}</td>`
-    },
-    status: {
-      header: 'Estado',
-      thAlign: 'center',
-      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center; white-space: nowrap;">${row.statusHtml}</td>`
-    },
-    prov: {
-      header: 'Proveedor',
-      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; color: #475569;">${row.prov}</td>`
-    },
-    event: {
-      header: 'Incidencia / Detalle',
-      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-size: 12px;">
-        ${row.eventLabel ? `<strong style="color: #334155;">${row.eventLabel}</strong>` : ''}
-        ${row.eventLabel && row.obs ? `<br/>` : ''}
-        ${row.obs ? `<span style="color: #64748b; font-style: italic;">${row.obs}</span>` : ''}
-        ${!row.eventLabel && !row.obs ? '-' : ''}
-      </td>`
-    },
-    nTraspaso: {
-      header: 'N° Traspaso',
-      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-family: monospace; color: #475569;">${row.nTraspaso}</td>`
-    },
-    precio: {
-      header: 'Precio/Costo',
-      thAlign: 'right',
-      renderCell: (row) => `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: right; font-weight: 600; color: #16a34a;">${row.precio}</td>`
-    }
-  };
-
-  // Filter columns according to active selection
-  const selectedDefs = activeColumns
-    .filter(k => columnRenderMap[k])
-    .map(k => ({ key: k, ...columnRenderMap[k] }));
-
-  // Build the table rows
+  // Pre-process items and render table rows
   let tableRows = '';
-  processedData.forEach((row, index) => {
+
+  items.forEach((item, index) => {
     const bgClass = index % 2 === 0 ? '#ffffff' : '#f8fafc';
-    const cells = selectedDefs.map(col => col.renderCell(row)).join('');
+    const itemKeys = Object.keys(item || {}).filter(k => !k.startsWith('_'));
+    const allSearchKeys = Array.from(new Set([...candidateHeaders, ...itemKeys]));
+
+    // Extract core identifiers for relational lookups
+    const itemSku = extractFieldValue(item, allSearchKeys, 'sku', customAliases);
+    const itemLote = extractFieldValue(item, allSearchKeys, 'lote', customAliases);
+
+    const cellsHtml = activeHeaders.map(header => {
+      // 1. Virtual Columns
+      if (header.startsWith('_virtual_')) {
+        if (header === '_virtual_estado_vencimiento') {
+          const itemStatus = getItemStatus(item, allSearchKeys);
+          let badge = '';
+          if (itemStatus.code === 'EXPIRED') {
+            badge = `<span style="background-color: #fff1f2; color: #be123c; border: 1px solid #fecdd3; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; display: inline-block;">Vencido</span>`;
+          } else if (itemStatus.code === 'RETIRE_NOW') {
+            badge = `<span style="background-color: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; display: inline-block;">Retirar Ahora</span>`;
+          } else if (itemStatus.code === 'UPCOMING') {
+            badge = `<span style="background-color: #fffbeb; color: #b45309; border: 1px solid #fde68a; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; display: inline-block;">Próximo Retiro</span>`;
+          } else if (itemStatus.code === 'DRAINAGE_PM') {
+            badge = `<span style="background-color: #fff7ed; color: #c2410c; border: 1px solid #ffedd5; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; display: inline-block;">Alerta Drenaje PM</span>`;
+          } else {
+            badge = `<span style="background-color: #f8fafc; color: #475569; border: 1px solid #e2e8f0; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; display: inline-block;">En Regla</span>`;
+          }
+          return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center; white-space: nowrap;">${badge}</td>`;
+        }
+
+        if (header === '_virtual_estado_resolucion') {
+          const res = getItemResolutionStatus(item, allSearchKeys);
+          const badge = res.isResolved
+            ? `<span style="background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; display: inline-block;">Realizado</span>`
+            : `<span style="background-color: #fffbeb; color: #b45309; border: 1px solid #fde68a; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; display: inline-block;">Pendiente</span>`;
+          return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center; white-space: nowrap;">${badge}</td>`;
+        }
+
+        if (header === '_virtual_dias_vencimiento') {
+          const itemStatus = getItemStatus(item, allSearchKeys);
+          const days = itemStatus.daysToExpiry !== null ? itemStatus.daysToExpiry : 0;
+          const color = days < 0 ? '#dc2626' : days <= 30 ? '#d97706' : '#1e293b';
+          return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center; font-weight: bold; color: ${color}; white-space: nowrap;">${days} d</td>`;
+        }
+
+        if (header === '_virtual_dias_retiro') {
+          const itemStatus = getItemStatus(item, allSearchKeys);
+          const days = itemStatus.daysToRetire !== null ? itemStatus.daysToRetire : '-';
+          return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center; font-weight: bold; color: #d97706; white-space: nowrap;">${days}</td>`;
+        }
+
+        if (header === '_virtual_fecha_retiro') {
+          const rawVc = extractFieldValue(item, allSearchKeys, 'fecha_vc', customAliases);
+          const rawRet = extractFieldValue(item, allSearchKeys, 'fecha_retiro', customAliases);
+          let retFormatted = '-';
+          if (rawRet) {
+            const d = parseAnyDate(rawRet);
+            retFormatted = d ? formatDisplayDate(d) : String(rawRet);
+          } else if (rawVc) {
+            const dVc = parseAnyDate(rawVc);
+            if (dVc) {
+              const dRet = new Date(dVc);
+              dRet.setDate(dRet.getDate() - 30);
+              retFormatted = formatDisplayDate(dRet);
+            }
+          }
+          return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; color: #d97706; font-weight: 600; white-space: nowrap;">${retFormatted}</td>`;
+        }
+
+        // Generic fallback for virtual columns
+        const val = item[header] !== undefined && item[header] !== null ? String(item[header]) : '-';
+        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0;">${val}</td>`;
+      }
+
+      // 2. Real Table Header from the active sheet
+      let cellVal = item[header] !== undefined && item[header] !== null ? String(item[header]).trim() : '';
+
+      // Check semantic meaning of this specific header
+      const isDescCol = findColumnBySemantic([header], 'descripcion', customAliases) !== null || /desc|producto|nombre.*art|detalle/i.test(header);
+      const isSkuCol = findColumnBySemantic([header], 'sku', customAliases) !== null || /^sku$|^c[oó]digo/i.test(header);
+      const isLoteCol = findColumnBySemantic([header], 'lote', customAliases) !== null || /^lote$|^batch$/i.test(header);
+      const isDateCol = findColumnBySemantic([header], 'fecha_vc', customAliases) !== null || findColumnBySemantic([header], 'fecha_retiro', customAliases) !== null || /fecha|venc|retiro|caduc/i.test(header);
+      const isCantCol = findColumnBySemantic([header], 'cantidad', customAliases) !== null || /cant|stock|qty|unidades/i.test(header);
+      const isPriceCol = findColumnBySemantic([header], 'precio', customAliases) !== null || /precio|costo|val_unit/i.test(header);
+      const isEventCol = findColumnBySemantic([header], 'tipo_evento', customAliases) !== null || /frc_even|evento|incidencia|motivo/i.test(header);
+
+      // If description column is empty on this row, look up in products or allMainItems
+      if (isDescCol && (!cellVal || cellVal === '')) {
+        if (itemSku) {
+          const cleanSku = itemSku.trim().toLowerCase();
+          const pMatch = products.find(p => {
+            const pKeys = Object.keys(p);
+            const pSku = extractFieldValue(p, pKeys, 'sku', customAliases) || p['COD PRODUCTO'] || p['SKU'] || p['Código'];
+            return pSku && String(pSku).trim().toLowerCase() === cleanSku;
+          });
+          if (pMatch) {
+            const pKeys = Object.keys(pMatch);
+            cellVal = extractFieldValue(pMatch, pKeys, 'descripcion', customAliases) || pMatch['DESCRIPCION'] || pMatch['Producto'] || '';
+          }
+          if (!cellVal) {
+            const mMatch = allMainItems.find(m => {
+              const mKeys = Object.keys(m);
+              const mSku = extractFieldValue(m, mKeys, 'sku', customAliases) || m['SKU'] || m['COD PRODUCTO'];
+              return mSku && String(mSku).trim().toLowerCase() === cleanSku;
+            });
+            if (mMatch) {
+              const mKeys = Object.keys(mMatch);
+              cellVal = extractFieldValue(mMatch, mKeys, 'descripcion', customAliases) || mMatch['DESCRIPCION'] || mMatch['Producto'] || '';
+            }
+          }
+        }
+        if (!cellVal && itemLote) {
+          const cleanLote = itemLote.trim().toLowerCase();
+          const matchByLote = allMainItems.find(m => {
+            const mKeys = Object.keys(m);
+            const mLote = extractFieldValue(m, mKeys, 'lote', customAliases) || m['LOTE'] || m['Lote'];
+            return mLote && String(mLote).trim().toLowerCase() === cleanLote;
+          });
+          if (matchByLote) {
+            const mKeys = Object.keys(matchByLote);
+            cellVal = extractFieldValue(matchByLote, mKeys, 'descripcion', customAliases) || matchByLote['DESCRIPCION'] || matchByLote['Producto'] || '';
+          }
+        }
+      }
+
+      // Format Date values
+      if (cellVal && isDateCol) {
+        const parsed = parseAnyDate(cellVal);
+        if (parsed) {
+          cellVal = formatDisplayDate(parsed);
+        }
+      }
+
+      // Display empty fallback
+      const displayVal = cellVal !== '' ? cellVal : '-';
+
+      // Style cell based on type
+      if (isSkuCol) {
+        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-weight: bold; color: #0f172a; white-space: nowrap;">${displayVal}</td>`;
+      }
+      if (isDescCol) {
+        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-weight: 600; color: #1e293b;">${displayVal}</td>`;
+      }
+      if (isLoteCol) {
+        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-family: monospace; color: #475569;">${displayVal}</td>`;
+      }
+      if (isDateCol) {
+        const isVc = /venc|vc|caduc/i.test(header);
+        const color = isVc ? '#dc2626' : '#d97706';
+        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; color: ${color}; font-weight: 600; white-space: nowrap;">${displayVal}</td>`;
+      }
+      if (isCantCol) {
+        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center; font-weight: bold; color: #0284c7; white-space: nowrap;">${displayVal}</td>`;
+      }
+      if (isPriceCol) {
+        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: right; font-weight: 600; color: #16a34a; white-space: nowrap;">${displayVal.startsWith('$') ? displayVal : `$${displayVal}`}</td>`;
+      }
+      if (isEventCol) {
+        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-size: 12px; font-weight: 600; color: #334155;">${displayVal}</td>`;
+      }
+
+      // Default normal cell
+      return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; color: #334155;">${displayVal}</td>`;
+    }).join('');
+
     tableRows += `
       <tr style="background-color: ${bgClass}; font-size: 13px; color: #334155;">
-        ${cells}
+        ${cellsHtml}
       </tr>
     `;
   });
 
-  // Build the table headers
-  const headerThs = selectedDefs.map(col => {
-    const align = col.thAlign ? `text-align: ${col.thAlign};` : 'text-align: left;';
-    return `<th style="padding: 12px; border: 1px solid #1e293b; ${align}">${col.header}</th>`;
+  // Build the table headers using EXACT column names
+  const headerThs = activeHeaders.map(header => {
+    const isVirtual = header.startsWith('_virtual_');
+    const label = isVirtual ? formatVirtualHeaderLabel(header) : header;
+    const isCant = findColumnBySemantic([header], 'cantidad', customAliases) !== null || /cant|stock|qty/i.test(header) || isVirtual;
+    const isPrice = findColumnBySemantic([header], 'precio', customAliases) !== null || /precio|costo/i.test(header);
+    const align = isCant ? 'text-align: center;' : isPrice ? 'text-align: right;' : 'text-align: left;';
+    return `<th style="padding: 12px; border: 1px solid #1e293b; ${align} white-space: nowrap;">${label}</th>`;
   }).join('');
 
   return `

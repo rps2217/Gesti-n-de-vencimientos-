@@ -2437,7 +2437,7 @@ export const InventoryDashboard: React.FC = () => {
         isOpen={isGmailModalOpen}
         onClose={() => setIsGmailModalOpen(false)}
         selectedItems={selectedRowIds.length > 0 ? filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number)) : filteredItems}
-        headers={headers}
+        headers={visibleHeaders.length > 0 ? visibleHeaders : headers}
         customAliases={sheetConfig.customAliases}
         activeViewTitle={
           activeView === 'main' ? 'Vencimientos y Drenaje' :

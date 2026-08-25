@@ -206,10 +206,69 @@ export const GmailDraftModal: React.FC<GmailDraftModalProps> = ({
     }
   };
 
-  const handleCopyHtml = () => {
-    navigator.clipboard.writeText(fullHtmlBody);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 3000);
+  const handleCopyRichText = async () => {
+    try {
+      // 1. Modern Async Clipboard API with text/html MIME type
+      if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+        const typeHtml = 'text/html';
+        const typePlain = 'text/plain';
+        const blobHtml = new Blob([fullHtmlBody], { type: typeHtml });
+        const plainTextFallback = `${introText}\n\n[Tabla de ${selectedItems.length} ítems adjunta]\n\n${footerText}`;
+        const blobPlain = new Blob([plainTextFallback], { type: typePlain });
+        
+        const data = [
+          new ClipboardItem({
+            [typeHtml]: blobHtml,
+            [typePlain]: blobPlain
+          })
+        ];
+        await navigator.clipboard.write(data);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 3000);
+        return;
+      }
+    } catch (e) {
+      console.warn('Async ClipboardItem write failed, trying DOM selection fallback:', e);
+    }
+
+    // 2. DOM Selection fallback (ensures rich formatting in all browser environments)
+    try {
+      const container = document.createElement('div');
+      container.innerHTML = fullHtmlBody;
+      container.style.position = 'fixed';
+      container.style.pointerEvents = 'none';
+      container.style.opacity = '0';
+      container.style.left = '-9999px';
+      document.body.appendChild(container);
+
+      const range = document.createRange();
+      range.selectNodeContents(container);
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+        const successful = document.execCommand('copy');
+        selection.removeAllRanges();
+        document.body.removeChild(container);
+        if (successful) {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 3000);
+          return;
+        }
+      }
+      if (container.parentNode) document.body.removeChild(container);
+    } catch (domErr) {
+      console.error('DOM copy fallback failed:', domErr);
+    }
+
+    // 3. Last fallback: plain text
+    try {
+      await navigator.clipboard.writeText(fullHtmlBody);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    } catch (err) {
+      console.error('Copy failed completely:', err);
+    }
   };
 
   const handleDownloadHtml = () => {
@@ -477,11 +536,16 @@ export const GmailDraftModal: React.FC<GmailDraftModalProps> = ({
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <button
-              onClick={handleCopyHtml}
-              className="bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm"
+              onClick={handleCopyRichText}
+              className={`border font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm ${
+                copied
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300'
+                  : 'bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200'
+              }`}
+              title="Copia el contenido con formato visual (tabla, colores y bordes) listo para pegar con Ctrl+V en Gmail o Outlook"
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? '¡Copiado!' : 'Copiar HTML'}</span>
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copied ? '¡Copiado con formato!' : 'Copiar (Pegar en Correo)'}</span>
             </button>
             <button
               onClick={handleDownloadHtml}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { InventoryItem, ViewTicketConfig } from '../../types';
+import { InventoryItem, ViewTicketConfig, TicketColumnConfig } from '../../types';
 import { findColumnBySemantic } from '../../utils/columnAliases';
 
 interface TicketPrintViewProps {
@@ -11,21 +11,34 @@ interface TicketPrintViewProps {
 export const TicketPrintView: React.FC<TicketPrintViewProps> = ({ items, headers, config }) => {
   if (!items || items.length === 0) return null;
 
-  const visibleHeaders = headers.filter(h => config[h]?.show);
+  // Check if user has explicitly configured at least one column to show
+  const hasCustomConfig = Object.values(config).some((c: any) => c && c.show);
 
-  // Detect semantic columns from visible headers or all headers
-  const skuHeader = visibleHeaders.find(h => findColumnBySemantic([h], 'sku') !== undefined) || findColumnBySemantic(headers, 'sku');
-  const descHeader = visibleHeaders.find(h => findColumnBySemantic([h], 'descripcion') !== undefined) || findColumnBySemantic(headers, 'descripcion');
-  const dateHeader = visibleHeaders.find(h => findColumnBySemantic([h], 'fecha_vc') !== undefined) || findColumnBySemantic(headers, 'fecha_vc');
-  const loteHeader = visibleHeaders.find(h => findColumnBySemantic([h], 'lote') !== undefined) || findColumnBySemantic(headers, 'lote');
-  const cantHeader = visibleHeaders.find(h => findColumnBySemantic([h], 'cantidad') !== undefined) || findColumnBySemantic(headers, 'cantidad');
+  // Determine which headers are visible
+  const visibleHeaders = hasCustomConfig 
+    ? headers.filter(h => (config[h] as TicketColumnConfig)?.show)
+    : headers;
 
-  // Other visible headers not already captured as primary
-  const usedHeaders = new Set([skuHeader, descHeader, dateHeader, loteHeader, cantHeader].filter(Boolean));
-  const otherHeaders = visibleHeaders.filter(h => !usedHeaders.has(h));
+  // Detect semantic columns
+  const skuHeader = headers.find(h => findColumnBySemantic([h], 'sku') !== undefined);
+  const descHeader = headers.find(h => findColumnBySemantic([h], 'descripcion') !== undefined);
+  const dateHeader = headers.find(h => findColumnBySemantic([h], 'fecha_vc') !== undefined);
+  const loteHeader = headers.find(h => findColumnBySemantic([h], 'lote') !== undefined);
+  const cantHeader = headers.find(h => findColumnBySemantic([h], 'cantidad') !== undefined);
+
+  // Check if each semantic column is allowed to show
+  const showSku = !hasCustomConfig || (skuHeader ? (config[skuHeader] as TicketColumnConfig)?.show : false);
+  const showDesc = !hasCustomConfig || (descHeader ? (config[descHeader] as TicketColumnConfig)?.show : false);
+  const showDate = !hasCustomConfig || (dateHeader ? (config[dateHeader] as TicketColumnConfig)?.show : false);
+  const showLote = !hasCustomConfig || (loteHeader ? (config[loteHeader] as TicketColumnConfig)?.show : false);
+  const showCant = !hasCustomConfig || (cantHeader ? (config[cantHeader] as TicketColumnConfig)?.show : false);
+
+  // Other visible headers not captured as primary semantic ones
+  const primaryHeaders = new Set([skuHeader, descHeader, dateHeader, loteHeader, cantHeader].filter(Boolean));
+  const otherVisibleHeaders = visibleHeaders.filter(h => !primaryHeaders.has(h));
 
   return (
-    <div className="hidden print:block w-[76mm] p-2 text-black font-mono text-[11px] leading-tight print:bg-white print:text-black">
+    <div className="hidden print:block w-[76mm] p-2 text-black font-mono leading-tight print:bg-white print:text-black">
       
       {/* TICKET HEADER */}
       <div className="text-center border-b border-dashed border-black pb-1.5 mb-2">
@@ -43,47 +56,75 @@ export const TicketPrintView: React.FC<TicketPrintViewProps> = ({ items, headers
           const loteVal = loteHeader ? String(item[loteHeader] || '').trim() : '';
           const cantVal = cantHeader ? String(item[cantHeader] || '').trim() : '';
 
+          // Config for styling SKU, Desc, Date, Lote, Cant
+          const skuConf = skuHeader ? (config[skuHeader] as TicketColumnConfig) : undefined;
+          const descConf = descHeader ? (config[descHeader] as TicketColumnConfig) : undefined;
+          const dateConf = dateHeader ? (config[dateHeader] as TicketColumnConfig) : undefined;
+          const loteConf = loteHeader ? (config[loteHeader] as TicketColumnConfig) : undefined;
+          const cantConf = cantHeader ? (config[cantHeader] as TicketColumnConfig) : undefined;
+
           return (
             <div key={idx} className="border-b border-dotted border-black py-1.5 break-words break-inside-avoid">
               <div className="flex flex-col gap-0.5">
                 
-                {/* SKU + Description (Line 1) */}
-                {(skuVal || descVal) ? (
-                  <div className="font-bold text-[12px] leading-snug">
-                    {skuVal && <span className="font-mono">[{skuVal}] </span>}
-                    {descVal && descVal !== skuVal && <span>{descVal}</span>}
-                  </div>
-                ) : visibleHeaders.length > 0 ? (
-                  <div className="font-bold text-[12px] leading-snug">
-                    {String(item[visibleHeaders[0]] || '')}
-                  </div>
-                ) : null}
-
-                {/* Batch & Quantity */}
-                {(loteVal || cantVal) && (
-                  <div className="text-[10px] flex gap-3 text-slate-800 dark:text-black mt-0.5 font-medium">
-                    {loteVal && <span>Lote: {loteVal}</span>}
-                    {cantVal && <span>Cant: {cantVal}</span>}
+                {/* SKU + Description Line */}
+                {((showSku && skuVal) || (showDesc && descVal)) && (
+                  <div 
+                    style={{ fontSize: `${Math.max(skuConf?.size || descConf?.size || 12, 10)}px` }}
+                    className={`leading-snug ${(skuConf?.bold || descConf?.bold) ? 'font-bold' : 'font-normal'}`}
+                  >
+                    {showSku && skuVal && <span className="font-mono">[{skuVal}] </span>}
+                    {showDesc && descVal && descVal !== skuVal && <span>{descVal}</span>}
                   </div>
                 )}
 
-                {/* Other selected columns without bulky prefix headers */}
-                {otherHeaders.map(header => {
+                {/* Batch & Quantity Line */}
+                {((showLote && loteVal) || (showCant && cantVal)) && (
+                  <div className="text-[10px] flex gap-3 text-slate-800 dark:text-black mt-0.5">
+                    {showLote && loteVal && (
+                      <span 
+                        style={{ fontSize: `${loteConf?.size || 10}px` }}
+                        className={loteConf?.bold ? 'font-bold' : 'font-medium'}
+                      >
+                        Lote: {loteVal}
+                      </span>
+                    )}
+                    {showCant && cantVal && (
+                      <span 
+                        style={{ fontSize: `${cantConf?.size || 10}px` }}
+                        className={cantConf?.bold ? 'font-bold' : 'font-medium'}
+                      >
+                        Cant: {cantVal}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Other custom visible headers */}
+                {otherVisibleHeaders.map(header => {
                   const val = item[header];
                   if (val === undefined || val === null || String(val).trim() === '') return null;
+                  const hConf = config[header] as TicketColumnConfig;
                   return (
-                    <div key={header} className="text-[10px] text-slate-800 dark:text-black mt-0.5">
+                    <div 
+                      key={header} 
+                      style={{ fontSize: `${hConf?.size || 10}px` }}
+                      className={`mt-0.5 text-black ${hConf?.bold ? 'font-bold' : 'font-normal'}`}
+                    >
                       <span className="opacity-80">{header}: </span>
-                      <span className="font-medium">{String(val)}</span>
+                      <span>{String(val)}</span>
                     </div>
                   );
                 })}
 
                 {/* Expiration Date Line (At the very end) */}
-                {dateVal && (
-                  <div className="text-[11px] mt-0.5 font-medium">
+                {showDate && dateVal && (
+                  <div 
+                    style={{ fontSize: `${dateConf?.size || 11}px` }}
+                    className={`mt-0.5 ${dateConf?.bold ? 'font-bold' : 'font-medium'}`}
+                  >
                     <span>F.Venc: </span>
-                    <span className="font-bold">{dateVal}</span>
+                    <span>{dateVal}</span>
                   </div>
                 )}
 

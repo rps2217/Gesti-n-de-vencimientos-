@@ -46,15 +46,15 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
     /^nro(_|\s)?(de)?(_|\s)?(registro|articulo|prod)$/i
   ],
   descripcion: [
-    /^descripci[oó]n(_|\s)?(de)?(_|\s)?(producto|articulo|item|material)?$/i,
-    /^desc$/i,
-    /^producto$/i,
-    /^articulo$/i,
-    /^art[ií]culo$/i,
-    /^item(_|\s)?(name)?$/i,
-    /^nombre(_|\s)?(de)?(_|\s)?(producto|articulo|item)?$/i,
-    /^detalle(_|\s)?(producto)?$/i,
-    /^denominaci[oó]n$/i,
+    /^descripci[oó]n(_|\s)?(de)?(_|\s)?(producto|articulo|item|material)?(_|\s)?(vc|calculado)?$/i,
+    /^desc(_|\s)?(vc|calculado)?$/i,
+    /^producto(_|\s)?(vc|calculado)?$/i,
+    /^articulo(_|\s)?(vc|calculado)?$/i,
+    /^art[ií]culo(_|\s)?(vc|calculado)?$/i,
+    /^item(_|\s)?(name)?(_|\s)?(vc|calculado)?$/i,
+    /^nombre(_|\s)?(de)?(_|\s)?(producto|articulo|item)?(_|\s)?(vc|calculado)?$/i,
+    /^detalle(_|\s)?(producto)?(_|\s)?(vc|calculado)?$/i,
+    /^denominaci[oó]n(_|\s)?(vc|calculado)?$/i,
     /^descripci[oó]n$/i
   ],
   fecha_vc: [

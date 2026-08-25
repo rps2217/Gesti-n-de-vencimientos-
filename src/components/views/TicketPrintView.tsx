@@ -51,21 +51,13 @@ export const TicketPrintView: React.FC<TicketPrintViewProps> = ({ items, headers
                 {(skuVal || descVal) ? (
                   <div className="font-bold text-[12px] leading-snug">
                     {skuVal && <span className="font-mono">[{skuVal}] </span>}
-                    <span>{descVal || (!descHeader && !skuHeader ? '' : skuVal)}</span>
+                    {descVal && descVal !== skuVal && <span>{descVal}</span>}
                   </div>
                 ) : visibleHeaders.length > 0 ? (
                   <div className="font-bold text-[12px] leading-snug">
                     {String(item[visibleHeaders[0]] || '')}
                   </div>
                 ) : null}
-
-                {/* Expiration Date Line */}
-                {dateVal && (
-                  <div className="text-[11px] mt-0.5 font-medium">
-                    <span>F.Venc: </span>
-                    <span className="font-bold">{dateVal}</span>
-                  </div>
-                )}
 
                 {/* Batch & Quantity */}
                 {(loteVal || cantVal) && (
@@ -86,6 +78,14 @@ export const TicketPrintView: React.FC<TicketPrintViewProps> = ({ items, headers
                     </div>
                   );
                 })}
+
+                {/* Expiration Date Line (At the very end) */}
+                {dateVal && (
+                  <div className="text-[11px] mt-0.5 font-medium">
+                    <span>F.Venc: </span>
+                    <span className="font-bold">{dateVal}</span>
+                  </div>
+                )}
 
               </div>
             </div>

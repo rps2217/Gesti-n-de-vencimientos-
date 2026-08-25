@@ -16,6 +16,9 @@ interface GmailDraftModalProps {
   headers: string[];
   customAliases?: Record<string, string[]>;
   activeViewTitle?: string;
+  allMainItems?: any[];
+  products?: any[];
+  policies?: any[];
 }
 
 export const GmailDraftModal: React.FC<GmailDraftModalProps> = ({
@@ -24,7 +27,10 @@ export const GmailDraftModal: React.FC<GmailDraftModalProps> = ({
   selectedItems,
   headers,
   customAliases,
-  activeViewTitle = 'Vencimientos e Incidencias'
+  activeViewTitle = 'Vencimientos e Incidencias',
+  allMainItems,
+  products,
+  policies
 }) => {
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
@@ -69,7 +75,11 @@ export const GmailDraftModal: React.FC<GmailDraftModalProps> = ({
 
   if (!isOpen) return null;
 
-  const tableHtml = generateItemsHtmlTable(selectedItems, headers, customAliases);
+  const tableHtml = generateItemsHtmlTable(selectedItems, headers, customAliases, {
+    allMainItems,
+    products,
+    policies
+  });
 
   const fullHtmlBody = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.6;">

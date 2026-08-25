@@ -2444,6 +2444,9 @@ export const InventoryDashboard: React.FC = () => {
           activeView === 'events' ? 'Incidencias FRC' :
           activeView === 'products' ? 'Productos' : 'Inventario'
         }
+        allMainItems={allMainItems}
+        products={products}
+        policies={policies}
       />
 
       {/* 6. COLUMN MANAGER MODAL */}

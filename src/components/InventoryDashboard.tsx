@@ -23,7 +23,7 @@ import {
   Plus, Edit2, Trash2, RefreshCw, Loader2, Database, AlertCircle, Package, 
   FileSpreadsheet, Printer, Settings, FileText, Search, X, Truck, RotateCcw, 
   PackageX, Sparkles, Clock, Clock3, Flame, AlertTriangle, CheckCircle2, FilterX, 
-  Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown, Menu, Scan, GripVertical, Tag
+  Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown, Menu, Scan, GripVertical, Tag, Mail
 } from 'lucide-react';
 
 // Utilities & Hooks
@@ -68,6 +68,7 @@ import { PmRadarCards } from './views/PmRadarCards';
 import { ColumnFilterMenu } from './views/ColumnFilterMenu';
 import { TicketPrintView } from './views/TicketPrintView';
 import { TicketConfigModal } from './modals/TicketConfigModal';
+import { GmailDraftModal } from './modals/GmailDraftModal';
 import { GlobalTicketConfig, ViewTicketConfig } from '../types';
 import { SkeletonLoader } from './common/SkeletonLoader';
 
@@ -246,6 +247,7 @@ export const InventoryDashboard: React.FC = () => {
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [globalTicketConfig, setGlobalTicketConfig] = useState<GlobalTicketConfig>({});
   const [isTicketConfigOpen, setIsTicketConfigOpen] = useState(false);
+  const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('global_ticket_print_config');
@@ -1530,6 +1532,14 @@ export const InventoryDashboard: React.FC = () => {
                   <FileSpreadsheet className="w-4 h-4" />
                   <span>Excel</span>
                 </button>
+                <button
+                  onClick={() => setIsGmailModalOpen(true)}
+                  className="text-sm bg-red-600 hover:bg-red-700 text-white border border-red-700 px-3 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-2 hidden md:flex"
+                  title="Generar borrador de correo en Gmail con los productos mostrados o seleccionados"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>Borrador Gmail</span>
+                </button>
               </>
             )}
             {/* Status & Sync Indicator */}
@@ -2291,6 +2301,13 @@ export const InventoryDashboard: React.FC = () => {
                 </button>
                 
                 <button 
+                  onClick={() => setIsGmailModalOpen(true)}
+                  className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 bg-red-600/40 text-red-200 border border-red-500/40 shadow-sm"
+                >
+                  <Mail className="w-3.5 h-3.5 text-red-400" /> Borrador Gmail
+                </button>
+                
+                <button 
                   onClick={() => {
                     const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
                     exportToExcel(`Seleccion_${new Date().toISOString().split('T')[0]}`, headers, selectedItems);
@@ -2413,6 +2430,20 @@ export const InventoryDashboard: React.FC = () => {
         onClose={() => setIsBulkEditOpen(false)}
         selectedCount={selectedRowIds.length}
         onApply={handleApplyBulkEdit}
+      />
+
+      {/* GMAIL DRAFT MODAL */}
+      <GmailDraftModal
+        isOpen={isGmailModalOpen}
+        onClose={() => setIsGmailModalOpen(false)}
+        selectedItems={selectedRowIds.length > 0 ? filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number)) : filteredItems}
+        headers={headers}
+        customAliases={sheetConfig.customAliases}
+        activeViewTitle={
+          activeView === 'main' ? 'Vencimientos y Drenaje' :
+          activeView === 'events' ? 'Incidencias FRC' :
+          activeView === 'products' ? 'Productos' : 'Inventario'
+        }
       />
 
       {/* 6. COLUMN MANAGER MODAL */}

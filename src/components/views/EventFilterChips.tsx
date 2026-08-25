@@ -34,6 +34,9 @@ export const EventFilterChips: React.FC<EventFilterChipsProps> = ({
   frcBodFilter = [],
   onFrcBodFilterClick
 }) => {
+  const activeEventSet = React.useMemo(() => new Set(eventFilter), [eventFilter]);
+  const activeBodSet = React.useMemo(() => new Set(frcBodFilter), [frcBodFilter]);
+
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
@@ -52,7 +55,7 @@ export const EventFilterChips: React.FC<EventFilterChipsProps> = ({
         <button 
           onClick={(e) => onFilterClick('VENCIMIENTO_CERCANO', e.ctrlKey || e.metaKey)}
           className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
-            eventFilter.includes('VENCIMIENTO_CERCANO')
+            activeEventSet.has('VENCIMIENTO_CERCANO')
               ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200 dark:shadow-none' 
               : 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'
           }`}
@@ -65,7 +68,7 @@ export const EventFilterChips: React.FC<EventFilterChipsProps> = ({
         <button 
           onClick={(e) => onFilterClick('TRANSPORTE', e.ctrlKey || e.metaKey)}
           className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
-            eventFilter.includes('TRANSPORTE')
+            activeEventSet.has('TRANSPORTE')
               ? 'bg-amber-600 text-white shadow-sm shadow-amber-200 dark:shadow-none' 
               : 'bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50'
           }`}
@@ -78,7 +81,7 @@ export const EventFilterChips: React.FC<EventFilterChipsProps> = ({
         <button 
           onClick={(e) => onFilterClick('CAL_INTERNA', e.ctrlKey || e.metaKey)}
           className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
-            eventFilter.includes('CAL_INTERNA')
+            activeEventSet.has('CAL_INTERNA')
               ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-200 dark:shadow-none' 
               : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
           }`}
@@ -91,7 +94,7 @@ export const EventFilterChips: React.FC<EventFilterChipsProps> = ({
         <button 
           onClick={(e) => onFilterClick('CAL_EXTERNA', e.ctrlKey || e.metaKey)}
           className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
-            eventFilter.includes('CAL_EXTERNA')
+            activeEventSet.has('CAL_EXTERNA')
               ? 'bg-teal-600 text-white shadow-sm shadow-teal-200 dark:shadow-none' 
               : 'bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/50'
           }`}
@@ -104,7 +107,7 @@ export const EventFilterChips: React.FC<EventFilterChipsProps> = ({
         <button 
           onClick={(e) => onFilterClick('CANJES', e.ctrlKey || e.metaKey)}
           className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
-            eventFilter.includes('CANJES')
+            activeEventSet.has('CANJES')
               ? 'bg-pink-600 text-white shadow-sm shadow-pink-200 dark:shadow-none' 
               : 'bg-pink-50 dark:bg-pink-950/50 text-pink-800 dark:text-pink-300 hover:bg-pink-100 dark:hover:bg-pink-900/50'
           }`}
@@ -117,7 +120,7 @@ export const EventFilterChips: React.FC<EventFilterChipsProps> = ({
         <button 
           onClick={(e) => onFilterClick('DIFERENCIA', e.ctrlKey || e.metaKey)}
           className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
-            eventFilter.includes('DIFERENCIA')
+            activeEventSet.has('DIFERENCIA')
               ? 'bg-purple-600 text-white shadow-sm shadow-purple-200 dark:shadow-none' 
               : 'bg-purple-50 dark:bg-purple-950/50 text-purple-800 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50'
           }`}
@@ -130,7 +133,7 @@ export const EventFilterChips: React.FC<EventFilterChipsProps> = ({
         <button 
           onClick={(e) => onFilterClick('AVERIA', e.ctrlKey || e.metaKey)}
           className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
-            eventFilter.includes('AVERIA')
+            activeEventSet.has('AVERIA')
               ? 'bg-rose-600 text-white shadow-sm shadow-rose-200 dark:shadow-none' 
               : 'bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/50'
           }`}
@@ -143,7 +146,7 @@ export const EventFilterChips: React.FC<EventFilterChipsProps> = ({
         <button 
           onClick={(e) => onFilterClick('DEVOLUCION', e.ctrlKey || e.metaKey)}
           className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all ${
-            eventFilter.includes('DEVOLUCION')
+            activeEventSet.has('DEVOLUCION')
               ? 'bg-teal-600 text-white shadow-sm shadow-teal-200 dark:shadow-none' 
               : 'bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/50'
           }`}
@@ -168,7 +171,7 @@ export const EventFilterChips: React.FC<EventFilterChipsProps> = ({
             Todas las bodegas ({totalItems})
           </button>
           {frcBodValues.map(bod => {
-            const active = frcBodFilter.includes(bod);
+            const active = activeBodSet.has(bod);
             const count = frcBodCounts[bod] || 0;
             return (
               <button

@@ -163,31 +163,6 @@ export const InventoryDashboard: React.FC = () => {
            });
   }, [headers]);
 
-  const frcBodValues = useMemo(() => {
-    if (!frcBodCol) return [];
-    const vals = new Set<string>();
-    items.forEach(item => {
-      const val = item[frcBodCol];
-      if (val !== undefined && val !== null && String(val).trim() !== '') {
-        vals.add(String(val).trim());
-      }
-    });
-    return Array.from(vals).sort((a, b) => a.localeCompare(b));
-  }, [items, frcBodCol]);
-
-  const frcBodCounts = useMemo(() => {
-    if (!frcBodCol) return {};
-    const counts: Record<string, number> = {};
-    items.forEach(item => {
-      const val = item[frcBodCol];
-      if (val !== undefined && val !== null && String(val).trim() !== '') {
-        const trimmed = String(val).trim();
-        counts[trimmed] = (counts[trimmed] || 0) + 1;
-      }
-    });
-    return counts;
-  }, [items, frcBodCol]);
-
   const [quickTraspasoItem, setQuickTraspasoItem] = useState<InventoryItem | null>(null);
   const [isQuickTraspasoOpen, setIsQuickTraspasoOpen] = useState<boolean>(false);
   const [pmRadarFilter, setPmRadarFilter] = useState<string[]>([]);
@@ -448,23 +423,14 @@ export const InventoryDashboard: React.FC = () => {
     });
   }, [headers, activeSheet, sheetConfig.schema]);
 
-  // Event Metrics Summary
-  const eventMetrics = useMemo(() => {
-    if ((activeView !== 'main' && activeView !== 'events') || items.length === 0) {
-      return {
-        total: items.length,
-        vencimientos: 0,
-        transporte: 0,
-        diferencia: 0,
-        averia: 0,
-        devolucion: 0,
-        vencimientoCercano: 0,
-        drainagePm: 0,
-        upcoming: 0,
-        retireNow: 0
-      };
-    }
-
+  // Unified single-pass aggregator for all chips, metrics, PM radar, and Bodega counts (O(N))
+  const {
+    eventMetrics,
+    pmMetrics,
+    eventResolutionMetrics,
+    frcBodValues,
+    frcBodCounts
+  } = useMemo(() => {
     let vencimientos = 0;
     let transporte = 0;
     let diferencia = 0;
@@ -478,7 +444,27 @@ export const InventoryDashboard: React.FC = () => {
     let upcoming = 0;
     let retireNow = 0;
 
-    items.forEach(item => {
+    let pending = 0;
+    let completed = 0;
+
+    const bodCounts: Record<string, number> = {};
+    const bodSet = new Set<string>();
+
+    const len = items.length;
+    for (let i = 0; i < len; i++) {
+      const item = items[i];
+
+      // 1. Bodega count (single pass)
+      if (frcBodCol) {
+        const val = item[frcBodCol];
+        if (val !== undefined && val !== null && String(val).trim() !== '') {
+          const trimmed = String(val).trim();
+          bodSet.add(trimmed);
+          bodCounts[trimmed] = (bodCounts[trimmed] || 0) + 1;
+        }
+      }
+
+      // 2. Event & Status metrics
       const cat = getEventCategory(item, headers);
       if (cat === 'TRANSPORTE') {
         transporte++;
@@ -503,10 +489,17 @@ export const InventoryDashboard: React.FC = () => {
         else if (st.code === 'UPCOMING') upcoming++;
         else if (st.code === 'RETIRE_NOW' || st.code === 'EXPIRED') retireNow++;
       }
-    });
 
-    return {
-      total: items.length,
+      // 3. Resolution metrics
+      const res = getItemResolutionStatus(item, headers);
+      if (res.isResolved) completed++;
+      else pending++;
+    }
+
+    const sortedBodValues = Array.from(bodSet).sort((a, b) => a.localeCompare(b));
+
+    const evMetrics = {
+      total: len,
       vencimientos,
       transporte,
       diferencia,
@@ -520,34 +513,29 @@ export const InventoryDashboard: React.FC = () => {
       upcoming,
       retireNow
     };
-  }, [items, headers, activeView]);
 
-  // PM Radar Metrics
-  const pmMetrics = useMemo(() => {
-    return {
-      total: eventMetrics.vencimientos,
-      drainage: eventMetrics.drainagePm,
-      upcoming: eventMetrics.upcoming,
-      retireNow: eventMetrics.retireNow,
-      enRegla: eventMetrics.vencimientos - eventMetrics.drainagePm - eventMetrics.upcoming - eventMetrics.retireNow
+    const pm = {
+      total: vencimientos,
+      drainage: drainagePm,
+      upcoming,
+      retireNow,
+      enRegla: Math.max(0, vencimientos - drainagePm - upcoming - retireNow)
     };
-  }, [eventMetrics]);
 
-  // Event Resolution Metrics (Pendientes vs Realizados con N_TRASPASO)
-  const eventResolutionMetrics = useMemo(() => {
-    let pending = 0;
-    let completed = 0;
-    items.forEach(item => {
-      const res = getItemResolutionStatus(item, headers);
-      if (res.isResolved) completed++;
-      else pending++;
-    });
-    return {
-      total: items.length,
+    const resMetrics = {
+      total: len,
       pending,
       completed
     };
-  }, [items, headers]);
+
+    return {
+      eventMetrics: evMetrics,
+      pmMetrics: pm,
+      eventResolutionMetrics: resMetrics,
+      frcBodValues: sortedBodValues,
+      frcBodCounts: bodCounts
+    };
+  }, [items, headers, frcBodCol]);
 
   const augmentedItems = useMemo(() => {
     return items.map(item => {
@@ -586,72 +574,103 @@ export const InventoryDashboard: React.FC = () => {
   }, [augmentedItems, headers, sheetConfig.activeVirtualColumns]);
 
   const filteredItems = useMemo(() => {
-    let list = augmentedItems;
+    // 1. Prepare O(1) Sets for fast lookups
+    const hasEventFilter = activeView === 'events' && eventFilter.length > 0;
+    const eventFilterSet = hasEventFilter ? new Set(eventFilter) : null;
 
-    // Apply Event Category Filter in main or events view
-    if (activeView === 'main') {
-      list = list.filter(item => {
+    const hasFrcBodFilter = activeView === 'events' && frcBodFilter.length > 0 && !!frcBodCol;
+    const frcBodFilterSet = hasFrcBodFilter ? new Set(frcBodFilter) : null;
+
+    const hasEventResFilter = activeView === 'events' && eventResolutionFilter.length > 0;
+    const eventResFilterSet = hasEventResFilter ? new Set(eventResolutionFilter) : null;
+
+    const hasPmRadarFilter = activeView === 'main' && pmRadarFilter.length > 0;
+    const pmRadarFilterSet = hasPmRadarFilter ? new Set(pmRadarFilter) : null;
+
+    const activeColFilterEntries = (Object.entries(columnFilters) as [string, string[]][])
+      .filter(([_, vals]) => vals && vals.length > 0)
+      .map(([colName, vals]) => [colName, new Set(vals)] as [string, Set<string>]);
+    const hasColFilters = activeColFilterEntries.length > 0;
+
+    const traspasoCol = hasEventResFilter ? (findColumnBySemantic(headers, 'n_traspaso') || 'N_TRASPASO') : '';
+
+    const term = (deferredSearchTerm.trim() || activeQuickChip || '').toLowerCase();
+    const hasSearch = term.length > 0;
+
+    // Single-pass filter loop without intermediate array allocations
+    const result: InventoryItem[] = [];
+    const len = augmentedItems.length;
+
+    for (let i = 0; i < len; i++) {
+      const item = augmentedItems[i];
+
+      // View constraints
+      if (activeView === 'main') {
         const cat = getEventCategory(item, headers);
-        return cat === 'VENCIMIENTO' || cat === 'VENCIMIENTO_CERCANO';
-      });
-    } else if (activeView === 'events') {
-      if (eventFilter.length > 0) {
-        list = list.filter(item => {
+        if (cat !== 'VENCIMIENTO' && cat !== 'VENCIMIENTO_CERCANO') {
+          continue;
+        }
+        if (pmRadarFilterSet) {
+          const st = getItemStatus(item, headers);
+          let matchPm = false;
+          if (pmRadarFilterSet.has('drainage') && st.code === 'DRAINAGE_PM') matchPm = true;
+          else if (pmRadarFilterSet.has('upcoming') && st.code === 'UPCOMING') matchPm = true;
+          else if (pmRadarFilterSet.has('retire_now') && (st.code === 'RETIRE_NOW' || st.code === 'EXPIRED')) matchPm = true;
+          else if (pmRadarFilterSet.has('en_regla') && st.code === 'NORMAL') matchPm = true;
+          if (!matchPm) continue;
+        }
+      } else if (activeView === 'events') {
+        if (eventFilterSet) {
           const cat = getEventCategory(item, headers);
-          return cat && eventFilter.includes(cat);
-        });
-      }
-      if (frcBodFilter.length > 0 && frcBodCol) {
-        list = list.filter(item => {
+          if (!cat || !eventFilterSet.has(cat)) continue;
+        }
+        if (frcBodFilterSet && frcBodCol) {
           const val = item[frcBodCol];
           const valStr = val !== undefined && val !== null ? String(val).trim() : '';
-          return frcBodFilter.includes(valStr);
-        });
-      }
-      if (eventResolutionFilter.length > 0) {
-        list = list.filter(item => {
+          if (!frcBodFilterSet.has(valStr)) continue;
+        }
+        if (eventResFilterSet) {
           const isResolved = getItemResolutionStatus(item, headers).isResolved;
           const status = isResolved ? 'completed' : 'pending';
-          const traspasoCol = findColumnBySemantic(headers, 'n_traspaso') || 'N_TRASPASO';
           const traspasoVal = item[traspasoCol];
-          return eventResolutionFilter.includes(status) || (traspasoVal && eventResolutionFilter.includes(traspasoVal));
-        });
+          const matchRes = eventResFilterSet.has(status) || (traspasoVal && eventResFilterSet.has(String(traspasoVal)));
+          if (!matchRes) continue;
+        }
       }
-    }
 
-    // Apply PM Radar Filter when in main view
-    if (activeView === 'main' && pmRadarFilter.length > 0) {
-      list = list.filter(item => {
-        const st = getItemStatus(item, headers);
-        if (pmRadarFilter.includes('drainage') && st.code === 'DRAINAGE_PM') return true;
-        if (pmRadarFilter.includes('upcoming') && st.code === 'UPCOMING') return true;
-        if (pmRadarFilter.includes('retire_now') && (st.code === 'RETIRE_NOW' || st.code === 'EXPIRED')) return true;
-        if (pmRadarFilter.includes('en_regla') && st.code === 'NORMAL') return true;
-        return false;
-      });
-    }
-
-    // Apply generic column filters
-    (Object.entries(columnFilters) as [string, string[]][]).forEach(([colName, selectedVals]) => {
-      if (selectedVals && selectedVals.length > 0) {
-        list = list.filter(item => {
+      // Column filters (O(1) Set lookup)
+      if (hasColFilters) {
+        let matchCols = true;
+        for (let j = 0; j < activeColFilterEntries.length; j++) {
+          const [colName, valSet] = activeColFilterEntries[j];
           const val = item[colName];
           const valStr = val !== undefined && val !== null && String(val).trim() !== '' ? String(val).trim() : '(Vacío)';
-          return selectedVals.includes(valStr);
-        });
+          if (!valSet.has(valStr)) {
+            matchCols = false;
+            break;
+          }
+        }
+        if (!matchCols) continue;
       }
-    });
 
-    if (!deferredSearchTerm.trim() && !activeQuickChip) return list;
-    const term = (deferredSearchTerm.trim() || activeQuickChip || '').toLowerCase();
-    return list.filter(item => {
-      return searchableHeaders.some(h => {
-        const val = item[h];
-        if (val === undefined || val === null) return false;
-        return String(val).toLowerCase().includes(term);
-      });
-    });
-  }, [items, deferredSearchTerm, activeQuickChip, searchableHeaders, activeView, eventFilter, frcBodFilter, frcBodCol, eventResolutionFilter, pmRadarFilter, columnFilters, headers]);
+      // Global text search (short-circuit on first match)
+      if (hasSearch) {
+        let matchSearch = false;
+        for (let j = 0; j < searchableHeaders.length; j++) {
+          const val = item[searchableHeaders[j]];
+          if (val !== undefined && val !== null && String(val).toLowerCase().includes(term)) {
+            matchSearch = true;
+            break;
+          }
+        }
+        if (!matchSearch) continue;
+      }
+
+      result.push(item);
+    }
+
+    return result;
+  }, [augmentedItems, deferredSearchTerm, activeQuickChip, searchableHeaders, activeView, eventFilter, frcBodFilter, frcBodCol, eventResolutionFilter, pmRadarFilter, columnFilters, headers]);
 
   // Collapsed groups state
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});

@@ -40,16 +40,22 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
     /^codigo(_|\s)?(de)?(_|\s)?(producto|articulo|item|material)?(_|\s)?(vc|calculado)?$/i,
     /^item(_|\s)?(code|id|num)?(_|\s)?(vc|calculado)?$/i,
     /^product(_|\s)?(id|code)?(_|\s)?(vc|calculado)?$/i,
-    /^clave(_|\s)?(prod|producto)?(_|\s)?(vc|calculado)?$/i
+    /^clave(_|\s)?(prod|producto)?(_|\s)?(vc|calculado)?$/i,
+    /^frc(_|\/|\s)?n(ro)?$/i,
+    /^frc$/i,
+    /^nro(_|\s)?(de)?(_|\s)?(registro|articulo|prod)$/i
   ],
   descripcion: [
     /^descripci[oó]n(_|\s)?(de)?(_|\s)?(producto|articulo|item|material)?$/i,
+    /^desc$/i,
     /^producto$/i,
     /^articulo$/i,
+    /^art[ií]culo$/i,
     /^item(_|\s)?(name)?$/i,
     /^nombre(_|\s)?(de)?(_|\s)?(producto|articulo|item)?$/i,
     /^detalle(_|\s)?(producto)?$/i,
-    /^denominaci[oó]n$/i
+    /^denominaci[oó]n$/i,
+    /^descripci[oó]n$/i
   ],
   fecha_vc: [
     /^fecha(_|\s)?(vc|vencimiento|caducidad|exp|expiracion|expiraci[oó]n)$/i,

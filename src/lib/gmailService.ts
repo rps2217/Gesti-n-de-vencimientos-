@@ -87,15 +87,98 @@ function extractFieldValue(
 ): string {
   if (!item || typeof item !== 'object') return '';
 
-  // 1. Try finding via semantic alias engine
+  // 1. Direct explicit property checks on the item
+  const itemKeys = Object.keys(item);
+  
+  // Specific direct checks based on semantic
+  if (semantic === 'sku') {
+    for (const k of ['SKU', 'sku', 'Sku', 'COD PRODUCTO', 'COD_PRODUCTO', 'CODIGO', 'CÓDIGO', 'COD', 'FRC_N', 'FRC/N', 'FRC', 'Item', 'ITEM', 'Articulo', 'ARTICULO', 'ID', 'id']) {
+      if (item[k] !== undefined && item[k] !== null && String(item[k]).trim() !== '') {
+        return String(item[k]).trim();
+      }
+    }
+  }
+
+  if (semantic === 'descripcion') {
+    for (const k of ['DESCRIPCION', 'DESCRIPCIÓN', 'Descripcion', 'Descripción', 'PRODUCTO', 'Producto', 'ARTICULO', 'Articulo', 'NOMBRE', 'Nombre', 'DETALLE', 'Detalle', 'DENOMINACION', 'Denominacion', 'Item_Name', 'ITEM_NAME']) {
+      if (item[k] !== undefined && item[k] !== null && String(item[k]).trim() !== '') {
+        return String(item[k]).trim();
+      }
+    }
+  }
+
+  if (semantic === 'lote') {
+    for (const k of ['LOTE', 'Lote', 'lote', 'BATCH', 'Batch', 'batch', 'LOT', 'Lot', 'NRO_LOTE', 'NUM_LOTE']) {
+      if (item[k] !== undefined && item[k] !== null && String(item[k]).trim() !== '') {
+        return String(item[k]).trim();
+      }
+    }
+  }
+
+  if (semantic === 'cantidad') {
+    for (const k of ['CANTIDAD', 'Cantidad', 'cantidad', 'CANTIDAD AFECTADA', 'CANTIDAD_AFECTADA', 'STOCK', 'Stock', 'UNIDADES', 'Unidades', 'QTY', 'Qty', 'qty', 'CANT', 'Cant']) {
+      if (item[k] !== undefined && item[k] !== null && String(item[k]).trim() !== '') {
+        return String(item[k]).trim();
+      }
+    }
+  }
+
+  if (semantic === 'fecha_vc') {
+    for (const k of ['FECHA_VENCIMIENTO', 'FECHA_VC', 'FECHA VC', 'FECHA VENCIMIENTO', 'VENCIMIENTO', 'Vto', 'VTO', 'F_VTO', 'F_VENC', 'FECHA_VTO', 'FECHA VTO', 'CADUCIDAD', 'EXP_DATE']) {
+      if (item[k] !== undefined && item[k] !== null && String(item[k]).trim() !== '') {
+        return String(item[k]).trim();
+      }
+    }
+  }
+
+  if (semantic === 'fecha_retiro') {
+    for (const k of ['FECHA_RETIRO', 'FECHA RETIRO', 'RETIRO', 'F_RETIRO', 'FECHA_CANJE', 'CANJE', 'fecha_retiro_calc', '_virtual_fecha_retiro']) {
+      if (item[k] !== undefined && item[k] !== null && String(item[k]).trim() !== '') {
+        return String(item[k]).trim();
+      }
+    }
+  }
+
+  if (semantic === 'proveedor') {
+    for (const k of ['PROVEEDOR', 'Proveedor', 'proveedor', 'LABORATORIO', 'Laboratorio', 'MARCA', 'Marca', 'FABRICANTE', 'Fabricante', 'VENDOR', 'Vendor', 'SUPPLIER', 'Supplier']) {
+      if (item[k] !== undefined && item[k] !== null && String(item[k]).trim() !== '') {
+        return String(item[k]).trim();
+      }
+    }
+  }
+
+  if (semantic === 'tipo_evento') {
+    for (const k of ['FRC_EVEN', 'FRC EVEN', 'TIPO_EVENTO', 'TIPO EVENTO', 'MOTIVO / INCIDENCIA', 'MOTIVO/INCIDENCIA', 'INCIDENCIA', 'EVENTO', 'MOTIVO', 'CONCEPTO']) {
+      if (item[k] !== undefined && item[k] !== null && String(item[k]).trim() !== '') {
+        return String(item[k]).trim();
+      }
+    }
+  }
+
+  if (semantic === 'observacion') {
+    for (const k of ['OBSERVACION', 'OBSERVACIONES', 'Observacion', 'Observaciones', 'OBS', 'Obs', 'COMENTARIOS', 'NOTAS', 'DETALLE']) {
+      if (item[k] !== undefined && item[k] !== null && String(item[k]).trim() !== '') {
+        return String(item[k]).trim();
+      }
+    }
+  }
+
+  if (semantic === 'n_traspaso') {
+    for (const k of ['N_TRASPASO', 'N TRASPASO', 'N_DE_TRASPASO', 'N° TRASPASO', 'TRASPASO', 'FOLIO', 'NUM_TRASPASO', 'NRO_TRASPASO']) {
+      if (item[k] !== undefined && item[k] !== null && String(item[k]).trim() !== '') {
+        return String(item[k]).trim();
+      }
+    }
+  }
+
+  // 2. Try finding via semantic alias engine
   const matchedCol = findColumnBySemantic(candidateKeys, semantic, customAliases);
   if (matchedCol && item[matchedCol] !== undefined && item[matchedCol] !== null) {
     const val = String(item[matchedCol]).trim();
     if (val !== '') return val;
   }
 
-  // 2. Direct property matches on item object keys (case-insensitive fuzzy)
-  const itemKeys = Object.keys(item);
+  // 3. Direct regex matches on all item object keys
   for (const key of itemKeys) {
     if (key.startsWith('_')) continue;
     for (const pattern of regexFallbacks) {
@@ -222,6 +305,20 @@ export function generateItemsHtmlTable(
             if (mProvCol && mainMatch[mProvCol]) prov = String(mainMatch[mProvCol]);
           }
         }
+      }
+    }
+
+    // Fallback: If still no description but lote exists, look up by lote in allMainItems
+    if (!desc && lote && lote !== '-') {
+      const matchByLote = allMainItems.find(m => {
+        const mLote = m['LOTE'] || m['Lote'] || m['batch'] || m['Batch'];
+        return mLote && String(mLote).trim().toLowerCase() === String(lote).trim().toLowerCase();
+      });
+      if (matchByLote) {
+        desc = matchByLote['DESCRIPCION'] || matchByLote['DESCRIPCIÓN'] || matchByLote['Producto'] || matchByLote['PRODUCTO'] || '';
+        if (!prov) prov = matchByLote['PROVEEDOR'] || matchByLote['Proveedor'] || '';
+        if (!sku) sku = matchByLote['SKU'] || matchByLote['sku'] || matchByLote['COD PRODUCTO'] || '';
+        if (!fechaVcRaw) fechaVcRaw = matchByLote['FECHA_VC'] || matchByLote['FECHA_VENCIMIENTO'] || '';
       }
     }
 

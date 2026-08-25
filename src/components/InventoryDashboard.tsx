@@ -156,7 +156,11 @@ export const InventoryDashboard: React.FC = () => {
   const [eventResolutionFilter, setEventResolutionFilter] = useState<string[]>([]);
 
   const frcBodCol = useMemo(() => {
-    return findColumnBySemantic(headers, 'frc_bod') || headers.find(h => /^frc(_|\s)?bod/i.test(h.trim()) || /bodega|destino/i.test(h));
+    return findColumnBySemantic(headers, 'frc_bod') || 
+           headers.find(h => {
+             const clean = h.trim().toLowerCase();
+             return /frc.*bod|bodega|destino|warehouse|^bod$/i.test(clean) || clean.includes('bod');
+           });
   }, [headers]);
 
   const frcBodValues = useMemo(() => {

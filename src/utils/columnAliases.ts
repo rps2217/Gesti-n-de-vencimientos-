@@ -201,7 +201,9 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
     /^bod$/i,
     /^destino(_|\s)?traspaso$/i,
     /^destino$/i,
-    /^warehouse$/i
+    /^warehouse$/i,
+    /frc.*bod/i,
+    /bod/i
   ]
 };
 

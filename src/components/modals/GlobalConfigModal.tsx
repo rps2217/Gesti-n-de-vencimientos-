@@ -19,6 +19,7 @@ const SEMANTIC_FIELDS = [
   { key: 'fecha_vc', label: 'Fecha de Vencimiento (Vto)' },
   { key: 'fecha_retiro', label: 'Fecha de Retiro / Canje' },
   { key: 'tipo_evento', label: 'Tipo de Incidencia / Evento (FRC)' },
+  { key: 'frc_bod', label: 'Bodega / FRC Bodega (FRC_BOD)' },
   { key: 'cantidad', label: 'Cantidad / Unidades' },
   { key: 'lote', label: 'Lote / Batch' },
   { key: 'n_traspaso', label: 'N° de Traspaso / Resolución' },

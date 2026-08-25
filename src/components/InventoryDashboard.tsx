@@ -152,7 +152,38 @@ export const InventoryDashboard: React.FC = () => {
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [selectedRowIds, setSelectedRowIds] = useState<number[]>([]);
   const [eventFilter, setEventFilter] = useState<string[]>([]);
+  const [frcBodFilter, setFrcBodFilter] = useState<string[]>([]);
   const [eventResolutionFilter, setEventResolutionFilter] = useState<string[]>([]);
+
+  const frcBodCol = useMemo(() => {
+    return findColumnBySemantic(headers, 'frc_bod') || headers.find(h => /^frc(_|\s)?bod/i.test(h.trim()) || /bodega|destino/i.test(h));
+  }, [headers]);
+
+  const frcBodValues = useMemo(() => {
+    if (!frcBodCol) return [];
+    const vals = new Set<string>();
+    items.forEach(item => {
+      const val = item[frcBodCol];
+      if (val !== undefined && val !== null && String(val).trim() !== '') {
+        vals.add(String(val).trim());
+      }
+    });
+    return Array.from(vals).sort((a, b) => a.localeCompare(b));
+  }, [items, frcBodCol]);
+
+  const frcBodCounts = useMemo(() => {
+    if (!frcBodCol) return {};
+    const counts: Record<string, number> = {};
+    items.forEach(item => {
+      const val = item[frcBodCol];
+      if (val !== undefined && val !== null && String(val).trim() !== '') {
+        const trimmed = String(val).trim();
+        counts[trimmed] = (counts[trimmed] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [items, frcBodCol]);
+
   const [quickTraspasoItem, setQuickTraspasoItem] = useState<InventoryItem | null>(null);
   const [isQuickTraspasoOpen, setIsQuickTraspasoOpen] = useState<boolean>(false);
   const [pmRadarFilter, setPmRadarFilter] = useState<string[]>([]);
@@ -174,6 +205,7 @@ export const InventoryDashboard: React.FC = () => {
   const hasActiveFilters = 
     searchTerm !== '' || 
     eventFilter.length > 0 || 
+    frcBodFilter.length > 0 || 
     eventResolutionFilter.length > 0 || 
     pmRadarFilter.length > 0 || 
     activeQuickChip !== null ||
@@ -182,6 +214,7 @@ export const InventoryDashboard: React.FC = () => {
   const clearAllFilters = () => {
     setSearchTerm('');
     setEventFilter([]);
+    setFrcBodFilter([]);
     setEventResolutionFilter([]);
     setPmRadarFilter([]);
     setColumnFilters({});
@@ -564,6 +597,13 @@ export const InventoryDashboard: React.FC = () => {
           return cat && eventFilter.includes(cat);
         });
       }
+      if (frcBodFilter.length > 0 && frcBodCol) {
+        list = list.filter(item => {
+          const val = item[frcBodCol];
+          const valStr = val !== undefined && val !== null ? String(val).trim() : '';
+          return frcBodFilter.includes(valStr);
+        });
+      }
       if (eventResolutionFilter.length > 0) {
         list = list.filter(item => {
           const isResolved = getItemResolutionStatus(item, headers).isResolved;
@@ -607,7 +647,7 @@ export const InventoryDashboard: React.FC = () => {
         return String(val).toLowerCase().includes(term);
       });
     });
-  }, [items, deferredSearchTerm, activeQuickChip, searchableHeaders, activeView, eventFilter, eventResolutionFilter, pmRadarFilter, columnFilters, headers]);
+  }, [items, deferredSearchTerm, activeQuickChip, searchableHeaders, activeView, eventFilter, frcBodFilter, frcBodCol, eventResolutionFilter, pmRadarFilter, columnFilters, headers]);
 
   // Collapsed groups state
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -1957,12 +1997,16 @@ export const InventoryDashboard: React.FC = () => {
               metrics={eventResolutionMetrics} 
             />
 
-            {/* Categorías FRC Secundarias */}
+            {/* Categorías FRC Secundarias y Bodegas */}
             <EventFilterChips 
               totalItems={items.length} 
               eventFilter={eventFilter} 
               onFilterClick={(val, isMulti) => setEventFilter(prev => handleFilterToggle(prev, val, isMulti))}
               metrics={eventMetrics} 
+              frcBodValues={frcBodValues}
+              frcBodCounts={frcBodCounts}
+              frcBodFilter={frcBodFilter}
+              onFrcBodFilterClick={(val, isMulti) => setFrcBodFilter(prev => handleFilterToggle(prev, val, isMulti))}
             />
           </div>
         )}

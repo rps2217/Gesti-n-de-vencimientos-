@@ -56,7 +56,7 @@ export const TicketPrintView: React.FC<TicketPrintViewProps> = ({ items, headers
           const loteVal = loteHeader ? String(item[loteHeader] || '').trim() : '';
           const cantVal = cantHeader ? String(item[cantHeader] || '').trim() : '';
 
-          // Config for styling SKU, Desc, Date, Lote, Cant
+          // Config for styling SKU, Desc, Date, Lote, Cant independently
           const skuConf = skuHeader ? (config[skuHeader] as TicketColumnConfig) : undefined;
           const descConf = descHeader ? (config[descHeader] as TicketColumnConfig) : undefined;
           const dateConf = dateHeader ? (config[dateHeader] as TicketColumnConfig) : undefined;
@@ -67,14 +67,25 @@ export const TicketPrintView: React.FC<TicketPrintViewProps> = ({ items, headers
             <div key={idx} className="border-b border-dotted border-black py-1.5 break-words break-inside-avoid">
               <div className="flex flex-col gap-0.5">
                 
-                {/* SKU + Description Line */}
+                {/* SKU + Description Line with Independent Styling */}
                 {((showSku && skuVal) || (showDesc && descVal)) && (
-                  <div 
-                    style={{ fontSize: `${Math.max(skuConf?.size || descConf?.size || 12, 10)}px` }}
-                    className={`leading-snug ${(skuConf?.bold || descConf?.bold) ? 'font-bold' : 'font-normal'}`}
-                  >
-                    {showSku && skuVal && <span className="font-mono">[{skuVal}] </span>}
-                    {showDesc && descVal && descVal !== skuVal && <span>{descVal}</span>}
+                  <div className="leading-snug">
+                    {showSku && skuVal && (
+                      <span 
+                        style={{ fontSize: `${skuConf?.size || 12}px` }}
+                        className={`font-mono ${skuConf?.bold ? 'font-bold' : 'font-normal'}`}
+                      >
+                        [{skuVal}]{descVal && descVal !== skuVal ? ' ' : ''}
+                      </span>
+                    )}
+                    {showDesc && descVal && descVal !== skuVal && (
+                      <span 
+                        style={{ fontSize: `${descConf?.size || 12}px` }}
+                        className={descConf?.bold ? 'font-bold' : 'font-normal'}
+                      >
+                        {descVal}
+                      </span>
+                    )}
                   </div>
                 )}
 

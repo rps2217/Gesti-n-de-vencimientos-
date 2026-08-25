@@ -23,7 +23,7 @@ import {
   Plus, Edit2, Trash2, RefreshCw, Loader2, Database, AlertCircle, Package, 
   FileSpreadsheet, Printer, Settings, FileText, Search, X, Truck, RotateCcw, 
   PackageX, Sparkles, Clock, Clock3, Flame, AlertTriangle, CheckCircle2, FilterX, 
-  Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown, Menu, Scan, GripVertical, Tag, Mail
+  Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown, Menu, Scan, GripVertical, Tag, Mail, ChevronDown, Check, MoreVertical
 } from 'lucide-react';
 
 // Utilities & Hooks
@@ -189,7 +189,6 @@ export const InventoryDashboard: React.FC = () => {
   };
 
   const [groupByColumn, setGroupByColumn] = useState<string>('none');
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [isColumnManagerOpen, setIsColumnManagerOpen] = useState(false);
   const [draggedCol, setDraggedCol] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
@@ -248,6 +247,23 @@ export const InventoryDashboard: React.FC = () => {
   const [globalTicketConfig, setGlobalTicketConfig] = useState<GlobalTicketConfig>({});
   const [isTicketConfigOpen, setIsTicketConfigOpen] = useState(false);
   const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
+  const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
+  const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
+
+  // Close menus on click outside
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('#actions-dropdown-btn') && !target.closest('#actions-dropdown-menu')) {
+        setIsActionsMenuOpen(false);
+      }
+      if (!target.closest('#view-dropdown-btn') && !target.closest('#view-dropdown-menu')) {
+        setIsViewMenuOpen(false);
+      }
+    };
+    window.addEventListener('click', handleGlobalClick);
+    return () => window.removeEventListener('click', handleGlobalClick);
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem('global_ticket_print_config');
@@ -593,32 +609,106 @@ export const InventoryDashboard: React.FC = () => {
     });
   }, [items, deferredSearchTerm, activeQuickChip, searchableHeaders, activeView, eventFilter, eventResolutionFilter, pmRadarFilter, columnFilters, headers]);
 
+  // Collapsed groups state
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
+  // Reset collapsed groups when group by column changes
+  useEffect(() => {
+    setCollapsedGroups({});
+  }, [groupByColumn]);
+
+  const toggleGroupCollapse = (groupKey: string) => {
+    setCollapsedGroups(prev => ({
+      ...prev,
+      [groupKey]: !prev[groupKey]
+    }));
+  };
+
+  const expandAllGroups = () => {
+    setCollapsedGroups({});
+  };
+
+  const collapseAllGroups = () => {
+    if (!groupedItems) return;
+    const allCollapsed: Record<string, boolean> = {};
+    for (const [key] of groupedItems) {
+      allCollapsed[key] = true;
+    }
+    setCollapsedGroups(allCollapsed);
+  };
+
   const groupedItems = useMemo(() => {
     if (groupByColumn === 'none') return null;
     const map = new Map<string, InventoryItem[]>();
     for (const item of filteredItems) {
-      const val = String(item[groupByColumn] || '(Sin asignar)');
+      const rawVal = item[groupByColumn];
+      const val = rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '' 
+        ? String(rawVal).trim() 
+        : '(Sin asignar / Vacío)';
       if (!map.has(val)) {
         map.set(val, []);
       }
       map.get(val)!.push(item);
     }
-    return Array.from(map.entries());
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: 'base' }));
   }, [filteredItems, groupByColumn]);
 
-  const paginatedItems = useMemo(() => {
-    if (pageSize === 'all') return filteredItems;
-    const start = (currentPage - 1) * (pageSize as number);
-    return filteredItems.slice(start, start + (pageSize as number));
-  }, [filteredItems, currentPage, pageSize]);
+  // Unified items structure for virtualization and rendering (supports group headers + rows)
+  const displayRows = useMemo(() => {
+    if (groupByColumn === 'none' || !groupedItems) {
+      return filteredItems.map((item, index) => ({
+        type: 'item' as const,
+        item,
+        index
+      }));
+    }
 
-  const totalPages = pageSize === 'all' ? 1 : Math.ceil(filteredItems.length / (pageSize as number)) || 1;
+    const rows: Array<
+      | { type: 'header'; groupKey: string; count: number; isCollapsed: boolean }
+      | { type: 'item'; item: InventoryItem; groupKey: string; index: number }
+    > = [];
+
+    let runningIndex = 0;
+    for (const [groupKey, groupItemList] of groupedItems) {
+      const isCollapsed = !!collapsedGroups[groupKey];
+      rows.push({
+        type: 'header',
+        groupKey,
+        count: groupItemList.length,
+        isCollapsed
+      });
+
+      if (!isCollapsed) {
+        for (const item of groupItemList) {
+          rows.push({
+            type: 'item',
+            item,
+            groupKey,
+            index: runningIndex++
+          });
+        }
+      }
+    }
+
+    return rows;
+  }, [groupByColumn, groupedItems, filteredItems, collapsedGroups]);
+
+  const paginatedDisplayRows = useMemo(() => {
+    if (pageSize === 'all' || groupByColumn !== 'none') return displayRows;
+    const start = (currentPage - 1) * (pageSize as number);
+    return displayRows.slice(start, start + (pageSize as number));
+  }, [displayRows, currentPage, pageSize, groupByColumn]);
+
+  const totalPages = pageSize === 'all' || groupByColumn !== 'none' ? 1 : Math.ceil(filteredItems.length / (pageSize as number)) || 1;
 
   const rowVirtualizer = useVirtualizer({
-    count: paginatedItems.length,
+    count: paginatedDisplayRows.length,
     getScrollElement: () => tableContainerRef.current,
-    estimateSize: () => 64, // Approximate row height (padding 16px top/bottom + text)
-    overscan: 10,
+    estimateSize: (index) => {
+      const row = paginatedDisplayRows[index];
+      return row && row.type === 'header' ? 44 : 64;
+    },
+    overscan: 12,
   });
   
   const virtualRows = rowVirtualizer.getVirtualItems();
@@ -1505,67 +1595,140 @@ export const InventoryDashboard: React.FC = () => {
             )}
           </div>
 
-          {/* Global Utils (Refresh, Export) */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Global Utils (Export/Share Menu, View Menu, Sync, Refresh) */}
+          <div className="flex items-center gap-2.5 shrink-0">
             {activeView !== 'schema' && (
               <>
-                <button
-                  onClick={() => setIsTicketConfigOpen(true)}
-                  className="text-sm bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 p-2.5 rounded-xl font-bold shadow-sm transition-all hidden md:block"
-                  title="Configurar opciones de impresión de Ticket"
-                >
-                  <Settings className="w-4 h-4 text-slate-500" />
-                </button>
-                <button
-                  onClick={() => handlePrintTicket(filteredItems)}
-                  className="text-sm bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-700 px-3 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-2 hidden md:flex"
-                  title="Imprimir ticket térmico con los registros mostrados"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>Imprimir Ticket</span>
-                </button>
-                <button
-                  onClick={() => exportToExcel(`${activeView}_${new Date().toISOString().split('T')[0]}`, headers, filteredItems)}
-                  className="text-sm bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-700 px-3 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-2 hidden md:flex"
-                  title="Exportar la vista actual a Excel"
-                >
-                  <FileSpreadsheet className="w-4 h-4" />
-                  <span>Excel</span>
-                </button>
-                <button
-                  onClick={() => setIsGmailModalOpen(true)}
-                  className="text-sm bg-red-600 hover:bg-red-700 text-white border border-red-700 px-3 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-2 hidden md:flex"
-                  title="Generar borrador de correo en Gmail con los productos mostrados o seleccionados"
-                >
-                  <Mail className="w-4 h-4" />
-                  <span>Borrador Gmail</span>
-                </button>
+                {/* Unified Share / Export Menu */}
+                <div className="relative">
+                  <button
+                    id="actions-dropdown-btn"
+                    onClick={() => setIsActionsMenuOpen(!isActionsMenuOpen)}
+                    className={`text-xs font-bold px-3.5 py-2.5 rounded-xl border transition-all flex items-center gap-1.5 shadow-sm ${
+                      isActionsMenuOpen
+                        ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-transparent'
+                        : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                    }`}
+                    title="Opciones de exportación, correo y reportes"
+                  >
+                    <Download className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span>Compartir & Exportar</span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isActionsMenuOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {isActionsMenuOpen && (
+                    <div
+                      id="actions-dropdown-menu"
+                      className="absolute right-0 top-full mt-1.5 w-64 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150"
+                    >
+                      <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                        Comunicaciones & Reportes
+                      </div>
+                      
+                      <button
+                        onClick={() => {
+                          setIsGmailModalOpen(true);
+                          setIsActionsMenuOpen(false);
+                        }}
+                        className="w-full text-left px-3.5 py-2 hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors group"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-red-100 dark:bg-red-900/60 text-red-600 dark:text-red-300 flex items-center justify-center shrink-0">
+                          <Mail className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-slate-800 dark:text-slate-100">Borrador Gmail</div>
+                          <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
+                            {selectedRowIds.length > 0 ? `${selectedRowIds.length} ítems seleccionados` : 'Todos los mostrados'}
+                          </div>
+                        </div>
+                      </button>
+
+                      {activeView === 'main' && (
+                        <button
+                          onClick={() => {
+                            setIsPmReportOpen(true);
+                            setIsActionsMenuOpen(false);
+                          }}
+                          className="w-full text-left px-3.5 py-2 hover:bg-orange-50 dark:hover:bg-orange-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors group"
+                        >
+                          <div className="w-7 h-7 rounded-lg bg-orange-100 dark:bg-orange-900/60 text-orange-600 dark:text-orange-300 flex items-center justify-center shrink-0">
+                            <Flame className="w-3.5 h-3.5" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-slate-800 dark:text-slate-100">Reporte PM ({drainageReportItems.length})</div>
+                            <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">Resumen de drenaje crítico</div>
+                          </div>
+                        </button>
+                      )}
+
+                      <div className="my-1.5 border-t border-slate-100 dark:border-slate-700/80" />
+
+                      <div className="px-3 py-1 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                        Archivos & Físico
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          exportToExcel(`${activeView}_${new Date().toISOString().split('T')[0]}`, headers, filteredItems);
+                          setIsActionsMenuOpen(false);
+                        }}
+                        className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                          <FileSpreadsheet className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-slate-800 dark:text-slate-100">Descargar Excel (.xlsx)</div>
+                          <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{filteredItems.length} registros</div>
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          handlePrintTicket(filteredItems);
+                          setIsActionsMenuOpen(false);
+                        }}
+                        className="w-full text-left px-3.5 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 flex items-center justify-center shrink-0">
+                          <Printer className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-slate-800 dark:text-slate-100">Imprimir Ticket Térmico</div>
+                          <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">Formato continuo 80mm/58mm</div>
+                        </div>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </>
             )}
+
             {/* Status & Sync Indicator */}
-            <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-sm">
+            <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-xl text-xs font-semibold shadow-sm">
               <span className={`w-2 h-2 rounded-full ${isOffline ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
-              <span className="text-slate-700 dark:text-slate-200">{isOffline ? 'Modo Offline (Caché)' : 'Conectado'}</span>
+              <span className="text-slate-700 dark:text-slate-200 hidden md:inline">{isOffline ? 'Offline' : 'Conectado'}</span>
               {lastCachedAt && (
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono hidden sm:inline">({new Date(lastCachedAt).toLocaleTimeString()})</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono hidden lg:inline">({new Date(lastCachedAt).toLocaleTimeString()})</span>
               )}
               {offlineQueue.length > 0 && (
                 <button 
                   onClick={handleSyncOfflineQueue}
-                  className="ml-2 bg-blue-600 text-white px-2 py-0.5 rounded-lg text-[10px] font-bold hover:bg-blue-700 transition-colors"
+                  className="ml-1 bg-blue-600 text-white px-2 py-0.5 rounded-lg text-[10px] font-bold hover:bg-blue-700 transition-colors"
                 >
                   Sincronizar ({offlineQueue.length})
                 </button>
               )}
             </div>
-            <button onClick={() => fetchData()} className="text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2.5 rounded-xl font-medium shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200 transition-colors" title="Refrescar datos">
+
+            <button onClick={() => fetchData()} className="text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2.5 rounded-xl font-medium shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 transition-colors" title="Refrescar datos">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
 
         {/* CONTEXTUAL PAGE HEADER */}
-        <div className="bg-slate-50/50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 px-8 py-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="bg-slate-50/50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 px-8 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
               {activeView === 'main' ? 'Radar de Vencimientos & Drenaje' :
@@ -1593,57 +1756,110 @@ export const InventoryDashboard: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            {activeView === 'events' && (
-              <button
-                onClick={() => setIsBulkImportOpen(true)}
-                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-1.5"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Importación Masiva FRC</span>
-              </button>
-            )}
-            
-            {activeView === 'schema' && (
-              <button
-                onClick={() => setIsScriptModalOpen(true)}
-                className="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-sm"
-              >
-                <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                <span>Conector Apps Script</span>
-              </button>
-            )}
-            
-            {activeView === 'main' && (
-              <button
-                onClick={() => setIsPmReportOpen(true)}
-                className="text-xs bg-orange-50 dark:bg-orange-950/50 hover:bg-orange-100 dark:hover:bg-orange-900/50 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-800 px-3.5 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-1.5"
-                title="Generar resumen de productos críticos para enviar a Product Manager"
-              >
-                <Flame className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                <span>Reporte PM ({drainageReportItems.length})</span>
-              </button>
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* View Config & Layout Menu */}
+            {activeView !== 'schema' && activeView !== 'analytics' && (
+              <div className="relative">
+                <button
+                  id="view-dropdown-btn"
+                  onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
+                  className={`text-xs bg-white dark:bg-slate-800 border hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2.5 rounded-xl font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+                    isViewMenuOpen ? 'border-blue-400 dark:border-blue-600 text-blue-600' : 'border-slate-200 dark:border-slate-700'
+                  }`}
+                  title="Configurar columnas, agrupación y visualización"
+                >
+                  <Columns className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  <span>Personalizar Vista</span>
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isViewMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isViewMenuOpen && (
+                  <div
+                    id="view-dropdown-menu"
+                    className="absolute right-0 top-full mt-1.5 w-60 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150"
+                  >
+                    {/* Quick Grouping inside menu */}
+                    <div className="px-3.5 py-2 border-b border-slate-100 dark:border-slate-700/60 flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                          <Tag className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Agrupar por
+                        </span>
+                        {groupByColumn !== 'none' && (
+                          <button
+                            onClick={() => setGroupByColumn('none')}
+                            className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-bold"
+                          >
+                            Quitar
+                          </button>
+                        )}
+                      </div>
+                      <select
+                        value={groupByColumn}
+                        onChange={(e) => setGroupByColumn(e.target.value)}
+                        className="w-full text-xs font-semibold bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="none">Sin agrupación</option>
+                        {visibleHeaders.map(h => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setIsColumnManagerOpen(true);
+                        setIsViewMenuOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
+                    >
+                      <Columns className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      <span>Gestionar & Ocultar Columnas</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setAreFiltersVisible(!areFiltersVisible);
+                        setIsViewMenuOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
+                    >
+                      <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      <span>{areFiltersVisible ? 'Ocultar Paneles de Filtro' : 'Mostrar Paneles de Filtro'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setIsTicketConfigOpen(true);
+                        setIsViewMenuOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
+                    >
+                      <Settings className="w-4 h-4 text-slate-500" />
+                      <span>Configurar Ticket Térmico</span>
+                    </button>
+
+                    {hasCustomColWidths && (
+                      <button
+                        onClick={() => {
+                          handleResetColWidths();
+                          setIsViewMenuOpen(false);
+                        }}
+                        className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
+                      >
+                        <RotateCcw className="w-4 h-4 text-slate-500" />
+                        <span>Restablecer Ancho Columnas</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
 
+            {/* Quick Grouping Selector */}
             {activeView !== 'schema' && activeView !== 'analytics' && (
-              <button
-                onClick={() => setAreFiltersVisible(!areFiltersVisible)}
-                className={`text-xs border px-3.5 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-sm ${
-                  areFiltersVisible 
-                    ? 'border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 bg-blue-50/50 dark:bg-blue-950/40' 
-                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
-                }`}
-                title={areFiltersVisible ? "Ocultar paneles de filtros y radar" : "Mostrar paneles de filtros y radar"}
-              >
-                <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                <span className="hidden sm:inline">{areFiltersVisible ? 'Ocultar Filtros' : 'Mostrar Filtros'}</span>
-              </button>
-            )}
-
-            {activeView !== 'schema' && activeView !== 'analytics' && (
-              <div className="hidden xl:flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 shadow-sm">
+              <div className="hidden lg:flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 shadow-sm">
                 <Tag className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 mr-2 shrink-0" />
-                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 mr-2">Agrupar por:</span>
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 mr-2">Agrupar:</span>
                 <select
                   value={groupByColumn}
                   onChange={(e) => setGroupByColumn(e.target.value)}
@@ -1658,37 +1874,39 @@ export const InventoryDashboard: React.FC = () => {
               </div>
             )}
 
-            {activeView !== 'schema' && activeView !== 'analytics' && (
+            {/* Special Action: Bulk Import FRC */}
+            {activeView === 'events' && (
               <button
-                onClick={() => setIsColumnManagerOpen(true)}
-                className="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-sm"
+                onClick={() => setIsBulkImportOpen(true)}
+                className="text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-1.5"
               >
-                <Columns className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                <span className="hidden sm:inline">Columnas</span>
-              </button>
-            )}
-            
-            {hasCustomColWidths && activeView !== 'schema' && activeView !== 'analytics' && (
-              <button
-                onClick={handleResetColWidths}
-                className="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 px-3 py-2.5 rounded-xl font-medium shadow-sm transition-colors flex items-center gap-1"
-                title="Restablecer ancho original de todas las columnas de esta tabla"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span className="hidden lg:inline">Ajuste Columnas</span>
+                <Plus className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <span>Importar Masivo FRC</span>
               </button>
             )}
 
+            {/* Special Action: Apps Script for Schema */}
+            {activeView === 'schema' && (
+              <button
+                onClick={() => setIsScriptModalOpen(true)}
+                className="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-sm"
+              >
+                <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <span>Conector Apps Script</span>
+              </button>
+            )}
+
+            {/* Primary Action Button (Add new item) */}
             {activeView !== 'schema' && activeView !== 'analytics' && (
               <button 
                 disabled={!activeSheet || isModalOpen} 
                 onClick={() => handleOpenModal()} 
-                className="text-sm bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-md shadow-blue-200 dark:shadow-none flex items-center gap-2 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all"
+                className="text-xs bg-blue-600 text-white px-4 py-2.5 rounded-xl font-bold shadow-md shadow-blue-200 dark:shadow-none flex items-center gap-2 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all"
               >
                 <Plus className="w-4 h-4"/>
                 <span>
                   {activeView === 'main' ? 'Nuevo Vencimiento' :
-                   activeView === 'events' ? 'Nueva Incidencia (FRC)' :
+                   activeView === 'events' ? 'Nueva Incidencia' :
                    activeView === 'products' ? 'Nuevo Producto' :
                    activeView === 'policies' ? 'Nueva Política' :
                    'Nuevo Registro'}
@@ -2050,12 +2268,55 @@ export const InventoryDashboard: React.FC = () => {
                       </tr>
                     ) : (<>
                       {paddingTop > 0 && (
-                        <tr><td style={{ height: `${paddingTop}px` }} colSpan={visibleHeaders.length + (activeView === 'main' || activeView === 'events' ? 3 : 2)} /></tr>
+                        <tr><td style={{ height: `${paddingTop}px` }} colSpan={visibleHeaders.length + (activeView === 'main' || activeView === 'events' ? 4 : 3)} /></tr>
                       )}
                       {virtualRows.map((virtualRow) => {
-                        const item = paginatedItems[virtualRow.index];
+                        const rowData = paginatedDisplayRows[virtualRow.index];
                         const idx = virtualRow.index;
+                        if (!rowData) return null;
 
+                        // RENDER GROUP HEADER ROW
+                        if (rowData.type === 'header') {
+                          const isCollapsed = rowData.isCollapsed;
+                          return (
+                            <tr
+                              key={`group-hdr-${rowData.groupKey}-${idx}`}
+                              data-index={virtualRow.index}
+                              ref={rowVirtualizer.measureElement}
+                              onClick={() => toggleGroupCollapse(rowData.groupKey)}
+                              className="bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 cursor-pointer select-none border-y-2 border-slate-200 dark:border-slate-700 transition-colors"
+                              title={isCollapsed ? 'Clic para expandir grupo' : 'Clic para contraer grupo'}
+                            >
+                              <td
+                                colSpan={visibleHeaders.length + (activeView === 'main' || activeView === 'events' ? 4 : 3)}
+                                className="px-4 py-2.5"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-5 h-5 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 flex items-center justify-center">
+                                      <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
+                                    </div>
+                                    <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                                      {groupByColumn}:
+                                    </span>
+                                    <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">
+                                      {rowData.groupKey}
+                                    </span>
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 font-mono font-bold">
+                                      {rowData.count} {rowData.count === 1 ? 'registro' : 'registros'}
+                                    </span>
+                                  </div>
+                                  <span className="text-[11px] text-slate-400 dark:text-slate-500 italic">
+                                    {isCollapsed ? 'Contraído (clic para ver)' : 'Expandido'}
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        // RENDER NORMAL DATA ROW
+                        const item = rowData.item;
                         const eventCategory = getEventCategory(item, headers);
                         const status = getItemStatus(item, headers);
                         const isEventView = activeView === 'events';
@@ -2073,7 +2334,7 @@ export const InventoryDashboard: React.FC = () => {
 
                         return (
                           <tr 
-                            key={idx} 
+                            key={`item-${item._rowIndex || idx}`} 
                             data-index={virtualRow.index} 
                             ref={rowVirtualizer.measureElement} 
                             onClick={() => setSelectedProduct(item)}
@@ -2261,7 +2522,7 @@ export const InventoryDashboard: React.FC = () => {
                         );
                       })}
                       {paddingBottom > 0 && (
-                        <tr><td style={{ height: `${paddingBottom}px` }} colSpan={visibleHeaders.length + (activeView === 'main' || activeView === 'events' ? 3 : 2)} /></tr>
+                        <tr><td style={{ height: `${paddingBottom}px` }} colSpan={visibleHeaders.length + (activeView === 'main' || activeView === 'events' ? 4 : 3)} /></tr>
                       )}
                     </>
                     )}
@@ -2271,9 +2532,31 @@ export const InventoryDashboard: React.FC = () => {
               
               {/* Footer summary bar */}
               <div className="p-3 bg-slate-100 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 flex flex-col sm:flex-row justify-between items-center gap-2">
-                <span>
-                  Mostrando <strong className="text-slate-800 dark:text-slate-100">{filteredItems.length}</strong> de <strong className="text-slate-800 dark:text-slate-100">{items.length}</strong> registros
-                </span>
+                <div className="flex items-center gap-3">
+                  <span>
+                    Mostrando <strong className="text-slate-800 dark:text-slate-100">{filteredItems.length}</strong> de <strong className="text-slate-800 dark:text-slate-100">{items.length}</strong> registros
+                  </span>
+                  {groupByColumn !== 'none' && groupedItems && (
+                    <div className="flex items-center gap-2 border-l border-slate-300 dark:border-slate-600 pl-3">
+                      <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                        Agrupado en {groupedItems.length} grupos ({groupByColumn})
+                      </span>
+                      <button
+                        onClick={expandAllGroups}
+                        className="text-[10px] text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 font-bold underline cursor-pointer"
+                      >
+                        Expandir todos
+                      </button>
+                      <span className="text-slate-300 dark:text-slate-600">|</span>
+                      <button
+                        onClick={collapseAllGroups}
+                        className="text-[10px] text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 font-bold underline cursor-pointer"
+                      >
+                        Contraer todos
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">
                   Tip: Arrastra las líneas entre columnas para cambiar su tamaño, o haz <strong>doble clic</strong> para auto-ajustar.
                 </span>

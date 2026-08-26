@@ -138,7 +138,7 @@ export const InventoryDashboard: React.FC = () => {
       }
       setOfflineQueue([]);
       localStorage.removeItem('appsheet_clone_offline_queue');
-      await fetchData();
+      await fetchData(sheetConfig, activeView, true);
       alert('¡Cola offline sincronizada con éxito en Google Sheets!');
     } catch (err: any) {
       alert(`Error sincronizando cola offline: ${err.message}`);
@@ -836,9 +836,12 @@ export const InventoryDashboard: React.FC = () => {
     return [];
   }, [items, headers, activeView]);
 
-  const fetchData = async (currentConfig = sheetConfig, currentView = activeView) => {
+  const fetchData = async (currentConfig = sheetConfig, currentView = activeView, forceRefresh = false) => {
     try {
-      setLoading(true);
+      // Only trigger full blocking skeleton on very first initial load without metadata, or explicit forced refresh
+      if (!metadata || forceRefresh) {
+        setLoading(true);
+      }
       setError(null);
       
       const scriptUrl = localStorage.getItem('appsheet_clone_scriptUrl');
@@ -846,14 +849,14 @@ export const InventoryDashboard: React.FC = () => {
         throw new Error('No script URL configured, loading demo mode');
       }
 
-      const meta = await getSpreadsheetMetadata();
+      const meta = await getSpreadsheetMetadata(forceRefresh);
       setMetadata(meta);
       const allSheets = meta.sheets.map((s: any) => s.properties.title);
       
       // 1. Try Opción 2: Script Properties (PropertiesService)
       let foundRemoteConfig = false;
       try {
-        const propConfig = await getScriptPropertiesConfig();
+        const propConfig = await getScriptPropertiesConfig(forceRefresh);
         if (propConfig && (propConfig.schema || propConfig.main)) {
           currentConfig = {
             ...currentConfig,
@@ -911,34 +914,42 @@ export const InventoryDashboard: React.FC = () => {
       
       let hasRelational = false;
       
-      // Fetch Relational Data in Parallel
+      // Fetch Relational Data in Parallel (skip if already cached unless forceRefresh)
       const promises = [];
-      if (prodSheetTitle) promises.push(getSheetData(prodSheetTitle).then(rows => {
-        if (rows.length > 0) {
-          const h = rows[0];
-          setProducts(rows.slice(1).map((row: string[]) => {
-            const obj: any = {};
-            h.forEach((header: string, i: number) => obj[header] = row[i] || '');
-            return obj;
-          }));
-          hasRelational = true;
-        }
-      }).catch(e => console.error(e)));
+      if (prodSheetTitle && (forceRefresh || products.length === 0)) {
+        promises.push(getSheetData(prodSheetTitle, forceRefresh).then(rows => {
+          if (rows.length > 0) {
+            const h = rows[0];
+            setProducts(rows.slice(1).map((row: string[]) => {
+              const obj: any = {};
+              h.forEach((header: string, i: number) => obj[header] = row[i] || '');
+              return obj;
+            }));
+            hasRelational = true;
+          }
+        }).catch(e => console.error(e)));
+      } else if (products.length > 0) {
+        hasRelational = true;
+      }
 
-      if (polSheetTitle) promises.push(getSheetData(polSheetTitle).then(rows => {
-        if (rows.length > 0) {
-          const h = rows[0];
-          setPolicies(rows.slice(1).map((row: string[]) => {
-            const obj: any = {};
-            h.forEach((header: string, i: number) => obj[header] = row[i] || '');
-            return obj;
-          }));
-          hasRelational = true;
-        }
-      }).catch(e => console.error(e)));
+      if (polSheetTitle && (forceRefresh || policies.length === 0)) {
+        promises.push(getSheetData(polSheetTitle, forceRefresh).then(rows => {
+          if (rows.length > 0) {
+            const h = rows[0];
+            setPolicies(rows.slice(1).map((row: string[]) => {
+              const obj: any = {};
+              h.forEach((header: string, i: number) => obj[header] = row[i] || '');
+              return obj;
+            }));
+            hasRelational = true;
+          }
+        }).catch(e => console.error(e)));
+      } else if (policies.length > 0) {
+        hasRelational = true;
+      }
 
-      if (mainSheetTitle && currentView !== 'main') {
-        promises.push(getSheetData(mainSheetTitle).then(rows => {
+      if (mainSheetTitle && currentView !== 'main' && (forceRefresh || allMainItems.length === 0)) {
+        promises.push(getSheetData(mainSheetTitle, forceRefresh).then(rows => {
           if (rows.length > 0) {
             const h = rows[0];
             setAllMainItems(rows.slice(1).map((row: string[], index: number) => {
@@ -950,9 +961,6 @@ export const InventoryDashboard: React.FC = () => {
         }).catch(e => console.error(e)));
       }
       
-      await Promise.all(promises);
-      setIsRelationalActive(hasRelational);
-
       // Determine target sheet for current view
       let targetSheetTitle = '';
       if (currentView === 'main' || currentView === 'analytics') targetSheetTitle = currentConfig.main || allSheets[0];
@@ -965,47 +973,52 @@ export const InventoryDashboard: React.FC = () => {
       
       if (targetSheetProp) {
         setActiveSheet(targetSheetProp);
-        let rows = [];
-        try {
-          rows = await getSheetData(targetSheetProp.title);
-          const cachePayload = { rows, timestamp: new Date().toISOString() };
-          localStorage.setItem(`appsheet_clone_cache_${targetSheetProp.title}`, JSON.stringify(cachePayload));
-          setLastCachedAt(cachePayload.timestamp);
-          setIsOffline(false);
-        } catch (netErr) {
-          console.warn('Network error loading sheet data, attempting local cache fallback:', netErr);
-          const cached = localStorage.getItem(`appsheet_clone_cache_${targetSheetProp.title}`);
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            rows = parsed.rows;
-            setLastCachedAt(parsed.timestamp);
-            setIsOffline(true);
-          } else {
-            throw netErr;
+        promises.push((async () => {
+          let rows = [];
+          try {
+            rows = await getSheetData(targetSheetProp.title, forceRefresh);
+            const cachePayload = { rows, timestamp: new Date().toISOString() };
+            localStorage.setItem(`appsheet_clone_cache_${targetSheetProp.title}`, JSON.stringify(cachePayload));
+            setLastCachedAt(cachePayload.timestamp);
+            setIsOffline(false);
+          } catch (netErr) {
+            console.warn('Network error loading sheet data, attempting local cache fallback:', netErr);
+            const cached = localStorage.getItem(`appsheet_clone_cache_${targetSheetProp.title}`);
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              rows = parsed.rows;
+              setLastCachedAt(parsed.timestamp);
+              setIsOffline(true);
+            } else {
+              throw netErr;
+            }
           }
-        }
-        
-        if (rows.length > 0) {
-          const headerRow = rows[0];
-          setHeaders(headerRow);
-          const parsedItems: InventoryItem[] = rows.slice(1).map((row: string[], index: number) => {
-            const item: InventoryItem = { _rowIndex: index + 2 };
-            headerRow.forEach((header: string, colIndex: number) => {
-              item[header] = row[colIndex] || '';
+          
+          if (rows.length > 0) {
+            const headerRow = rows[0];
+            setHeaders(headerRow);
+            const parsedItems: InventoryItem[] = rows.slice(1).map((row: string[], index: number) => {
+              const item: InventoryItem = { _rowIndex: index + 2 };
+              headerRow.forEach((header: string, colIndex: number) => {
+                item[header] = row[colIndex] || '';
+              });
+              return item;
             });
-            return item;
-          });
-          setItems(parsedItems);
-          if (currentView === 'main') setAllMainItems(parsedItems);
-        } else {
-          setHeaders([]);
-          setItems([]);
-        }
+            setItems(parsedItems);
+            if (currentView === 'main') setAllMainItems(parsedItems);
+          } else {
+            setHeaders([]);
+            setItems([]);
+          }
+        })());
       } else {
         setActiveSheet(null);
         setHeaders([]);
         setItems([]);
       }
+
+      await Promise.all(promises);
+      setIsRelationalActive(hasRelational);
     } catch (err: any) {
       console.warn('Network or Apps Script error, loading sample demo inventory:', err);
       // Fallback to sample data so app is fully testable out-of-the-box
@@ -1073,7 +1086,7 @@ export const InventoryDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchData(sheetConfig, activeView);
+    fetchData(sheetConfig, activeView, false);
     setSelectedRowIds([]);
   }, [activeView]);
 
@@ -1410,7 +1423,7 @@ export const InventoryDashboard: React.FC = () => {
         alert('Sin conexión con Google Sheets. Los cambios se guardaron localmente y se sincronizarán en la cola offline.');
       }
       
-      await fetchData();
+      await fetchData(sheetConfig, activeView, true);
     } catch (err: any) {
       // Rollback
       setItems(originalItems);
@@ -1448,7 +1461,7 @@ export const InventoryDashboard: React.FC = () => {
         setIsOffline(true);
         alert('Sin conexión. La eliminación se registró en la cola offline.');
       }
-      await fetchData();
+      await fetchData(sheetConfig, activeView, true);
     } catch (err: any) {
       // Rollback
       setItems(originalItems);
@@ -1535,7 +1548,7 @@ export const InventoryDashboard: React.FC = () => {
       }
 
       setSelectedRowIds([]);
-      await fetchData();
+      await fetchData(sheetConfig, activeView, true);
       alert(`¡Se actualizaron ${selectedRowIds.length} registros exitosamente con la información masiva!`);
     } catch (err: any) {
       setItems(originalItems);
@@ -1784,7 +1797,7 @@ export const InventoryDashboard: React.FC = () => {
               )}
             </div>
 
-            <button onClick={() => fetchData()} className="text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2.5 rounded-xl font-medium shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 transition-colors" title="Refrescar datos">
+            <button onClick={() => fetchData(sheetConfig, activeView, true)} className="text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2.5 rounded-xl font-medium shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 transition-colors" title="Refrescar datos">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
@@ -2961,7 +2974,7 @@ export const InventoryDashboard: React.FC = () => {
 
                 setIsBulkImportOpen(false);
                 alert(`Se importaron y guardaron ${data.length} registros exitosamente en la hoja "${activeSheet.title}".`);
-                await fetchData();
+                await fetchData(sheetConfig, activeView, true);
               } catch (err: any) {
                 alert(`Error al importar registros: ${err.message}`);
               } finally {

@@ -66,32 +66,81 @@ async function fetchFromScript<T = ScriptResponse>(payload: Record<string, any>,
   }
 }
 
-export async function getSpreadsheetMetadata() {
-  return fetchFromScript({ action: 'getMetadata', spreadsheetId: SPREADSHEET_ID });
+// In-memory cache structures with TTL to avoid redundant HTTP requests to Google Apps Script
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
 }
 
-export async function getSheetData(sheetName: string) {
+const METADATA_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const SHEET_DATA_TTL_MS = 3 * 60 * 1000; // 3 minutes
+const CONFIG_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+let cachedMetadata: CacheEntry<any> | null = null;
+let cachedPropertiesConfig: CacheEntry<any> | null = null;
+const cachedSheetsData = new Map<string, CacheEntry<any[][]>>();
+
+export function clearSheetsCache(sheetName?: string) {
+  if (sheetName) {
+    cachedSheetsData.delete(sheetName.trim().toLowerCase());
+  } else {
+    cachedSheetsData.clear();
+    cachedMetadata = null;
+    cachedPropertiesConfig = null;
+  }
+}
+
+export async function getSpreadsheetMetadata(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && cachedMetadata && (now - cachedMetadata.timestamp < METADATA_TTL_MS)) {
+    return cachedMetadata.data;
+  }
+  const data = await fetchFromScript({ action: 'getMetadata', spreadsheetId: SPREADSHEET_ID });
+  cachedMetadata = { data, timestamp: now };
+  return data;
+}
+
+export async function getSheetData(sheetName: string, forceRefresh = false) {
+  const now = Date.now();
+  const key = sheetName.trim().toLowerCase();
+  if (!forceRefresh && cachedSheetsData.has(key)) {
+    const entry = cachedSheetsData.get(key)!;
+    if (now - entry.timestamp < SHEET_DATA_TTL_MS) {
+      return entry.data;
+    }
+  }
+
   const data = await fetchFromScript({ action: 'getSheetData', sheetName, spreadsheetId: SPREADSHEET_ID });
-  return data.values || [];
+  const values = data.values || [];
+  cachedSheetsData.set(key, { data: values, timestamp: now });
+  return values;
 }
 
 export async function appendRow(sheetName: string, values: any[]) {
+  clearSheetsCache(sheetName);
   return fetchFromScript({ action: 'appendRow', sheetName, values, spreadsheetId: SPREADSHEET_ID });
 }
 
 export async function updateRow(sheetName: string, rowIndex: number, values: any[]) {
+  clearSheetsCache(sheetName);
   return fetchFromScript({ action: 'updateRow', sheetName, rowIndex, values, spreadsheetId: SPREADSHEET_ID });
 }
 
-export async function deleteRow(sheetId: number, rowIndex: number) {
+export async function deleteRow(sheetId: number, rowIndex: number, sheetName?: string) {
+  clearSheetsCache(sheetName);
   return fetchFromScript({ action: 'deleteRow', sheetId, rowIndex, spreadsheetId: SPREADSHEET_ID });
 }
 
 // Opción 2: Almacenamiento directo en PropertiesService (sin hojas adicionales)
-export async function getScriptPropertiesConfig() {
+export async function getScriptPropertiesConfig(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && cachedPropertiesConfig && (now - cachedPropertiesConfig.timestamp < CONFIG_TTL_MS)) {
+    return cachedPropertiesConfig.data;
+  }
   try {
     const res = await fetchFromScript({ action: 'getAppProperties', spreadsheetId: SPREADSHEET_ID });
     if (res && res.success && res.config && (res.config.schema || res.config.main)) {
+      cachedPropertiesConfig = { data: res.config, timestamp: now };
       return res.config;
     }
   } catch (e) {
@@ -101,6 +150,7 @@ export async function getScriptPropertiesConfig() {
 }
 
 export async function saveScriptPropertiesConfig(config: any) {
+  cachedPropertiesConfig = { data: config, timestamp: Date.now() };
   return fetchFromScript({ 
     action: 'saveAppProperties', 
     config, 

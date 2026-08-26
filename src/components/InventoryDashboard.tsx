@@ -39,6 +39,7 @@ import {
 import { findColumnBySemantic } from '../utils/columnAliases';
 import { VIRTUAL_COLUMNS } from '../utils/virtualColumns';
 import { useColumnResize } from '../hooks/useColumnResize';
+import { useColumnManager } from '../hooks/useColumnManager';
 import { useInventoryFiltering, handleFilterToggle, DisplayRow } from '../hooks/useInventoryFiltering';
 import { useOfflineSync } from '../hooks/useOfflineSync';
 import { indexedDbService } from '../db/indexedDbService';
@@ -64,6 +65,7 @@ import { GlobalConfigModal } from './modals/GlobalConfigModal';
 import { BarcodeScannerModal } from './modals/BarcodeScannerModal';
 import { BulkEditModal } from './modals/BulkEditModal';
 import { QuickTransferModal } from './modals/QuickTransferModal';
+import { ColumnManagerModal } from './modals/ColumnManagerModal';
 import { exportToExcel } from '../utils/exportUtils';
 import { EventResolutionCards } from './views/EventResolutionCards';
 import { EventFilterChips } from './views/EventFilterChips';
@@ -150,31 +152,6 @@ export const InventoryDashboard: React.FC = () => {
   const [isColumnManagerOpen, setIsColumnManagerOpen] = useState(false);
   const [draggedCol, setDraggedCol] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
-  const [columnOrders, setColumnOrders] = useState<Record<string, string[]>>(() => {
-    try {
-      const saved = localStorage.getItem('appsheet_clone_col_orders');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
-  const [hiddenColumns, setHiddenColumns] = useState<Record<string, string[]>>(() => {
-    try {
-      const saved = localStorage.getItem('appsheet_clone_hidden_cols');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
-
-  // Persist column preferences
-  useEffect(() => {
-    localStorage.setItem('appsheet_clone_col_orders', JSON.stringify(columnOrders));
-  }, [columnOrders]);
-
-  useEffect(() => {
-    localStorage.setItem('appsheet_clone_hidden_cols', JSON.stringify(hiddenColumns));
-  }, [hiddenColumns]);
 
   // Sheet configuration state
   const [sheetConfig, setSheetConfig] = useState<SheetConfig>(() => {
@@ -309,56 +286,22 @@ export const InventoryDashboard: React.FC = () => {
     }
   };
 
-  const visibleHeaders = useMemo(() => {
-    if (!activeSheet) return [];
-    
-    // First, filter out those hidden via schema OR hidden locally via user preference
-    const viewHidden = hiddenColumns[activeView] || [];
-    let cols = headers.filter(h => 
-      sheetConfig.schema?.[activeSheet.title]?.[h]?.visible !== false &&
-      !viewHidden.includes(h)
-    );
-
-    // Then, reorder them if a custom order exists for this view
-    const viewOrder = columnOrders[activeView];
-    if (viewOrder && viewOrder.length > 0) {
-      cols.sort((a, b) => {
-        const idxA = viewOrder.indexOf(a);
-        const idxB = viewOrder.indexOf(b);
-        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-        if (idxA !== -1) return -1;
-        if (idxB !== -1) return 1;
-        return 0;
-      });
-    }
-    
-    // Finally, append active virtual columns that apply to this view
-    const activeVCs = sheetConfig.activeVirtualColumns || [];
-    const virtualColHeaders = VIRTUAL_COLUMNS
-      .filter(vc => activeVCs.includes(vc.id) && (!vc.supportedViews || vc.supportedViews.includes(activeView)))
-      .map(vc => vc.id);
-    
-    return [...cols, ...virtualColHeaders];
-  }, [headers, activeSheet, sheetConfig.schema, hiddenColumns, columnOrders, activeView, sheetConfig.activeVirtualColumns]);
-
-  const handleColumnDrop = (targetHeader: string, droppedHeader: string) => {
-    if (targetHeader === droppedHeader) return;
-    const currentOrder = columnOrders[activeView] || visibleHeaders;
-    const newOrder = [...currentOrder];
-    visibleHeaders.forEach(h => {
-      if (!newOrder.includes(h)) newOrder.push(h);
-    });
-    const fromIdx = newOrder.indexOf(droppedHeader);
-    const toIdx = newOrder.indexOf(targetHeader);
-    if (fromIdx !== -1 && toIdx !== -1) {
-      newOrder.splice(fromIdx, 1);
-      newOrder.splice(toIdx, 0, droppedHeader);
-      setColumnOrders(prev => ({
-        ...prev,
-        [activeView]: newOrder
-      }));
-    }
-  };
+  // Centralized Column Manager Hook
+  const {
+    visibleHeaders,
+    allManageableColumns,
+    toggleVisibility,
+    handleColumnDrop,
+    moveColumn,
+    showAllColumns,
+    resetColumnOrder,
+    columnOrders
+  } = useColumnManager({
+    headers,
+    activeSheetTitle: activeSheet?.title,
+    activeView,
+    sheetConfig
+  });
 
   const searchableHeaders = useMemo(() => {
     if (!activeSheet) return headers;
@@ -2340,103 +2283,16 @@ export const InventoryDashboard: React.FC = () => {
       />
 
       {/* 6. COLUMN MANAGER MODAL */}
-      {isColumnManagerOpen && activeSheet && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-md flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-800">
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
-              <div>
-                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Gestionar Columnas</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Oculta o reordena las columnas para esta vista.</p>
-              </div>
-              <button onClick={() => setIsColumnManagerOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 p-2 rounded-xl transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-2">
-              {(() => {
-                const viewOrder = columnOrders[activeView] || headers;
-                // Merge any headers that might be missing from viewOrder
-                const displayOrder = [...new Set([...viewOrder, ...headers])].filter(h => headers.includes(h));
-                const viewHidden = hiddenColumns[activeView] || [];
-                
-                return displayOrder.map((header, index) => {
-                  const isHidden = viewHidden.includes(header);
-                  
-                  const moveUp = () => {
-                    if (index === 0) return;
-                    const newOrder = [...displayOrder];
-                    [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
-                    setColumnOrders(prev => ({ ...prev, [activeView]: newOrder }));
-                  };
-                  
-                  const moveDown = () => {
-                    if (index === displayOrder.length - 1) return;
-                    const newOrder = [...displayOrder];
-                    [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
-                    setColumnOrders(prev => ({ ...prev, [activeView]: newOrder }));
-                  };
-                  
-                  const toggleVisibility = () => {
-                    setHiddenColumns(prev => {
-                      const current = prev[activeView] || [];
-                      if (current.includes(header)) {
-                        return { ...prev, [activeView]: current.filter(h => h !== header) };
-                      } else {
-                        return { ...prev, [activeView]: [...current, header] };
-                      }
-                    });
-                  };
-
-                  return (
-                    <div key={header} className={`flex items-center justify-between p-3 rounded-xl mb-1 ${isHidden ? 'bg-slate-50/50 dark:bg-slate-800/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800/70'} transition-colors group`}>
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <button 
-                          onClick={toggleVisibility}
-                          className={`p-1.5 rounded-lg transition-colors shrink-0 ${isHidden ? 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700' : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50'}`}
-                          title={isHidden ? 'Mostrar columna' : 'Ocultar columna'}
-                        >
-                          {isHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                        <span className={`text-sm font-medium truncate ${isHidden ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-700 dark:text-slate-200'}`}>
-                          {header}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={moveUp} disabled={index === 0} className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg disabled:opacity-30">
-                          <ArrowUp className="w-4 h-4" />
-                        </button>
-                        <button onClick={moveDown} disabled={index === displayOrder.length - 1} className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg disabled:opacity-30">
-                          <ArrowDown className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                });
-              })()}
-            </div>
-            
-            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex justify-between shrink-0">
-              <button 
-                onClick={() => {
-                  setColumnOrders(prev => ({ ...prev, [activeView]: headers }));
-                  setHiddenColumns(prev => ({ ...prev, [activeView]: [] }));
-                }}
-                className="text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-3 py-2"
-              >
-                Restablecer
-              </button>
-              <button 
-                onClick={() => setIsColumnManagerOpen(false)}
-                className="text-sm font-bold bg-slate-800 dark:bg-blue-600 text-white px-5 py-2.5 rounded-xl hover:bg-slate-700 dark:hover:bg-blue-500 shadow-sm"
-              >
-                Listo
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ColumnManagerModal
+        isOpen={isColumnManagerOpen}
+        onClose={() => setIsColumnManagerOpen(false)}
+        columns={allManageableColumns}
+        toggleVisibility={toggleVisibility}
+        moveColumn={moveColumn}
+        showAllColumns={showAllColumns}
+        resetColumnOrder={resetColumnOrder}
+        handleColumnDrop={handleColumnDrop}
+      />
 
       {/* QUICK TRANSFER MODAL */}
       <QuickTransferModal

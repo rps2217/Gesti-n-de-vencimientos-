@@ -167,7 +167,33 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                     </div>
 
                     {/* Input Element */}
-                    {colSchema?.type === 'enum' && colSchema.options ? (
+                    {colSchema?.type === 'ref' ? (
+                      <select
+                        name={header}
+                        value={formData[header] || ''}
+                        onChange={onChange}
+                        className={`w-full bg-slate-50 dark:bg-slate-800 border rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-800 dark:text-slate-100 outline-none transition-all ${
+                          hasError 
+                            ? 'border-rose-400 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10' 
+                            : 'border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
+                        }`}
+                      >
+                        <option value="">-- Seleccionar registro de {colSchema.refTable || 'tabla relacionada'} --</option>
+                        {products.map((prod, idx) => {
+                          const keys = Object.keys(prod);
+                          const valKey = keys.find(k => /sku|id|codigo|code/i.test(k)) || keys[0];
+                          const labelKey = keys.find(k => /desc|nombre|name|title|producto/i.test(k)) || keys[1] || keys[0];
+                          const val = valKey ? prod[valKey] : '';
+                          const label = labelKey ? prod[labelKey] : val;
+                          if (!val) return null;
+                          return (
+                            <option key={`ref-${idx}-${val}`} value={val}>
+                              {val} {label && label !== val ? `- ${label}` : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    ) : colSchema?.type === 'enum' && colSchema.options ? (
                       <select
                         name={header}
                         value={formData[header] || ''}

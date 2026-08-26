@@ -40,6 +40,8 @@ import { findColumnBySemantic } from '../utils/columnAliases';
 import { VIRTUAL_COLUMNS } from '../utils/virtualColumns';
 import { useColumnResize } from '../hooks/useColumnResize';
 import { useInventoryFiltering, handleFilterToggle, DisplayRow } from '../hooks/useInventoryFiltering';
+import { useOfflineSync } from '../hooks/useOfflineSync';
+import { indexedDbService } from '../db/indexedDbService';
 import { 
   SAMPLE_HEADERS, 
   SAMPLE_ITEMS, 
@@ -68,9 +70,11 @@ import { EventFilterChips } from './views/EventFilterChips';
 import { PmRadarCards } from './views/PmRadarCards';
 import { ColumnFilterMenu } from './views/ColumnFilterMenu';
 import { InventoryTableRow } from './views/InventoryTableRow';
+import { usePrecomputedColumns } from '../hooks/usePrecomputedColumns';
 import { TicketPrintView } from './views/TicketPrintView';
 import { TicketConfigModal } from './modals/TicketConfigModal';
 import { GmailDraftModal } from './modals/GmailDraftModal';
+import { UniversalImportModal } from './modals/UniversalImportModal';
 import { GlobalTicketConfig, ViewTicketConfig } from '../types';
 import { SkeletonLoader } from './common/SkeletonLoader';
 
@@ -91,7 +95,6 @@ export const InventoryDashboard: React.FC = () => {
   const [hasCloudConfigSheet, setHasCloudConfigSheet] = useState<boolean>(false);
   const [cloudConfigSheetName, setCloudConfigSheetName] = useState<string>('_CONFIG_APP');
   const [configStorageMode, setConfigStorageMode] = useState<'properties' | 'sheet' | 'local'>('local');
-  const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
   const [syncSuccessMessage, setSyncSuccessMessage] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -99,53 +102,33 @@ export const InventoryDashboard: React.FC = () => {
   // Advanced features: Pagination, Offline Cache & Concurrency
   const [pageSize, setPageSize] = useState<number | 'all'>(100);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
-  const [lastCachedAt, setLastCachedAt] = useState<string | null>(null);
-  const [offlineQueue, setOfflineQueue] = useState<any[]>(() => {
-    try {
-      const saved = localStorage.getItem('appsheet_clone_offline_queue');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
+
+  // Local-First IndexedDB Offline Sync Hook
+  const {
+    offlineQueue,
+    isOffline,
+    setIsOffline,
+    isSyncing: isSyncingCloud,
+    setIsSyncing: setIsSyncingCloud,
+    lastCachedAt,
+    setLastCachedAt,
+    enqueueMutation,
+    syncQueue
+  } = useOfflineSync(async () => {
+    await fetchData(sheetConfig, activeView, true);
   });
 
-  useEffect(() => {
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('appsheet_clone_offline_queue', JSON.stringify(offlineQueue));
-  }, [offlineQueue]);
-
   const handleSyncOfflineQueue = async () => {
-    if (offlineQueue.length === 0 || !activeSheet) return;
+    if (offlineQueue.length === 0) return;
     try {
-      setIsSyncingCloud(true);
-      for (const action of offlineQueue) {
-        if (action.type === 'append') {
-          await appendRow(action.sheetTitle, action.values);
-        } else if (action.type === 'update') {
-          await updateRow(action.sheetTitle, action.rowIndex, action.values);
-        } else if (action.type === 'delete') {
-          await deleteRow(action.sheetId, action.rowIndex);
-        }
+      const res = await syncQueue();
+      if (res && res.success) {
+        alert(`¡Se sincronizaron exitosamente ${res.count} mutaciones en Google Sheets!`);
+      } else if (res && res.errors && res.errors.length > 0) {
+        alert(`Hubo errores al sincronizar parte de la cola: ${res.errors.join(', ')}`);
       }
-      setOfflineQueue([]);
-      localStorage.removeItem('appsheet_clone_offline_queue');
-      await fetchData(sheetConfig, activeView, true);
-      alert('¡Cola offline sincronizada con éxito en Google Sheets!');
     } catch (err: any) {
       alert(`Error sincronizando cola offline: ${err.message}`);
-    } finally {
-      setIsSyncingCloud(false);
     }
   };
 
@@ -434,6 +417,9 @@ export const InventoryDashboard: React.FC = () => {
     currentPage,
   });
 
+  // Precomputed metadata for visible columns to prevent per-cell regex in 60fps virtualization
+  const { visibleColumnMeta } = usePrecomputedColumns(headers, visibleHeaders, frcBodCol);
+
   const hasActiveFilters = 
     searchTerm !== '' || 
     eventFilter.length > 0 || 
@@ -456,9 +442,9 @@ export const InventoryDashboard: React.FC = () => {
     getScrollElement: () => tableContainerRef.current,
     estimateSize: (index) => {
       const row = paginatedDisplayRows[index];
-      return row && row.type === 'header' ? 44 : 64;
+      return row && row.type === 'header' ? 44 : 60;
     },
-    overscan: 12,
+    overscan: 20,
   });
   
   const virtualRows = rowVirtualizer.getVirtualItems();
@@ -664,17 +650,15 @@ export const InventoryDashboard: React.FC = () => {
           let rows = [];
           try {
             rows = await getSheetData(targetSheetProp.title, forceRefresh);
-            const cachePayload = { rows, timestamp: new Date().toISOString() };
-            localStorage.setItem(`appsheet_clone_cache_${targetSheetProp.title}`, JSON.stringify(cachePayload));
-            setLastCachedAt(cachePayload.timestamp);
+            await indexedDbService.saveCachedSheet(targetSheetProp.title, rows);
+            setLastCachedAt(new Date().toISOString());
             setIsOffline(false);
           } catch (netErr) {
-            console.warn('Network error loading sheet data, attempting local cache fallback:', netErr);
-            const cached = localStorage.getItem(`appsheet_clone_cache_${targetSheetProp.title}`);
-            if (cached) {
-              const parsed = JSON.parse(cached);
-              rows = parsed.rows;
-              setLastCachedAt(parsed.timestamp);
+            console.warn('Network error loading sheet data, attempting IndexedDB cache fallback:', netErr);
+            const cached = await indexedDbService.getCachedSheet(targetSheetProp.title);
+            if (cached && cached.rows && cached.rows.length > 0) {
+              rows = cached.rows;
+              setLastCachedAt(cached.timestamp);
               setIsOffline(true);
             } else {
               throw netErr;
@@ -760,14 +744,12 @@ export const InventoryDashboard: React.FC = () => {
         await updateRow(activeSheet.title, updatedItem._rowIndex, rowValues);
       } catch (saveErr) {
         console.warn('Network error during quick transfer save, adding to offline queue:', saveErr);
-        setOfflineQueue(prev => [...prev, {
+        await enqueueMutation({
           type: 'update',
           sheetTitle: activeSheet.title,
           rowIndex: updatedItem._rowIndex,
-          values: rowValues,
-          timestamp: new Date().toISOString()
-        }]);
-        setIsOffline(true);
+          values: rowValues
+        });
       }
     }
   };
@@ -1099,15 +1081,13 @@ export const InventoryDashboard: React.FC = () => {
         }
       } catch (saveErr) {
         console.warn('Network error during save, adding to offline queue:', saveErr);
-        setOfflineQueue(prev => [...prev, {
+        await enqueueMutation({
           type: editingItem ? 'update' : 'append',
           sheetTitle: activeSheet.title,
           rowIndex: editingItem ? editingItem._rowIndex : undefined,
-          values: rowValues,
-          timestamp: nowIso
-        }]);
-        setIsOffline(true);
-        alert('Sin conexión con Google Sheets. Los cambios se guardaron localmente y se sincronizarán en la cola offline.');
+          values: rowValues
+        });
+        alert('Sin conexión con Google Sheets. Los cambios se guardaron localmente en IndexedDB y se sincronizarán en la cola offline.');
       }
       
       await fetchData(sheetConfig, activeView, true);
@@ -1138,15 +1118,13 @@ export const InventoryDashboard: React.FC = () => {
         await deleteRow(activeSheet.sheetId, item._rowIndex);
       } catch (delErr) {
         console.warn('Network error during delete, adding to offline queue:', delErr);
-        setOfflineQueue(prev => [...prev, {
+        await enqueueMutation({
           type: 'delete',
           sheetId: activeSheet.sheetId,
           sheetTitle: activeSheet.title,
-          rowIndex: item._rowIndex,
-          timestamp: new Date().toISOString()
-        }]);
-        setIsOffline(true);
-        alert('Sin conexión. La eliminación se registró en la cola offline.');
+          rowIndex: item._rowIndex
+        });
+        alert('Sin conexión. La eliminación se registró localmente en la cola offline.');
       }
       await fetchData(sheetConfig, activeView, true);
     } catch (err: any) {
@@ -1252,14 +1230,12 @@ export const InventoryDashboard: React.FC = () => {
           await updateRow(activeSheet.title, rowIndex, rowValues);
         } catch (err) {
           console.warn(`Error updating row ${rowIndex} in cloud, adding to offline queue`, err);
-          setOfflineQueue(prev => [...prev, {
+          await enqueueMutation({
             type: 'update',
             sheetTitle: activeSheet.title,
             rowIndex,
-            values: rowValues,
-            timestamp: new Date().toISOString()
-          }]);
-          setIsOffline(true);
+            values: rowValues
+          });
         }
       }
 
@@ -2135,10 +2111,9 @@ export const InventoryDashboard: React.FC = () => {
                             item={item}
                             virtualIndex={virtualRow.index}
                             headers={headers}
-                            visibleHeaders={visibleHeaders}
-                            activeView={activeView}
+                            visibleColumnMeta={visibleColumnMeta}
+                            activeView={activeView as any}
                             isSelected={isSelected}
-                            frcBodCol={frcBodCol}
                             frcBodFilter={frcBodFilter}
                             getColWidth={getColWidth}
                             measureElementRef={rowVirtualizer.measureElement}
@@ -2485,57 +2460,49 @@ export const InventoryDashboard: React.FC = () => {
         onSave={handleSaveTicketConfig}
       />
 
-      {/* BULK IMPORT MODAL */}
-      {isBulkImportOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl w-full max-w-3xl shadow-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Importación Inteligente</h2>
-              <button onClick={() => setIsBulkImportOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
-            </div>
-            <BulkImportFRC onImport={async (data) => {
-              if (!activeSheet || headers.length === 0) {
-                alert('No hay una hoja activa configurada.');
-                return;
-              }
+      {/* UNIVERSAL IMPORT MODAL (EXCEL / CSV / TSV / CLIPBOARD) */}
+      <UniversalImportModal
+        isOpen={isBulkImportOpen}
+        onClose={() => setIsBulkImportOpen(false)}
+        targetHeaders={headers}
+        activeSheetTitle={activeSheet?.title || 'Hoja Activa'}
+        onImportConfirmed={async (mappedData) => {
+          if (!activeSheet || headers.length === 0) {
+            alert('No hay una hoja activa configurada.');
+            return;
+          }
+          try {
+            setIsSaving(true);
+            let nextRowIndex = items.length ? Math.max(...items.map(i => i._rowIndex || 2)) + 1 : 2;
+
+            for (const item of mappedData) {
+              const rowValues = headers.map(h => item[h] !== undefined ? String(item[h]) : '');
+              const newItem: InventoryItem = { _rowIndex: nextRowIndex++ };
+              headers.forEach((h, i) => newItem[h] = rowValues[i]);
+
+              setItems(prev => [...prev, newItem]);
+
               try {
-                setIsSaving(true);
-                const nowIso = new Date().toISOString();
-                let nextRowIndex = items.length ? Math.max(...items.map(i => i._rowIndex || 2)) + 1 : 2;
-
-                for (const item of data) {
-                  const rowValues = headers.map(h => item[h] || '');
-                  const newItem: InventoryItem = { _rowIndex: nextRowIndex++ };
-                  headers.forEach((h, i) => newItem[h] = rowValues[i]);
-
-                  setItems(prev => [...prev, newItem]);
-
-                  try {
-                    await appendRow(activeSheet.title, rowValues);
-                  } catch (saveErr) {
-                    console.warn('Network error during bulk import append, adding to offline queue:', saveErr);
-                    setOfflineQueue(prev => [...prev, {
-                      type: 'append',
-                      sheetTitle: activeSheet.title,
-                      values: rowValues,
-                      timestamp: nowIso
-                    }]);
-                    setIsOffline(true);
-                  }
-                }
-
-                setIsBulkImportOpen(false);
-                alert(`Se importaron y guardaron ${data.length} registros exitosamente en la hoja "${activeSheet.title}".`);
-                await fetchData(sheetConfig, activeView, true);
-              } catch (err: any) {
-                alert(`Error al importar registros: ${err.message}`);
-              } finally {
-                setIsSaving(false);
+                await appendRow(activeSheet.title, rowValues);
+              } catch (saveErr) {
+                console.warn('Network error during bulk import append, adding to offline queue:', saveErr);
+                await enqueueMutation({
+                  type: 'append',
+                  sheetTitle: activeSheet.title,
+                  values: rowValues
+                });
               }
-            }} />
-          </div>
-        </div>
-      )}
+            }
+
+            alert(`Se importaron e integraron ${mappedData.length} registros exitosamente en "${activeSheet.title}".`);
+            await fetchData(sheetConfig, activeView, true);
+          } catch (err: any) {
+            alert(`Error al importar registros: ${err.message}`);
+          } finally {
+            setIsSaving(false);
+          }
+        }}
+      />
     </div>
 
     {/* HIDDEN UNLESS PRINTING: TICKET PRINT VIEW */}

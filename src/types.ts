@@ -102,3 +102,10 @@ export interface TicketColumnConfig {
 }
 export type ViewTicketConfig = Record<string, TicketColumnConfig>;
 export type GlobalTicketConfig = Record<string, ViewTicketConfig>;
+
+export type SortDirection = 'asc' | 'desc' | null;
+
+export interface SortConfig {
+  column: string | null;
+  direction: SortDirection;
+}

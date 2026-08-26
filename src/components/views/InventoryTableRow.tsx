@@ -11,16 +11,15 @@ import {
   EVENT_CATEGORIES, 
   renderEventIcon 
 } from '../../utils/dateCalculations';
-import { findColumnBySemantic } from '../../utils/columnAliases';
+import { ColumnMetadata } from '../../hooks/usePrecomputedColumns';
 
 export interface InventoryTableRowProps {
   item: InventoryItem;
   virtualIndex: number;
   headers: string[];
-  visibleHeaders: string[];
+  visibleColumnMeta: ColumnMetadata[];
   activeView: 'main' | 'events' | 'products' | 'policies';
   isSelected: boolean;
-  frcBodCol: string | null;
   frcBodFilter: string[];
   getColWidth: (headerId: string, label: string) => number;
   measureElementRef?: (node: HTMLElement | null) => void;
@@ -38,10 +37,9 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
   item,
   virtualIndex,
   headers,
-  visibleHeaders,
+  visibleColumnMeta,
   activeView,
   isSelected,
-  frcBodCol,
   frcBodFilter,
   getColWidth,
   measureElementRef,
@@ -58,6 +56,7 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
   const status = getItemStatus(item, headers);
   const isEventView = activeView === 'events';
   const eventResStatus = isEventView ? getItemResolutionStatus(item, headers) : null;
+  const isProductsView = activeView === 'products';
 
   let rowBgClass = 'hover:bg-slate-50/80 dark:hover:bg-slate-800/60';
   if (isSelected) {
@@ -161,15 +160,10 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
         </td>
       )}
 
-      {/* Cell Values */}
-      {visibleHeaders.map((header) => {
+      {/* Cell Values using Precomputed Column Metadata */}
+      {visibleColumnMeta.map(({ header, isSku, isEventCol, isTraspasoCol, isBodCol }) => {
         const val = item[header];
-        const isSku = /sku|código|codigo/i.test(header);
-        const isEventCol = /^frc(_|\s)?even/i.test(header.trim()) || findColumnBySemantic(headers, 'tipo_evento') === header;
-        const isTraspasoCol = /traspaso/i.test(header) || findColumnBySemantic(headers, 'n_traspaso') === header;
-        const isBodCol = header === frcBodCol || /^frc(_|\s)?bod/i.test(header.trim()) || findColumnBySemantic(headers, 'frc_bod') === header || /bodega/i.test(header.trim());
         const eventCat = isEventCol && val ? getCategoryFromEventValue(val) : null;
-        const isProductsView = activeView === 'products';
         const colWidth = getColWidth(header, header);
 
         return (
@@ -278,4 +272,14 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
       </td>
     </tr>
   );
+}, (prevProps, nextProps) => {
+  // Ultra-fast memo comparison for 60fps virtualization scrolling
+  if (prevProps.item !== nextProps.item) return false;
+  if (prevProps.isSelected !== nextProps.isSelected) return false;
+  if (prevProps.virtualIndex !== nextProps.virtualIndex) return false;
+  if (prevProps.activeView !== nextProps.activeView) return false;
+  if (prevProps.visibleColumnMeta !== nextProps.visibleColumnMeta) return false;
+  if (prevProps.frcBodFilter !== nextProps.frcBodFilter) return false;
+  if (prevProps.getColWidth !== nextProps.getColWidth) return false;
+  return true;
 });

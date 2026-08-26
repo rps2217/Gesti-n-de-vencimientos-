@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useDeferredValue } from 'react';
-import { InventoryItem, SheetConfig } from '../types';
+import { InventoryItem, SheetConfig, SortConfig } from '../types';
 import { 
   getItemStatus, 
   getEventCategory, 
@@ -7,6 +7,8 @@ import {
 } from '../utils/dateCalculations';
 import { findColumnBySemantic } from '../utils/columnAliases';
 import { VIRTUAL_COLUMNS } from '../utils/virtualColumns';
+import { sortInventoryItems } from '../utils/sortUtils';
+import { useInventoryWorker } from './useInventoryWorker';
 
 export interface DisplayRowItem {
   type: 'item';
@@ -37,6 +39,7 @@ export interface UseInventoryFilteringProps {
   searchableHeaders: string[];
   pageSize: number | 'all';
   currentPage: number;
+  initialSort?: SortConfig;
 }
 
 export function handleFilterToggle<T>(current: T[], value: T, isMulti = false): T[] {
@@ -60,10 +63,12 @@ export function useInventoryFiltering({
   searchableHeaders,
   pageSize,
   currentPage,
+  initialSort = { column: null, direction: null }
 }: UseInventoryFilteringProps) {
   const deferredSearchTerm = useDeferredValue(searchTerm);
 
-  // Filter state
+  // Filter and Sorting state
+  const [sortConfig, setSortConfig] = useState<SortConfig>(initialSort);
   const [eventFilter, setEventFilter] = useState<string[]>([]);
   const [frcBodFilter, setFrcBodFilter] = useState<string[]>([]);
   const [eventResolutionFilter, setEventResolutionFilter] = useState<string[]>([]);
@@ -77,14 +82,39 @@ export function useInventoryFiltering({
     setCollapsedGroups({});
   }, [groupByColumn]);
 
-  // Single-pass aggregator for all metrics and bodega counts
-  const {
-    eventMetrics,
-    pmMetrics,
-    eventResolutionMetrics,
-    frcBodValues,
-    frcBodCounts
-  } = useMemo(() => {
+  // Toggle sort handler (None -> ASC -> DESC -> None)
+  const handleToggleSort = useCallback((columnName: string) => {
+    setSortConfig(prev => {
+      if (prev.column !== columnName) {
+        return { column: columnName, direction: 'asc' };
+      }
+      if (prev.direction === 'asc') {
+        return { column: columnName, direction: 'desc' };
+      }
+      return { column: null, direction: null };
+    });
+  }, []);
+
+  // Web Worker for non-blocking background calculations
+  const { metrics, matchingIndices, isProcessing, isWorkerReady } = useInventoryWorker({
+    items,
+    headers,
+    frcBodCol,
+    searchableHeaders,
+    activeView,
+    searchTerm: deferredSearchTerm,
+    activeQuickChip,
+    eventFilter,
+    frcBodFilter,
+    eventResolutionFilter,
+    pmRadarFilter,
+    columnFilters
+  });
+
+  // Single-pass metrics fallback if worker metrics not yet ready
+  const localMetrics = useMemo(() => {
+    if (metrics) return metrics;
+
     let vencimientos = 0;
     let transporte = 0;
     let diferencia = 0;
@@ -107,7 +137,6 @@ export function useInventoryFiltering({
     for (let i = 0; i < len; i++) {
       const item = items[i];
 
-      // 1. Bodega count
       if (frcBodCol) {
         const val = item[frcBodCol];
         if (val !== undefined && val !== null && String(val).trim() !== '') {
@@ -117,7 +146,6 @@ export function useInventoryFiltering({
         }
       }
 
-      // 2. Event & Status metrics
       const cat = getEventCategory(item, headers);
       if (cat === 'TRANSPORTE') {
         transporte++;
@@ -143,7 +171,6 @@ export function useInventoryFiltering({
         else if (st.code === 'RETIRE_NOW' || st.code === 'EXPIRED') retireNow++;
       }
 
-      // 3. Resolution metrics
       const res = getItemResolutionStatus(item, headers);
       if (res.isResolved) completed++;
       else pending++;
@@ -180,9 +207,10 @@ export function useInventoryFiltering({
         completed
       },
       frcBodValues: sortedBodValues,
-      frcBodCounts: bodCounts
+      frcBodCounts: bodCounts,
+      columnOptionsMap: {}
     };
-  }, [items, headers, frcBodCol]);
+  }, [items, headers, frcBodCol, metrics]);
 
   // Virtual columns augmentation
   const augmentedItems = useMemo(() => {
@@ -198,6 +226,10 @@ export function useInventoryFiltering({
 
   // Options map for column dropdown filter menus
   const columnOptionsMap = useMemo(() => {
+    if (metrics?.columnOptionsMap && Object.keys(metrics.columnOptionsMap).length > 0) {
+      return metrics.columnOptionsMap;
+    }
+
     const map: Record<string, { label: string; value: string }[]> = {};
     const activeVCs = sheetConfig.activeVirtualColumns || [];
     const activeViewVCs = VIRTUAL_COLUMNS
@@ -221,109 +253,135 @@ export function useInventoryFiltering({
         .map(v => ({ label: v, value: v }));
     });
     return map;
-  }, [augmentedItems, headers, sheetConfig.activeVirtualColumns]);
+  }, [augmentedItems, headers, sheetConfig.activeVirtualColumns, metrics, activeView]);
 
-  // Fast single-pass filtering
+  // Fast filtering using Worker matching indices when available
   const filteredItems = useMemo(() => {
-    const hasEventFilter = activeView === 'events' && eventFilter.length > 0;
-    const eventFilterSet = hasEventFilter ? new Set(eventFilter) : null;
+    let rawFiltered: InventoryItem[] = [];
 
-    const hasFrcBodFilter = frcBodFilter.length > 0 && !!frcBodCol;
-    const frcBodFilterSet = hasFrcBodFilter ? new Set(frcBodFilter) : null;
+    if (matchingIndices !== null && isWorkerReady) {
+      for (let k = 0; k < matchingIndices.length; k++) {
+        const item = augmentedItems[matchingIndices[k]];
+        if (item) rawFiltered.push(item);
+      }
+    } else {
+      // Local single-pass fallback
+      const hasEventFilter = activeView === 'events' && eventFilter.length > 0;
+      const eventFilterSet = hasEventFilter ? new Set(eventFilter) : null;
 
-    const hasEventResFilter = activeView === 'events' && eventResolutionFilter.length > 0;
-    const eventResFilterSet = hasEventResFilter ? new Set(eventResolutionFilter) : null;
+      const hasFrcBodFilter = frcBodFilter.length > 0 && !!frcBodCol;
+      const frcBodFilterSet = hasFrcBodFilter ? new Set(frcBodFilter) : null;
 
-    const hasPmRadarFilter = activeView === 'main' && pmRadarFilter.length > 0;
-    const pmRadarFilterSet = hasPmRadarFilter ? new Set(pmRadarFilter) : null;
+      const hasEventResFilter = activeView === 'events' && eventResolutionFilter.length > 0;
+      const eventResFilterSet = hasEventResFilter ? new Set(eventResolutionFilter) : null;
 
-    const activeColFilterEntries = (Object.entries(columnFilters) as [string, string[]][])
-      .filter(([_, vals]) => vals && vals.length > 0)
-      .map(([colName, vals]) => [colName, new Set(vals)] as [string, Set<string>]);
-    const hasColFilters = activeColFilterEntries.length > 0;
+      const hasPmRadarFilter = activeView === 'main' && pmRadarFilter.length > 0;
+      const pmRadarFilterSet = hasPmRadarFilter ? new Set(pmRadarFilter) : null;
 
-    const traspasoCol = hasEventResFilter ? (findColumnBySemantic(headers, 'n_traspaso') || 'N_TRASPASO') : '';
-    const term = (deferredSearchTerm.trim() || activeQuickChip || '').toLowerCase();
-    const hasSearch = term.length > 0;
+      const activeColFilterEntries = (Object.entries(columnFilters) as [string, string[]][])
+        .filter(([_, vals]) => vals && vals.length > 0)
+        .map(([colName, vals]) => [colName, new Set(vals)] as [string, Set<string>]);
+      const hasColFilters = activeColFilterEntries.length > 0;
 
-    const result: InventoryItem[] = [];
-    const len = augmentedItems.length;
+      const traspasoCol = hasEventResFilter ? (findColumnBySemantic(headers, 'n_traspaso') || 'N_TRASPASO') : '';
+      const term = (deferredSearchTerm.trim() || activeQuickChip || '').toLowerCase();
+      const hasSearch = term.length > 0;
 
-    for (let i = 0; i < len; i++) {
-      const item = augmentedItems[i];
+      const len = augmentedItems.length;
 
-      // View constraints
-      if (activeView === 'main') {
-        const cat = getEventCategory(item, headers);
-        if (cat !== 'VENCIMIENTO' && cat !== 'VENCIMIENTO_CERCANO') {
-          continue;
-        }
-        if (frcBodFilterSet && frcBodCol) {
-          const val = item[frcBodCol];
-          const valStr = val !== undefined && val !== null ? String(val).trim() : '';
-          if (!frcBodFilterSet.has(valStr)) continue;
-        }
-        if (pmRadarFilterSet) {
-          const st = getItemStatus(item, headers);
-          let matchPm = false;
-          if (pmRadarFilterSet.has('drainage') && st.code === 'DRAINAGE_PM') matchPm = true;
-          else if (pmRadarFilterSet.has('upcoming') && st.code === 'UPCOMING') matchPm = true;
-          else if (pmRadarFilterSet.has('retire_now') && (st.code === 'RETIRE_NOW' || st.code === 'EXPIRED')) matchPm = true;
-          else if (pmRadarFilterSet.has('en_regla') && st.code === 'NORMAL') matchPm = true;
-          if (!matchPm) continue;
-        }
-      } else if (activeView === 'events') {
-        if (eventFilterSet) {
+      for (let i = 0; i < len; i++) {
+        const item = augmentedItems[i];
+
+        // View constraints
+        if (activeView === 'main') {
           const cat = getEventCategory(item, headers);
-          if (!cat || !eventFilterSet.has(cat)) continue;
-        }
-        if (frcBodFilterSet && frcBodCol) {
-          const val = item[frcBodCol];
-          const valStr = val !== undefined && val !== null ? String(val).trim() : '';
-          if (!frcBodFilterSet.has(valStr)) continue;
-        }
-        if (eventResFilterSet) {
-          const isResolved = getItemResolutionStatus(item, headers).isResolved;
-          const status = isResolved ? 'completed' : 'pending';
-          const traspasoVal = item[traspasoCol];
-          const matchRes = eventResFilterSet.has(status) || (traspasoVal && eventResFilterSet.has(String(traspasoVal)));
-          if (!matchRes) continue;
-        }
-      }
-
-      // Column filters
-      if (hasColFilters) {
-        let matchCols = true;
-        for (let j = 0; j < activeColFilterEntries.length; j++) {
-          const [colName, valSet] = activeColFilterEntries[j];
-          const val = item[colName];
-          const valStr = val !== undefined && val !== null && String(val).trim() !== '' ? String(val).trim() : '(Vacío)';
-          if (!valSet.has(valStr)) {
-            matchCols = false;
-            break;
+          if (cat !== 'VENCIMIENTO' && cat !== 'VENCIMIENTO_CERCANO') {
+            continue;
+          }
+          if (frcBodFilterSet && frcBodCol) {
+            const val = item[frcBodCol];
+            const valStr = val !== undefined && val !== null ? String(val).trim() : '';
+            if (!frcBodFilterSet.has(valStr)) continue;
+          }
+          if (pmRadarFilterSet) {
+            const st = getItemStatus(item, headers);
+            let matchPm = false;
+            if (pmRadarFilterSet.has('drainage') && st.code === 'DRAINAGE_PM') matchPm = true;
+            else if (pmRadarFilterSet.has('upcoming') && st.code === 'UPCOMING') matchPm = true;
+            else if (pmRadarFilterSet.has('retire_now') && (st.code === 'RETIRE_NOW' || st.code === 'EXPIRED')) matchPm = true;
+            else if (pmRadarFilterSet.has('en_regla') && st.code === 'NORMAL') matchPm = true;
+            if (!matchPm) continue;
+          }
+        } else if (activeView === 'events') {
+          if (eventFilterSet) {
+            const cat = getEventCategory(item, headers);
+            if (!cat || !eventFilterSet.has(cat)) continue;
+          }
+          if (frcBodFilterSet && frcBodCol) {
+            const val = item[frcBodCol];
+            const valStr = val !== undefined && val !== null ? String(val).trim() : '';
+            if (!frcBodFilterSet.has(valStr)) continue;
+          }
+          if (eventResFilterSet) {
+            const isResolved = getItemResolutionStatus(item, headers).isResolved;
+            const status = isResolved ? 'completed' : 'pending';
+            const traspasoVal = item[traspasoCol];
+            const matchRes = eventResFilterSet.has(status) || (traspasoVal && eventResFilterSet.has(String(traspasoVal)));
+            if (!matchRes) continue;
           }
         }
-        if (!matchCols) continue;
-      }
 
-      // Global text search
-      if (hasSearch) {
-        let matchSearch = false;
-        for (let j = 0; j < searchableHeaders.length; j++) {
-          const val = item[searchableHeaders[j]];
-          if (val !== undefined && val !== null && String(val).toLowerCase().includes(term)) {
-            matchSearch = true;
-            break;
+        // Column filters
+        if (hasColFilters) {
+          let matchCols = true;
+          for (let j = 0; j < activeColFilterEntries.length; j++) {
+            const [colName, valSet] = activeColFilterEntries[j];
+            const val = item[colName];
+            const valStr = val !== undefined && val !== null && String(val).trim() !== '' ? String(val).trim() : '(Vacío)';
+            if (!valSet.has(valStr)) {
+              matchCols = false;
+              break;
+            }
           }
+          if (!matchCols) continue;
         }
-        if (!matchSearch) continue;
-      }
 
-      result.push(item);
+        // Global text search
+        if (hasSearch) {
+          let matchSearch = false;
+          for (let j = 0; j < searchableHeaders.length; j++) {
+            const val = item[searchableHeaders[j]];
+            if (val !== undefined && val !== null && String(val).toLowerCase().includes(term)) {
+              matchSearch = true;
+              break;
+            }
+          }
+          if (!matchSearch) continue;
+        }
+
+        rawFiltered.push(item);
+      }
     }
 
-    return result;
-  }, [augmentedItems, deferredSearchTerm, activeQuickChip, searchableHeaders, activeView, eventFilter, frcBodFilter, frcBodCol, eventResolutionFilter, pmRadarFilter, columnFilters, headers]);
+    // Apply stable multi-type column sorting
+    return sortInventoryItems(rawFiltered, sortConfig);
+  }, [
+    augmentedItems, 
+    matchingIndices, 
+    isWorkerReady, 
+    deferredSearchTerm, 
+    activeQuickChip, 
+    searchableHeaders, 
+    activeView, 
+    eventFilter, 
+    frcBodFilter, 
+    frcBodCol, 
+    eventResolutionFilter, 
+    pmRadarFilter, 
+    columnFilters, 
+    headers,
+    sortConfig
+  ]);
 
   // Grouping logic
   const groupedItems = useMemo(() => {
@@ -413,10 +471,14 @@ export function useInventoryFiltering({
     setEventResolutionFilter([]);
     setPmRadarFilter([]);
     setColumnFilters({});
+    setSortConfig({ column: null, direction: null });
   }, []);
 
   return {
     deferredSearchTerm,
+    sortConfig,
+    setSortConfig,
+    handleToggleSort,
     eventFilter,
     setEventFilter,
     frcBodFilter,
@@ -434,11 +496,13 @@ export function useInventoryFiltering({
     expandAllGroups,
     collapseAllGroups,
     clearAllFilters,
-    eventMetrics,
-    pmMetrics,
-    eventResolutionMetrics,
-    frcBodValues,
-    frcBodCounts,
+    isWorkerProcessing: isProcessing,
+    isWorkerReady,
+    eventMetrics: localMetrics.eventMetrics,
+    pmMetrics: localMetrics.pmMetrics,
+    eventResolutionMetrics: localMetrics.eventResolutionMetrics,
+    frcBodValues: localMetrics.frcBodValues,
+    frcBodCounts: localMetrics.frcBodCounts,
     augmentedItems,
     columnOptionsMap,
     filteredItems,

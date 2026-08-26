@@ -14,59 +14,100 @@ export interface ScriptResponse<T = any> {
   [key: string]: any;
 }
 
-async function fetchFromScript<T = ScriptResponse>(payload: Record<string, any>, timeoutMs = 25000): Promise<T> {
+interface FetchOptions {
+  timeoutMs?: number;
+  maxRetries?: number;
+  retryDelayMs?: number;
+}
+
+/**
+ * Robust fetch client for Google Apps Script with exponential backoff retries,
+ * network timeout handling, and informative Spanish error messages.
+ */
+async function fetchFromScript<T = ScriptResponse>(
+  payload: Record<string, any>,
+  options: FetchOptions = {}
+): Promise<T> {
+  const { timeoutMs = 28000, maxRetries = 2, retryDelayMs = 1200 } = options;
+
   const url = getScriptUrl();
   if (!url) {
     throw new Error('La URL del script no está configurada. Ve a Configuración para ingresar tu Web App URL.');
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  let attempt = 0;
+  let lastError: any = null;
 
-  try {
-    // By omitting the Content-Type header or setting it to text/plain, 
-    // fetch sends a simple request that bypasses CORS preflight (OPTIONS).
-    // Apps Script receives it natively.
-    const response = await fetch(url, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8'
-      },
-      signal: controller.signal
-    });
+  while (attempt <= maxRetries) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`Error de servidor Apps Script (HTTP ${response.status}: ${response.statusText})`);
-    }
-
-    const text = await response.text();
-    let data: any;
     try {
-      data = JSON.parse(text);
-    } catch {
-      throw new Error('La respuesta de Google Apps Script no tiene formato JSON válido. Verifica que el Web App esté desplegado con acceso para "Cualquiera" (Anyone).');
-    }
+      // By using text/plain, fetch avoids unnecessary CORS preflight (OPTIONS)
+      // which Apps Script doesn't handle natively.
+      const response = await fetch(url, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8'
+        },
+        signal: controller.signal
+      });
 
-    if (data.error) {
-      throw new Error(data.error);
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Error en el servicio de Google Apps Script (HTTP ${response.status}: ${response.statusText})`);
+      }
+
+      const text = await response.text();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error('La respuesta de Google Apps Script no tiene formato JSON válido. Verifica que el Web App esté desplegado con acceso para "Cualquiera" (Anyone).');
+      }
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      return data as T;
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      lastError = err;
+
+      const isAbort = err.name === 'AbortError';
+      const isNetworkError = err.message && (
+        err.message.includes('Failed to fetch') ||
+        err.message.includes('NetworkError') ||
+        err.message.includes('Load failed')
+      );
+
+      // Only retry if it was a network drop or transient timeout and we have attempts left
+      if ((isAbort || isNetworkError) && attempt < maxRetries) {
+        attempt++;
+        const backoff = retryDelayMs * Math.pow(1.5, attempt - 1);
+        console.warn(`[AppsScript] Reintento ${attempt}/${maxRetries} tras fallo transitorio (${err.message}). Esperando ${backoff}ms...`);
+        await new Promise(r => setTimeout(r, backoff));
+        continue;
+      }
+
+      if (isAbort) {
+        throw new Error(`La solicitud a Google Apps Script excedió el tiempo límite (${Math.round(timeoutMs / 1000)}s). Verifica tu conexión o el volumen de datos.`);
+      }
+      if (isNetworkError) {
+        throw new Error('Error de conexión con Google Apps Script. Asegúrate de que el Web App esté publicado con acceso "Cualquiera" (Anyone) y no requiera inicio de sesión corporativo restringido.');
+      }
+
+      throw err;
     }
-    return data as T;
-  } catch (err: any) {
-    clearTimeout(timeoutId);
-    if (err.name === 'AbortError') {
-      throw new Error('La solicitud a Google Apps Script excedió el tiempo límite (25s). Verifica tu conexión a internet.');
-    }
-    if (err.message && err.message.includes('Failed to fetch')) {
-      throw new Error('Error de conexión con Google Apps Script. Asegúrate de que el Web App esté publicado con acceso "Cualquiera" (Anyone) y no requiera inicio de sesión de Google en el navegador.');
-    }
-    throw err;
   }
+
+  throw lastError || new Error('Fallo al comunicarse con Google Apps Script.');
 }
 
-// In-memory cache structures with TTL to avoid redundant HTTP requests to Google Apps Script
+// In-memory cache structures with TTL to avoid redundant HTTP requests
 interface CacheEntry<T> {
   data: T;
   timestamp: number;
@@ -131,7 +172,7 @@ export async function deleteRow(sheetId: number, rowIndex: number, sheetName?: s
   return fetchFromScript({ action: 'deleteRow', sheetId, rowIndex, spreadsheetId: SPREADSHEET_ID });
 }
 
-// Opción 2: Almacenamiento directo en PropertiesService (sin hojas adicionales)
+// PropertiesService storage (zero extra sheets needed)
 export async function getScriptPropertiesConfig(forceRefresh = false) {
   const now = Date.now();
   if (!forceRefresh && cachedPropertiesConfig && (now - cachedPropertiesConfig.timestamp < CONFIG_TTL_MS)) {
@@ -162,13 +203,11 @@ export async function loadCloudConfig(configSheetName = '_CONFIG_APP') {
   try {
     const data = await getSheetData(configSheetName);
     if (data && data.length >= 2) {
-      // Look for KEY 'APP_CONFIG' or row 2 column 2
       for (let i = 1; i < data.length; i++) {
         if (data[i][0] === 'APP_CONFIG' && data[i][1]) {
           return JSON.parse(data[i][1]);
         }
       }
-      // If single raw JSON cell in row 2 col 1 or 2
       if (data[1][1] && data[1][1].startsWith('{')) {
         return JSON.parse(data[1][1]);
       }
@@ -187,11 +226,9 @@ export async function saveCloudConfig(config: any, configSheetName = '_CONFIG_AP
   const rows = await getSheetData(configSheetName);
   
   if (rows.length === 0) {
-    // Add header and first config row
     await appendRow(configSheetName, ['CLAVE', 'VALOR_JSON', 'ULTIMA_ACTUALIZACION']);
     await appendRow(configSheetName, ['APP_CONFIG', jsonStr, new Date().toISOString()]);
   } else {
-    // Check if row exists, update row 2
     await updateRow(configSheetName, 2, ['APP_CONFIG', jsonStr, new Date().toISOString()]);
   }
 }
@@ -284,7 +321,8 @@ function doGet(e) {
 function responseJson(data) {
   return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
-}`;
+}
+`;
 
 export const APPS_SCRIPT_ADVANCED_PROPERTIES_CODE = APPS_SCRIPT_TEMPLATE;
 export const APPS_SCRIPT_RECOMMENDED_CODE = APPS_SCRIPT_TEMPLATE;

@@ -33,15 +33,27 @@ El proyecto sigue una estructura modular limpia construida en **React 18+**, **T
     ├── main.tsx                  # Punto de montaje de React DOM
     ├── index.css                 # Estilos globales y directivas de Tailwind (@import "tailwindcss")
     ├── types.ts                  # Tipados globales (InventoryItem, EventCategory, ItemStatus, etc.)
+    ├── db/
+    │   └── indexedDbService.ts   # Motor de almacenamiento asíncrono Local-First y cola offline
+    ├── workers/
+    │   └── inventoryWorker.ts    # Web Worker de cómputo en segundo plano (filtrado, métricas, indexación)
+    ├── hooks/
+    │   ├── useInventoryWorker.ts # Hook de comunicación no bloqueante con el Web Worker
+    │   ├── useInventoryFiltering.ts # Orquestación de filtros, paginación y agrupación
+    │   ├── useOfflineSync.ts     # Hook de sincronización y vaciado de cola offline
+    │   └── useColumnResize.ts    # Manejo interactivo del ancho de columnas
     ├── utils/
     │   ├── columnAliases.ts      # Motor de detección semántica de encabezados de columnas
-    │   └── dateCalculations.tsx  # Parsing de fechas, números, cálculo de estados y categorías
+    │   ├── pureCalculations.ts   # Cálculos puros y parsing de fechas y métricas (Zero-DOM/Web Worker compatible)
+    │   ├── universalImporter.ts  # Parser universal de Excel/CSV/TSV y motor de auto-mapeo semántico
+    │   └── dateCalculations.tsx  # Badges de UI, iconos y renderizado de estados
     └── components/
         ├── InventoryDashboard.tsx# Vista principal de control y filtrado de inventario
         ├── views/
         │   └── SchemaEditorView.tsx# Vista de configuración y mapeo de esquema de columnas
         ├── modals/
         │   ├── GlobalConfigModal.tsx # Configuración global y credenciales
+        │   ├── UniversalImportModal.tsx # Ingestión universal asistida (Excel, CSV, TSV, Portapapeles)
         │   ├── ItemFormModal.tsx     # Modal para crear/editar registros e ítems
         │   ├── PmReportModal.tsx     # Generador de reportes de drenaje y alertas
         │   └── ScriptCodeModal.tsx   # Visor y generador de código Google Apps Script

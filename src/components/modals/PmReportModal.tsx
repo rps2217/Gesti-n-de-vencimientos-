@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Flame, X, CheckCircle2, CheckCheck, Copy } from 'lucide-react';
+import { Flame, X, CheckCircle2, CheckCheck, Copy, Download } from 'lucide-react';
 import { InventoryItem } from '../../types';
 import { getItemStatus, formatDisplayDate } from '../../utils/dateCalculations';
 import { findColumnBySemantic } from '../../utils/columnAliases';
+import { exportToExcel } from '../../utils/exportUtils';
 
 interface PmReportModalProps {
   isOpen: boolean;
@@ -48,6 +49,22 @@ export const PmReportModal: React.FC<PmReportModalProps> = ({
     navigator.clipboard.writeText(lines.join('\n'));
     setCopiedReport(true);
     setTimeout(() => setCopiedReport(false), 3000);
+  };
+
+  const handleExportExcel = () => {
+    if (drainageReportItems.length === 0) return;
+    const sampleKeys = Object.keys(drainageReportItems[0]);
+    const headers = [
+      findColumnBySemantic(sampleKeys, 'sku') || 'SKU',
+      findColumnBySemantic(sampleKeys, 'descripcion') || 'DESCRIPCION',
+      findColumnBySemantic(sampleKeys, 'fecha_vc') || 'FECHA_VC',
+      findColumnBySemantic(sampleKeys, 'fecha_retiro') || 'FECHA_RETIRO',
+      findColumnBySemantic(sampleKeys, 'cantidad') || 'CANTIDAD',
+      findColumnBySemantic(sampleKeys, 'lote') || 'LOTE'
+    ].filter(Boolean);
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    exportToExcel(`Reporte_Drenaje_PM_${todayStr}.xlsx`, headers, drainageReportItems, 'Drenaje PM');
   };
 
   return (
@@ -141,6 +158,14 @@ export const PmReportModal: React.FC<PmReportModalProps> = ({
               Cerrar
             </button>
             <button
+              onClick={handleExportExcel}
+              disabled={drainageReportItems.length === 0}
+              className="px-4 py-2 bg-emerald-600 text-white font-bold text-xs rounded-xl hover:bg-emerald-700 flex items-center gap-1.5 shadow-sm shadow-emerald-200 dark:shadow-none disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+              <span>Exportar a Excel</span>
+            </button>
+            <button
               onClick={copyPmReportToClipboard}
               disabled={drainageReportItems.length === 0}
               className="px-4 py-2 bg-orange-600 text-white font-bold text-xs rounded-xl hover:bg-orange-700 flex items-center gap-1.5 shadow-sm shadow-orange-200 dark:shadow-none disabled:opacity-50"
@@ -154,4 +179,3 @@ export const PmReportModal: React.FC<PmReportModalProps> = ({
     </div>
   );
 };
-

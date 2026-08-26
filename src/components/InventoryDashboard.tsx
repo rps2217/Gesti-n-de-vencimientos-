@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef, useDeferredValue } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useDeferredValue, useCallback } from 'react';
 import { 
   getSpreadsheetMetadata, 
   getSheetData, 
@@ -39,6 +39,7 @@ import {
 import { findColumnBySemantic } from '../utils/columnAliases';
 import { VIRTUAL_COLUMNS } from '../utils/virtualColumns';
 import { useColumnResize } from '../hooks/useColumnResize';
+import { useInventoryFiltering, handleFilterToggle, DisplayRow } from '../hooks/useInventoryFiltering';
 import { 
   SAMPLE_HEADERS, 
   SAMPLE_ITEMS, 
@@ -66,6 +67,7 @@ import { EventResolutionCards } from './views/EventResolutionCards';
 import { EventFilterChips } from './views/EventFilterChips';
 import { PmRadarCards } from './views/PmRadarCards';
 import { ColumnFilterMenu } from './views/ColumnFilterMenu';
+import { InventoryTableRow } from './views/InventoryTableRow';
 import { TicketPrintView } from './views/TicketPrintView';
 import { TicketConfigModal } from './modals/TicketConfigModal';
 import { GmailDraftModal } from './modals/GmailDraftModal';
@@ -147,13 +149,12 @@ export const InventoryDashboard: React.FC = () => {
     }
   };
 
-  // Search and Filter States
+  // Search and Selection States
   const [searchTerm, setSearchTerm] = useState('');
-  const deferredSearchTerm = useDeferredValue(searchTerm);
+  const [activeQuickChip, setActiveQuickChip] = useState<string | null>(null);
   const [selectedRowIds, setSelectedRowIds] = useState<number[]>([]);
-  const [eventFilter, setEventFilter] = useState<string[]>([]);
-  const [frcBodFilter, setFrcBodFilter] = useState<string[]>([]);
-  const [eventResolutionFilter, setEventResolutionFilter] = useState<string[]>([]);
+  const [quickTraspasoItem, setQuickTraspasoItem] = useState<InventoryItem | null>(null);
+  const [isQuickTraspasoOpen, setIsQuickTraspasoOpen] = useState<boolean>(false);
 
   const frcBodCol = useMemo(() => {
     return findColumnBySemantic(headers, 'frc_bod') || 
@@ -163,44 +164,6 @@ export const InventoryDashboard: React.FC = () => {
            });
   }, [headers]);
 
-  const [quickTraspasoItem, setQuickTraspasoItem] = useState<InventoryItem | null>(null);
-  const [isQuickTraspasoOpen, setIsQuickTraspasoOpen] = useState<boolean>(false);
-  const [pmRadarFilter, setPmRadarFilter] = useState<string[]>([]);
-  const [columnFilters, setColumnFilters] = useState<Record<string, string[]>>({});
-
-  // Multiselect toggle helper (Ctrl/Cmd + Click)
-  const handleFilterToggle = (current: string[], value: string, isMulti: boolean): string[] => {
-    if (value === 'all') return [];
-    if (!isMulti) {
-      return current.includes(value) && current.length === 1 ? [] : [value];
-    }
-    if (current.includes(value)) {
-      return current.filter(v => v !== value);
-    }
-    return [...current, value];
-  };
-  const [activeQuickChip, setActiveQuickChip] = useState<string | null>(null);
-
-  const hasActiveFilters = 
-    searchTerm !== '' || 
-    eventFilter.length > 0 || 
-    frcBodFilter.length > 0 || 
-    eventResolutionFilter.length > 0 || 
-    pmRadarFilter.length > 0 || 
-    activeQuickChip !== null ||
-    Object.values(columnFilters).some((vals: string[]) => vals && vals.length > 0);
-
-  const clearAllFilters = () => {
-    setSearchTerm('');
-    setEventFilter([]);
-    setFrcBodFilter([]);
-    setEventResolutionFilter([]);
-    setPmRadarFilter([]);
-    setColumnFilters({});
-    setActiveQuickChip(null);
-  };
-
-  const [groupByColumn, setGroupByColumn] = useState<string>('none');
   const [isColumnManagerOpen, setIsColumnManagerOpen] = useState(false);
   const [draggedCol, setDraggedCol] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
@@ -423,349 +386,66 @@ export const InventoryDashboard: React.FC = () => {
     });
   }, [headers, activeSheet, sheetConfig.schema]);
 
-  // Unified single-pass aggregator for all chips, metrics, PM radar, and Bodega counts (O(N))
+  // Unified filtering, metrics aggregation, virtual columns, and grouping hook
   const {
+    deferredSearchTerm,
+    eventFilter,
+    setEventFilter,
+    frcBodFilter,
+    setFrcBodFilter,
+    eventResolutionFilter,
+    setEventResolutionFilter,
+    pmRadarFilter,
+    setPmRadarFilter,
+    columnFilters,
+    setColumnFilters,
+    groupByColumn,
+    setGroupByColumn,
+    collapsedGroups,
+    toggleGroupCollapse,
+    expandAllGroups,
+    collapseAllGroups,
+    clearAllFilters: clearHookFilters,
     eventMetrics,
     pmMetrics,
     eventResolutionMetrics,
     frcBodValues,
-    frcBodCounts
-  } = useMemo(() => {
-    let vencimientos = 0;
-    let transporte = 0;
-    let diferencia = 0;
-    let calInterna = 0;
-    let calExterna = 0;
-    let canjes = 0;
-    let averia = 0;
-    let devolucion = 0;
-    let vencimientoCercano = 0;
-    let drainagePm = 0;
-    let upcoming = 0;
-    let retireNow = 0;
+    frcBodCounts,
+    augmentedItems,
+    columnOptionsMap,
+    filteredItems,
+    groupedItems,
+    displayRows,
+    paginatedDisplayRows
+  } = useInventoryFiltering({
+    items,
+    headers,
+    activeView: activeView as any,
+    frcBodCol,
+    sheetConfig,
+    products,
+    policies,
+    searchTerm,
+    activeQuickChip,
+    searchableHeaders,
+    pageSize,
+    currentPage,
+  });
 
-    let pending = 0;
-    let completed = 0;
+  const hasActiveFilters = 
+    searchTerm !== '' || 
+    eventFilter.length > 0 || 
+    frcBodFilter.length > 0 || 
+    eventResolutionFilter.length > 0 || 
+    pmRadarFilter.length > 0 || 
+    activeQuickChip !== null ||
+    Object.values(columnFilters).some((vals: string[]) => vals && vals.length > 0);
 
-    const bodCounts: Record<string, number> = {};
-    const bodSet = new Set<string>();
-
-    const len = items.length;
-    for (let i = 0; i < len; i++) {
-      const item = items[i];
-
-      // 1. Bodega count (single pass)
-      if (frcBodCol) {
-        const val = item[frcBodCol];
-        if (val !== undefined && val !== null && String(val).trim() !== '') {
-          const trimmed = String(val).trim();
-          bodSet.add(trimmed);
-          bodCounts[trimmed] = (bodCounts[trimmed] || 0) + 1;
-        }
-      }
-
-      // 2. Event & Status metrics
-      const cat = getEventCategory(item, headers);
-      if (cat === 'TRANSPORTE') {
-        transporte++;
-      } else if (cat === 'DIFERENCIA') {
-        diferencia++;
-      } else if (cat === 'CAL_INTERNA') {
-        calInterna++;
-      } else if (cat === 'CAL_EXTERNA') {
-        calExterna++;
-      } else if (cat === 'CANJES') {
-        canjes++;
-      } else if (cat === 'AVERIA') {
-        averia++;
-      } else if (cat === 'DEVOLUCION') {
-        devolucion++;
-      } else if (cat === 'VENCIMIENTO_CERCANO') {
-        vencimientoCercano++;
-      } else {
-        vencimientos++;
-        const st = getItemStatus(item, headers);
-        if (st.code === 'DRAINAGE_PM') drainagePm++;
-        else if (st.code === 'UPCOMING') upcoming++;
-        else if (st.code === 'RETIRE_NOW' || st.code === 'EXPIRED') retireNow++;
-      }
-
-      // 3. Resolution metrics
-      const res = getItemResolutionStatus(item, headers);
-      if (res.isResolved) completed++;
-      else pending++;
-    }
-
-    const sortedBodValues = Array.from(bodSet).sort((a, b) => a.localeCompare(b));
-
-    const evMetrics = {
-      total: len,
-      vencimientos,
-      transporte,
-      diferencia,
-      calInterna,
-      calExterna,
-      canjes,
-      averia,
-      devolucion,
-      vencimientoCercano,
-      drainagePm,
-      upcoming,
-      retireNow
-    };
-
-    const pm = {
-      total: vencimientos,
-      drainage: drainagePm,
-      upcoming,
-      retireNow,
-      enRegla: Math.max(0, vencimientos - drainagePm - upcoming - retireNow)
-    };
-
-    const resMetrics = {
-      total: len,
-      pending,
-      completed
-    };
-
-    return {
-      eventMetrics: evMetrics,
-      pmMetrics: pm,
-      eventResolutionMetrics: resMetrics,
-      frcBodValues: sortedBodValues,
-      frcBodCounts: bodCounts
-    };
-  }, [items, headers, frcBodCol]);
-
-  const augmentedItems = useMemo(() => {
-    return items.map(item => {
-      const virtualData: Record<string, any> = {};
-      const activeVCs = sheetConfig.activeVirtualColumns || [];
-      VIRTUAL_COLUMNS.filter(col => activeVCs.includes(col.id)).forEach(col => {
-        // Pass products and policies as allData
-        virtualData[col.id] = col.calculate(item, headers, { products, policies });
-      });
-      return { ...item, ...virtualData };
-    });
-  }, [items, headers, sheetConfig.activeVirtualColumns, products, policies]);
-
-  // Memoized unique options per column for ColumnFilterMenu
-  const columnOptionsMap = useMemo(() => {
-    const map: Record<string, { label: string; value: string }[]> = {};
-    const activeVCs = sheetConfig.activeVirtualColumns || [];
-    const allHeaders = [...headers, ...VIRTUAL_COLUMNS.filter(vc => activeVCs.includes(vc.id)).map(vc => vc.id)];
-    
-    allHeaders.forEach(h => {
-      const uniqueVals = new Set<string>();
-      augmentedItems.forEach(item => {
-        const val = item[h];
-        if (val !== undefined && val !== null && String(val).trim() !== '') {
-          uniqueVals.add(String(val).trim());
-        } else {
-          uniqueVals.add('(Vacío)');
-        }
-      });
-      map[h] = Array.from(uniqueVals)
-        .sort((a, b) => a.localeCompare(b))
-        .slice(0, 100)
-        .map(v => ({ label: v, value: v }));
-    });
-    return map;
-  }, [augmentedItems, headers, sheetConfig.activeVirtualColumns]);
-
-  const filteredItems = useMemo(() => {
-    // 1. Prepare O(1) Sets for fast lookups
-    const hasEventFilter = activeView === 'events' && eventFilter.length > 0;
-    const eventFilterSet = hasEventFilter ? new Set(eventFilter) : null;
-
-    const hasFrcBodFilter = frcBodFilter.length > 0 && !!frcBodCol;
-    const frcBodFilterSet = hasFrcBodFilter ? new Set(frcBodFilter) : null;
-
-    const hasEventResFilter = activeView === 'events' && eventResolutionFilter.length > 0;
-    const eventResFilterSet = hasEventResFilter ? new Set(eventResolutionFilter) : null;
-
-    const hasPmRadarFilter = activeView === 'main' && pmRadarFilter.length > 0;
-    const pmRadarFilterSet = hasPmRadarFilter ? new Set(pmRadarFilter) : null;
-
-    const activeColFilterEntries = (Object.entries(columnFilters) as [string, string[]][])
-      .filter(([_, vals]) => vals && vals.length > 0)
-      .map(([colName, vals]) => [colName, new Set(vals)] as [string, Set<string>]);
-    const hasColFilters = activeColFilterEntries.length > 0;
-
-    const traspasoCol = hasEventResFilter ? (findColumnBySemantic(headers, 'n_traspaso') || 'N_TRASPASO') : '';
-
-    const term = (deferredSearchTerm.trim() || activeQuickChip || '').toLowerCase();
-    const hasSearch = term.length > 0;
-
-    // Single-pass filter loop without intermediate array allocations
-    const result: InventoryItem[] = [];
-    const len = augmentedItems.length;
-
-    for (let i = 0; i < len; i++) {
-      const item = augmentedItems[i];
-
-      // View constraints
-      if (activeView === 'main') {
-        const cat = getEventCategory(item, headers);
-        if (cat !== 'VENCIMIENTO' && cat !== 'VENCIMIENTO_CERCANO') {
-          continue;
-        }
-        if (frcBodFilterSet && frcBodCol) {
-          const val = item[frcBodCol];
-          const valStr = val !== undefined && val !== null ? String(val).trim() : '';
-          if (!frcBodFilterSet.has(valStr)) continue;
-        }
-        if (pmRadarFilterSet) {
-          const st = getItemStatus(item, headers);
-          let matchPm = false;
-          if (pmRadarFilterSet.has('drainage') && st.code === 'DRAINAGE_PM') matchPm = true;
-          else if (pmRadarFilterSet.has('upcoming') && st.code === 'UPCOMING') matchPm = true;
-          else if (pmRadarFilterSet.has('retire_now') && (st.code === 'RETIRE_NOW' || st.code === 'EXPIRED')) matchPm = true;
-          else if (pmRadarFilterSet.has('en_regla') && st.code === 'NORMAL') matchPm = true;
-          if (!matchPm) continue;
-        }
-      } else if (activeView === 'events') {
-        if (eventFilterSet) {
-          const cat = getEventCategory(item, headers);
-          if (!cat || !eventFilterSet.has(cat)) continue;
-        }
-        if (frcBodFilterSet && frcBodCol) {
-          const val = item[frcBodCol];
-          const valStr = val !== undefined && val !== null ? String(val).trim() : '';
-          if (!frcBodFilterSet.has(valStr)) continue;
-        }
-        if (eventResFilterSet) {
-          const isResolved = getItemResolutionStatus(item, headers).isResolved;
-          const status = isResolved ? 'completed' : 'pending';
-          const traspasoVal = item[traspasoCol];
-          const matchRes = eventResFilterSet.has(status) || (traspasoVal && eventResFilterSet.has(String(traspasoVal)));
-          if (!matchRes) continue;
-        }
-      }
-
-      // Column filters (O(1) Set lookup)
-      if (hasColFilters) {
-        let matchCols = true;
-        for (let j = 0; j < activeColFilterEntries.length; j++) {
-          const [colName, valSet] = activeColFilterEntries[j];
-          const val = item[colName];
-          const valStr = val !== undefined && val !== null && String(val).trim() !== '' ? String(val).trim() : '(Vacío)';
-          if (!valSet.has(valStr)) {
-            matchCols = false;
-            break;
-          }
-        }
-        if (!matchCols) continue;
-      }
-
-      // Global text search (short-circuit on first match)
-      if (hasSearch) {
-        let matchSearch = false;
-        for (let j = 0; j < searchableHeaders.length; j++) {
-          const val = item[searchableHeaders[j]];
-          if (val !== undefined && val !== null && String(val).toLowerCase().includes(term)) {
-            matchSearch = true;
-            break;
-          }
-        }
-        if (!matchSearch) continue;
-      }
-
-      result.push(item);
-    }
-
-    return result;
-  }, [augmentedItems, deferredSearchTerm, activeQuickChip, searchableHeaders, activeView, eventFilter, frcBodFilter, frcBodCol, eventResolutionFilter, pmRadarFilter, columnFilters, headers]);
-
-  // Collapsed groups state
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
-
-  // Reset collapsed groups when group by column changes
-  useEffect(() => {
-    setCollapsedGroups({});
-  }, [groupByColumn]);
-
-  const toggleGroupCollapse = (groupKey: string) => {
-    setCollapsedGroups(prev => ({
-      ...prev,
-      [groupKey]: !prev[groupKey]
-    }));
+  const clearAllFilters = () => {
+    setSearchTerm('');
+    setActiveQuickChip(null);
+    clearHookFilters();
   };
-
-  const expandAllGroups = () => {
-    setCollapsedGroups({});
-  };
-
-  const collapseAllGroups = () => {
-    if (!groupedItems) return;
-    const allCollapsed: Record<string, boolean> = {};
-    for (const [key] of groupedItems) {
-      allCollapsed[key] = true;
-    }
-    setCollapsedGroups(allCollapsed);
-  };
-
-  const groupedItems = useMemo(() => {
-    if (groupByColumn === 'none') return null;
-    const map = new Map<string, InventoryItem[]>();
-    for (const item of filteredItems) {
-      const rawVal = item[groupByColumn];
-      const val = rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '' 
-        ? String(rawVal).trim() 
-        : '(Sin asignar / Vacío)';
-      if (!map.has(val)) {
-        map.set(val, []);
-      }
-      map.get(val)!.push(item);
-    }
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: 'base' }));
-  }, [filteredItems, groupByColumn]);
-
-  // Unified items structure for virtualization and rendering (supports group headers + rows)
-  const displayRows = useMemo(() => {
-    if (groupByColumn === 'none' || !groupedItems) {
-      return filteredItems.map((item, index) => ({
-        type: 'item' as const,
-        item,
-        index
-      }));
-    }
-
-    const rows: Array<
-      | { type: 'header'; groupKey: string; count: number; isCollapsed: boolean }
-      | { type: 'item'; item: InventoryItem; groupKey: string; index: number }
-    > = [];
-
-    let runningIndex = 0;
-    for (const [groupKey, groupItemList] of groupedItems) {
-      const isCollapsed = !!collapsedGroups[groupKey];
-      rows.push({
-        type: 'header',
-        groupKey,
-        count: groupItemList.length,
-        isCollapsed
-      });
-
-      if (!isCollapsed) {
-        for (const item of groupItemList) {
-          rows.push({
-            type: 'item',
-            item,
-            groupKey,
-            index: runningIndex++
-          });
-        }
-      }
-    }
-
-    return rows;
-  }, [groupByColumn, groupedItems, filteredItems, collapsedGroups]);
-
-  const paginatedDisplayRows = useMemo(() => {
-    if (pageSize === 'all' || groupByColumn !== 'none') return displayRows;
-    const start = (currentPage - 1) * (pageSize as number);
-    return displayRows.slice(start, start + (pageSize as number));
-  }, [displayRows, currentPage, pageSize, groupByColumn]);
 
   const totalPages = pageSize === 'all' || groupByColumn !== 'none' ? 1 : Math.ceil(filteredItems.length / (pageSize as number)) || 1;
 
@@ -1474,6 +1154,35 @@ export const InventoryDashboard: React.FC = () => {
       alert(`Error eliminando fila (rollback aplicado): ${err.message}`);
     }
   };
+
+  const handleSelectRow = useCallback((rowIndex: number, selected: boolean) => {
+    setSelectedRowIds(prev => selected ? [...prev, rowIndex] : prev.filter(id => id !== rowIndex));
+  }, []);
+
+  const handleRowClick = useCallback((item: InventoryItem) => {
+    setSelectedProduct(item);
+  }, []);
+
+  const handlePmRadarFilterClick = useCallback((targetFilter: string, isMulti: boolean) => {
+    setPmRadarFilter(prev => handleFilterToggle(prev, targetFilter, isMulti));
+  }, []);
+
+  const handleEventResolutionFilterClick = useCallback((status: 'pending' | 'completed', isMulti: boolean) => {
+    setEventResolutionFilter(prev => handleFilterToggle(prev, status, isMulti));
+  }, []);
+
+  const handleEventFilterClick = useCallback((eventCat: any, isMulti: boolean) => {
+    setEventFilter(prev => handleFilterToggle(prev, eventCat, isMulti));
+  }, []);
+
+  const handleFrcBodFilterClick = useCallback((bodVal: string, isMulti: boolean) => {
+    setFrcBodFilter(prev => handleFilterToggle(prev, bodVal, isMulti));
+  }, []);
+
+  const handleOpenQuickTraspaso = useCallback((item: InventoryItem) => {
+    setQuickTraspasoItem(item);
+    setIsQuickTraspasoOpen(true);
+  }, []);
 
   const handleApplyBulkEdit = async (values: { frc_n: string; n_traspaso: string; tipo_evento: string; frc_bod: string }) => {
     if (!activeSheet || selectedRowIds.length === 0) return;
@@ -2414,228 +2123,32 @@ export const InventoryDashboard: React.FC = () => {
                           );
                         }
 
-                        // RENDER NORMAL DATA ROW
+                        // RENDER NORMAL DATA ROW (Memoized for 60fps high performance)
                         const item = rowData.item;
-                        const eventCategory = getEventCategory(item, headers);
-                        const status = getItemStatus(item, headers);
-                        const isEventView = activeView === 'events';
-                        const eventResStatus = isEventView ? getItemResolutionStatus(item, headers) : null;
                         const isSelected = selectedRowIds.includes(item._rowIndex as number);
 
-                        let rowBgClass = 'hover:bg-slate-50/80 dark:hover:bg-slate-800/60';
-                        if (isSelected) {
-                          rowBgClass = 'bg-blue-50/50 dark:bg-blue-950/40 hover:bg-blue-50 dark:hover:bg-blue-950/60';
-                        } else if (isEventView) {
-                          rowBgClass = eventResStatus?.isResolved
-                            ? 'bg-emerald-50/25 dark:bg-emerald-950/20 border-l-4 border-l-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/35'
-                            : 'bg-amber-50/30 dark:bg-amber-950/25 border-l-4 border-l-amber-500 hover:bg-amber-50/60 dark:hover:bg-amber-950/40';
-                        }
-
                         return (
-                          <tr 
-                            key={`item-${item._rowIndex || idx}`} 
-                            data-index={virtualRow.index} 
-                            ref={rowVirtualizer.measureElement} 
-                            onClick={() => setSelectedProduct(item)}
-                            className={`transition-colors group cursor-pointer ${rowBgClass}`}
-                            title="Haz clic para ver detalles del registro"
-                          >
-                            {/* Selection Cell */}
-                            <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-center">
-                                <input
-                                  type="checkbox"
-                                  className="w-4 h-4 text-blue-600 rounded border-slate-300 dark:border-slate-700 dark:bg-slate-800 focus:ring-blue-500 cursor-pointer"
-                                  checked={isSelected}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setSelectedRowIds(prev => [...prev, item._rowIndex as number]);
-                                    } else {
-                                      setSelectedRowIds(prev => prev.filter(id => id !== item._rowIndex));
-                                    }
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                              </div>
-                            </td>
-                            {/* Row Index */}
-                            <td 
-                              style={{ width: `${getColWidth('_row', '#')}px` }}
-                              className="p-4 text-center font-mono text-xs text-slate-400 dark:text-slate-500 truncate"
-                            >
-                              {item._rowIndex}
-                            </td>
-
-                            {/* Expiration Status Badge (Main view) */}
-                            {activeView === 'main' && (
-                              <td 
-                                style={{ width: `${getColWidth('_status', 'Estado / Radar PM')}px` }}
-                                className="p-4 truncate"
-                              >
-                                {eventCategory === 'VENCIMIENTO' || eventCategory === 'VENCIMIENTO_CERCANO' ? (
-                                  <button 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const code = status.code;
-                                      const targetFilter = 
-                                        (code === 'EXPIRED' || code === 'RETIRE_NOW') ? 'retire_now' :
-                                        (code === 'UPCOMING') ? 'upcoming' :
-                                        (code === 'DRAINAGE_PM') ? 'drainage' : 'en_regla';
-                                      setPmRadarFilter(prev => handleFilterToggle(prev, targetFilter, e.ctrlKey || e.metaKey));
-                                    }}
-                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border truncate cursor-pointer hover:opacity-80 transition-opacity ${status.color}`}
-                                    title="Clic normal: Solo este estado. Ctrl+Clic: Sumar estado."
-                                  >
-                                    <span className="shrink-0">{status.icon}</span>
-                                    <span className="truncate">{status.label}</span>
-                                  </button>
-                                ) : (
-                                  <span className="text-xs text-slate-400 dark:text-slate-500 italic">Incidencia FRC</span>
-                                )}
-                              </td>
-                            )}
-
-                            {/* Incident Resolution Status Badge (Events view) */}
-                            {activeView === 'events' && (
-                              <td 
-                                style={{ width: `${getColWidth('_res_status', 'Estado Gestión')}px` }}
-                                className="p-4 truncate"
-                              >
-                                {eventResStatus?.isResolved ? (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); setEventResolutionFilter(prev => handleFilterToggle(prev, 'completed', e.ctrlKey || e.metaKey)); }}
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700/80 shadow-2xs cursor-pointer hover:opacity-80 transition-opacity"
-                                    title="Clic normal: Solo realizados. Ctrl+Clic: Sumar."
-                                  >
-                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                    <span>Realizado</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); setEventResolutionFilter(prev => handleFilterToggle(prev, 'pending', e.ctrlKey || e.metaKey)); }}
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700/80 shadow-2xs cursor-pointer hover:opacity-80 transition-opacity"
-                                    title="Clic normal: Solo pendientes. Ctrl+Clic: Sumar."
-                                  >
-                                    <Clock3 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0 animate-pulse" />
-                                    <span>Pendiente</span>
-                                  </button>
-                                )}
-                              </td>
-                            )}
-
-                            {/* Cell Values */}
-                            {visibleHeaders.map((header) => {
-                              const val = item[header];
-                              const isSku = /sku|código|codigo/i.test(header);
-                              const isEventCol = /^frc(_|\s)?even/i.test(header.trim()) || findColumnBySemantic(headers, 'tipo_evento') === header;
-                              const isTraspasoCol = /traspaso/i.test(header) || findColumnBySemantic(headers, 'n_traspaso') === header;
-                              const isBodCol = header === frcBodCol || /^frc(_|\s)?bod/i.test(header.trim()) || findColumnBySemantic(headers, 'frc_bod') === header || /bodega/i.test(header.trim());
-                              const eventCat = isEventCol && val ? getCategoryFromEventValue(val) : null;
-                              const isProductsView = activeView === 'products';
-                              const colWidth = getColWidth(header, header);
-
-                              return (
-                                <td 
-                                  key={header} 
-                                  style={{ width: `${colWidth}px`, maxWidth: `${colWidth}px` }}
-                                  className="p-4 truncate text-slate-800 dark:text-slate-200"
-                                >
-                                  {isProductsView && isSku ? (
-                                    <button 
-                                      onClick={() => setSelectedProduct(item)}
-                                      className="font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline flex items-center gap-1 truncate text-left"
-                                      title="Ver detalle del producto y registros relacionados"
-                                    >
-                                      <span className="truncate">{String(val || '')}</span>
-                                      <span className="text-[10px] bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 px-1 py-0.2 rounded font-mono shrink-0">
-                                        DETALLE
-                                      </span>
-                                    </button>
-                                  ) : isSku && val ? (
-                                    <span className="font-mono font-semibold text-slate-800 dark:text-slate-100 truncate block">
-                                      {String(val)}
-                                    </span>
-                                  ) : eventCat ? (
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); setEventFilter(prev => handleFilterToggle(prev, eventCat, e.ctrlKey || e.metaKey)); }}
-                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${EVENT_CATEGORIES[eventCat].badgeBg} ${EVENT_CATEGORIES[eventCat].badgeText} ${EVENT_CATEGORIES[eventCat].badgeBorder} truncate cursor-pointer hover:opacity-80 transition-opacity`}
-                                      title="Clic normal: Solo este tipo. Ctrl+Clic: Sumar."
-                                    >
-                                      {renderEventIcon(eventCat, 'w-3.5 h-3.5 shrink-0')}
-                                      <span className="truncate">{String(val)}</span>
-                                    </button>
-                                  ) : isBodCol && val !== undefined && val !== null && String(val).trim() !== '' ? (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        const bodVal = String(val).trim();
-                                        setFrcBodFilter(prev => handleFilterToggle(prev, bodVal, e.ctrlKey || e.metaKey));
-                                      }}
-                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border truncate cursor-pointer transition-all shadow-2xs ${
-                                        frcBodFilter.includes(String(val).trim())
-                                          ? 'bg-blue-600 text-white border-blue-700 shadow-sm ring-2 ring-blue-300 dark:ring-blue-800'
-                                          : 'bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-200 border-blue-200 dark:border-blue-800/80 hover:bg-blue-100 dark:hover:bg-blue-900/60'
-                                      }`}
-                                      title={`Bodega: ${String(val)}. Clic normal: Filtrar solo esta bodega. Ctrl+Clic: Sumar al filtro.`}
-                                    >
-                                      <Building2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                                      <span className="truncate">{String(val)}</span>
-                                    </button>
-                                  ) : isEventView && isTraspasoCol ? (
-                                    val !== undefined && val !== null && String(val).trim() !== '' ? (
-                                      <div className="flex items-center gap-1.5 group/traspaso">
-                                        <span className="font-mono font-bold text-xs bg-emerald-100/90 dark:bg-emerald-950/70 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700/80 px-2 py-0.5 rounded-md truncate">
-                                          {String(val)}
-                                        </span>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setQuickTraspasoItem(item);
-                                            setIsQuickTraspasoOpen(true);
-                                          }}
-                                          className="p-1 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 opacity-0 group-hover/traspaso:opacity-100 transition-opacity rounded cursor-pointer shrink-0"
-                                          title="Modificar N° Traspaso"
-                                        >
-                                          <Edit2 className="w-3 h-3" />
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setQuickTraspasoItem(item);
-                                          setIsQuickTraspasoOpen(true);
-                                        }}
-                                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold border border-dashed border-amber-400 dark:border-amber-600/90 bg-amber-50/90 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-all cursor-pointer group shrink-0"
-                                        title="Anotar número de traspaso de su sistema informático"
-                                      >
-                                        <Plus className="w-3 h-3 group-hover:scale-125 transition-transform text-amber-600 dark:text-amber-400 shrink-0" />
-                                        <span>Anotar Traspaso</span>
-                                      </button>
-                                    )
-                                  ) : (
-                                    <span className="truncate block">
-                                      {val !== undefined && val !== null && String(val).trim() !== '' ? String(val) : '-'}
-                                    </span>
-                                  )}
-                                </td>
-                              );
-                            })}
-
-
-                            {/* Row Actions */}
-                            <td className="p-4 text-right sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 transition-colors shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)] w-20 min-w-[80px]" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-end gap-1">
-                                <button 
-                                  onClick={() => handleDelete(item)} 
-                                  className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                                  title="Eliminar fila"
-                                >
-                                  <Trash2 className="w-4 h-4"/>
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
+                          <InventoryTableRow
+                            key={`item-${item._rowIndex || idx}`}
+                            item={item}
+                            virtualIndex={virtualRow.index}
+                            headers={headers}
+                            visibleHeaders={visibleHeaders}
+                            activeView={activeView}
+                            isSelected={isSelected}
+                            frcBodCol={frcBodCol}
+                            frcBodFilter={frcBodFilter}
+                            getColWidth={getColWidth}
+                            measureElementRef={rowVirtualizer.measureElement}
+                            onSelectRow={handleSelectRow}
+                            onClickItem={handleRowClick}
+                            onDeleteRow={handleDelete}
+                            onPmRadarFilterClick={handlePmRadarFilterClick}
+                            onEventResolutionFilterClick={handleEventResolutionFilterClick}
+                            onEventFilterClick={handleEventFilterClick}
+                            onFrcBodFilterClick={handleFrcBodFilterClick}
+                            onOpenQuickTraspaso={handleOpenQuickTraspaso}
+                          />
                         );
                       })}
                       {paddingBottom > 0 && (

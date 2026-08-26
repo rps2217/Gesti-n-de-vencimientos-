@@ -23,7 +23,7 @@ import {
   Plus, Edit2, Trash2, RefreshCw, Loader2, Database, AlertCircle, Package, 
   FileSpreadsheet, Printer, Settings, FileText, Search, X, Truck, RotateCcw, 
   PackageX, Sparkles, Clock, Clock3, Flame, AlertTriangle, CheckCircle2, FilterX, 
-  Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown, Menu, Scan, GripVertical, Tag, Mail, ChevronDown, Check, MoreVertical
+  Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown, Menu, Scan, GripVertical, Tag, Mail, ChevronDown, Check, MoreVertical, Building2
 } from 'lucide-react';
 
 // Utilities & Hooks
@@ -578,7 +578,7 @@ export const InventoryDashboard: React.FC = () => {
     const hasEventFilter = activeView === 'events' && eventFilter.length > 0;
     const eventFilterSet = hasEventFilter ? new Set(eventFilter) : null;
 
-    const hasFrcBodFilter = activeView === 'events' && frcBodFilter.length > 0 && !!frcBodCol;
+    const hasFrcBodFilter = frcBodFilter.length > 0 && !!frcBodCol;
     const frcBodFilterSet = hasFrcBodFilter ? new Set(frcBodFilter) : null;
 
     const hasEventResFilter = activeView === 'events' && eventResolutionFilter.length > 0;
@@ -609,6 +609,11 @@ export const InventoryDashboard: React.FC = () => {
         const cat = getEventCategory(item, headers);
         if (cat !== 'VENCIMIENTO' && cat !== 'VENCIMIENTO_CERCANO') {
           continue;
+        }
+        if (frcBodFilterSet && frcBodCol) {
+          const val = item[frcBodCol];
+          const valStr = val !== undefined && val !== null ? String(val).trim() : '';
+          if (!frcBodFilterSet.has(valStr)) continue;
         }
         if (pmRadarFilterSet) {
           const st = getItemStatus(item, headers);
@@ -2211,6 +2216,7 @@ export const InventoryDashboard: React.FC = () => {
                         
                         const isEventCol = /^frc(_|\s)?even/i.test(header.trim()) || findColumnBySemantic(headers, 'tipo_evento') === header;
                         const isTraspasoCol = /traspaso/i.test(header) || findColumnBySemantic(headers, 'n_traspaso') === header;
+                        const isBodCol = header === frcBodCol || /^frc(_|\s)?bod/i.test(header.trim()) || findColumnBySemantic(headers, 'frc_bod') === header || /bodega/i.test(header.trim());
 
                         const alignRight = idx > visibleHeaders.length - 3;
 
@@ -2283,6 +2289,19 @@ export const InventoryDashboard: React.FC = () => {
                                   selectedValues={eventFilter}
                                   onToggle={(val, isMulti) => setEventFilter(prev => handleFilterToggle(prev, val, isMulti))}
                                   onClear={() => setEventFilter([])}
+                                  alignRight={alignRight}
+                                />
+                              ) : isBodCol && frcBodValues.length > 0 ? (
+                                <ColumnFilterMenu
+                                  title="Bodegas (FRC_BOD)"
+                                  options={frcBodValues.map(bod => ({
+                                    label: `${bod} (${frcBodCounts[bod] || 0})`,
+                                    value: bod,
+                                    badgeClass: 'text-sky-600 dark:text-sky-400 font-bold'
+                                  }))}
+                                  selectedValues={frcBodFilter}
+                                  onToggle={(val, isMulti) => setFrcBodFilter(prev => handleFilterToggle(prev, val, isMulti))}
+                                  onClear={() => setFrcBodFilter([])}
                                   alignRight={alignRight}
                                 />
                               ) : isTraspasoCol ? (
@@ -2510,6 +2529,7 @@ export const InventoryDashboard: React.FC = () => {
                               const isSku = /sku|código|codigo/i.test(header);
                               const isEventCol = /^frc(_|\s)?even/i.test(header.trim()) || findColumnBySemantic(headers, 'tipo_evento') === header;
                               const isTraspasoCol = /traspaso/i.test(header) || findColumnBySemantic(headers, 'n_traspaso') === header;
+                              const isBodCol = header === frcBodCol || /^frc(_|\s)?bod/i.test(header.trim()) || findColumnBySemantic(headers, 'frc_bod') === header || /bodega/i.test(header.trim());
                               const eventCat = isEventCol && val ? getCategoryFromEventValue(val) : null;
                               const isProductsView = activeView === 'products';
                               const colWidth = getColWidth(header, header);
@@ -2542,6 +2562,23 @@ export const InventoryDashboard: React.FC = () => {
                                       title="Clic normal: Solo este tipo. Ctrl+Clic: Sumar."
                                     >
                                       {renderEventIcon(eventCat, 'w-3.5 h-3.5 shrink-0')}
+                                      <span className="truncate">{String(val)}</span>
+                                    </button>
+                                  ) : isBodCol && val !== undefined && val !== null && String(val).trim() !== '' ? (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const bodVal = String(val).trim();
+                                        setFrcBodFilter(prev => handleFilterToggle(prev, bodVal, e.ctrlKey || e.metaKey));
+                                      }}
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border truncate cursor-pointer transition-all shadow-2xs ${
+                                        frcBodFilter.includes(String(val).trim())
+                                          ? 'bg-blue-600 text-white border-blue-700 shadow-sm ring-2 ring-blue-300 dark:ring-blue-800'
+                                          : 'bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-200 border-blue-200 dark:border-blue-800/80 hover:bg-blue-100 dark:hover:bg-blue-900/60'
+                                      }`}
+                                      title={`Bodega: ${String(val)}. Clic normal: Filtrar solo esta bodega. Ctrl+Clic: Sumar al filtro.`}
+                                    >
+                                      <Building2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
                                       <span className="truncate">{String(val)}</span>
                                     </button>
                                   ) : isEventView && isTraspasoCol ? (

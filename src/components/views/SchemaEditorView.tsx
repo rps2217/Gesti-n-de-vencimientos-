@@ -430,7 +430,12 @@ export const SchemaEditorView: React.FC<SchemaEditorViewProps> = ({
                     }`}
                   >
                     {isActive ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
-                    {col.label}
+                    <div className="flex flex-col text-left">
+                      <span>{col.label}</span>
+                      <span className="text-[11px] font-normal text-slate-400 dark:text-slate-500">
+                        {col.supportedViews?.includes('main') && col.supportedViews.length === 1 ? 'Solo Radar de Vencimientos' : 'Todas las vistas'}
+                      </span>
+                    </div>
                   </button>
                 );
               })}

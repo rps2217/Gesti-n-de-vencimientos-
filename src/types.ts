@@ -34,6 +34,7 @@ export type ColumnType = 'text' | 'longtext' | 'number' | 'date' | 'datetime' | 
 export interface VirtualColumn {
   id: string;
   label: string;
+  supportedViews?: Array<'main' | 'events' | 'products' | 'policies'>;
   calculate: (item: any, headers: any, allData?: any) => any;
 }
 export type ColumnBehavior = 'none' | 'auto_id' | 'calc_fecha_vc' | 'calc_retiro' | 'sku_lookup';

@@ -6,6 +6,7 @@ export const VIRTUAL_COLUMNS: VirtualColumn[] = [
   {
     id: 'fecha_retiro_calc',
     label: 'Fecha Retiro Calc.',
+    supportedViews: ['main'],
     calculate: (item, headers, allData) => {
       const { products, policies } = allData || {};
       const vcCol = findColumnBySemantic(headers, 'fecha_vc');

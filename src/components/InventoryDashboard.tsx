@@ -349,9 +349,11 @@ export const InventoryDashboard: React.FC = () => {
       });
     }
     
-    // Finally, append active virtual columns
+    // Finally, append active virtual columns that apply to this view
     const activeVCs = sheetConfig.activeVirtualColumns || [];
-    const virtualColHeaders = VIRTUAL_COLUMNS.filter(vc => activeVCs.includes(vc.id)).map(vc => vc.id);
+    const virtualColHeaders = VIRTUAL_COLUMNS
+      .filter(vc => activeVCs.includes(vc.id) && (!vc.supportedViews || vc.supportedViews.includes(activeView)))
+      .map(vc => vc.id);
     
     return [...cols, ...virtualColHeaders];
   }, [headers, activeSheet, sheetConfig.schema, hiddenColumns, columnOrders, activeView, sheetConfig.activeVirtualColumns]);

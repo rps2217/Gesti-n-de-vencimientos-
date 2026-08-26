@@ -200,7 +200,10 @@ export function useInventoryFiltering({
   const columnOptionsMap = useMemo(() => {
     const map: Record<string, { label: string; value: string }[]> = {};
     const activeVCs = sheetConfig.activeVirtualColumns || [];
-    const allHeaders = [...headers, ...VIRTUAL_COLUMNS.filter(vc => activeVCs.includes(vc.id)).map(vc => vc.id)];
+    const activeViewVCs = VIRTUAL_COLUMNS
+      .filter(vc => activeVCs.includes(vc.id) && (!vc.supportedViews || vc.supportedViews.includes(activeView)))
+      .map(vc => vc.id);
+    const allHeaders = [...headers, ...activeViewVCs];
     
     allHeaders.forEach(h => {
       const uniqueVals = new Set<string>();

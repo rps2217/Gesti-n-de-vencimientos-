@@ -737,7 +737,14 @@ export const InventoryDashboard: React.FC = () => {
       const eventCol = headers.find(h => /tipo.*evento|evento|tipo.*registro|incidencia|categor[ií]a/i.test(h));
       
       headers.forEach(h => {
-        initialData[h] = '';
+        const colSchema = sheetConfig.schema?.[activeSheet.title]?.[h];
+        if (colSchema?.type === 'datetime' || /timestamp|created_at|fecha_creaci[oó]n|fecha_registro|fecha_ingreso/i.test(h)) {
+          const now = new Date();
+          const localISO = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+          initialData[h] = localISO;
+        } else {
+          initialData[h] = '';
+        }
       });
       
       if (idVcCol) {
@@ -1000,7 +1007,17 @@ export const InventoryDashboard: React.FC = () => {
     
     try {
       setIsSaving(true);
-      const rowValues = headers.map(h => formData[h] || '');
+      const now = new Date();
+      const currentFormattedDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 19).replace('T', ' ');
+
+      const rowValues = headers.map(h => {
+        const val = formData[h] || '';
+        const colSchema = sheetConfig.schema?.[activeSheet.title]?.[h];
+        if (!val && (colSchema?.type === 'datetime' || /timestamp|created_at|fecha_creaci[oó]n|fecha_registro/i.test(h))) {
+          return currentFormattedDateTime;
+        }
+        return val;
+      });
       
       // Optimistic update
       const newItem: InventoryItem = { _rowIndex: editingItem ? editingItem._rowIndex : (items.length ? Math.max(...items.map(i => i._rowIndex)) + 1 : 2) };

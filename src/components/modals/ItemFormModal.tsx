@@ -199,7 +199,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                     ) : (
                       <input
                         type={
-                          colSchema?.type === 'date' || /fecha/i.test(header) ? 'date' :
+                          colSchema?.type === 'datetime' ? 'datetime-local' :
+                          colSchema?.type === 'date' || (/fecha/i.test(header) && !/time/i.test(header)) ? 'date' :
                           colSchema?.type === 'number' || /^cant|unidades|stock|dias|precio/i.test(header) ? 'number' : 'text'
                         }
                         name={header}

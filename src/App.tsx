@@ -104,7 +104,7 @@ export default function App() {
           </div>
           <div>
             <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
-              Gestor de <span className="text-blue-600 dark:text-blue-400 font-medium">Inventario</span>
+              Gestión de <span className="text-blue-600 dark:text-blue-400 font-medium">Vencimientos</span>
             </h1>
             <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Modo Desarrollo (Sin PIN)</span>
           </div>

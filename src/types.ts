@@ -20,6 +20,13 @@ export interface SheetMetadata {
 
 export type SpreadsheetMetadata = SheetMetadata;
 
+export interface UserVirtualColumn {
+  id: string;
+  label: string;
+  operation: 'concatenate' | 'sum' | 'diff_days';
+  sourceColumns: string[];
+}
+
 export interface SheetConfig {
   main?: string;
   events?: string;
@@ -27,6 +34,7 @@ export interface SheetConfig {
   policies?: string;
   schema?: Record<string, Record<string, ColumnSchema>>;
   activeVirtualColumns?: string[];
+  userVirtualColumns?: UserVirtualColumn[];
 }
 
 export type ColumnType = 'text' | 'longtext' | 'number' | 'date' | 'datetime' | 'enum' | 'enumlist' | 'ref' | 'calculated' | 'virtual';

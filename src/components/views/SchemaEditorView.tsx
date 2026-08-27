@@ -406,10 +406,10 @@ export const SchemaEditorView: React.FC<SchemaEditorViewProps> = ({
           </div>
 
           {/* Virtual Columns Configuration */}
-          <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6">
+          <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6 mb-6">
             <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-blue-600" />
-              Columnas Virtuales Activas
+              Columnas Virtuales Activas (Sistema)
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {VIRTUAL_COLUMNS.map((col) => {
@@ -432,13 +432,85 @@ export const SchemaEditorView: React.FC<SchemaEditorViewProps> = ({
                     {isActive ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
                     <div className="flex flex-col text-left">
                       <span>{col.label}</span>
-                      <span className="text-[11px] font-normal text-slate-400 dark:text-slate-500">
-                        {col.supportedViews?.includes('main') && col.supportedViews.length === 1 ? 'Solo Radar de Vencimientos' : 'Todas las vistas'}
-                      </span>
                     </div>
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* User Virtual Columns Configuration */}
+          <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-600" />
+                Columnas Virtuales de Usuario (Personalizadas)
+              </span>
+              <button
+                onClick={() => {
+                  const newVirtualColumn = {
+                    id: `uvc_${Date.now()}`,
+                    label: 'Nueva Columna',
+                    operation: 'concatenate',
+                    sourceColumns: []
+                  };
+                  saveConfig({ ...sheetConfig, userVirtualColumns: [...(sheetConfig.userVirtualColumns || []), newVirtualColumn] });
+                }}
+                className="text-xs px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+              >
+                + Crear Nueva
+              </button>
+            </h3>
+            <div className="space-y-3">
+              {(sheetConfig.userVirtualColumns || []).map((uvc, index) => (
+                <div key={uvc.id} className="grid grid-cols-4 gap-3 items-center p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+                  <input
+                    value={uvc.label}
+                    onChange={(e) => {
+                      const updated = [...(sheetConfig.userVirtualColumns || [])];
+                      updated[index].label = e.target.value;
+                      saveConfig({ ...sheetConfig, userVirtualColumns: updated });
+                    }}
+                    className="col-span-1 px-3 py-2 text-sm border rounded-lg bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 outline-none"
+                    placeholder="Nombre"
+                  />
+                  <select
+                    value={uvc.operation}
+                    onChange={(e) => {
+                      const updated = [...(sheetConfig.userVirtualColumns || [])];
+                      updated[index].operation = e.target.value as any;
+                      saveConfig({ ...sheetConfig, userVirtualColumns: updated });
+                    }}
+                    className="col-span-1 px-3 py-2 text-sm border rounded-lg bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 outline-none"
+                  >
+                    <option value="concatenate">Concatenar</option>
+                    <option value="sum">Suma</option>
+                    <option value="diff_days">Diferencia Días</option>
+                  </select>
+                  <select
+                    multiple
+                    value={uvc.sourceColumns}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                      const selected = Array.from(e.target.selectedOptions, option => option.value);
+                      const updated = [...(sheetConfig.userVirtualColumns || [])];
+                      updated[index].sourceColumns = selected;
+                      saveConfig({ ...sheetConfig, userVirtualColumns: updated });
+                    }}
+                    className="col-span-1 px-3 py-2 text-sm border rounded-lg bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 outline-none h-20"
+                  >
+                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                  <button
+                    onClick={() => {
+                      const updated = (sheetConfig.userVirtualColumns || []).filter((_, i) => i !== index);
+                      saveConfig({ ...sheetConfig, userVirtualColumns: updated });
+                    }}
+                    className="text-rose-600 text-xs font-bold"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         </>

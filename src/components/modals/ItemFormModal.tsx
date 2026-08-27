@@ -181,8 +181,20 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                         <option value="">-- Seleccionar registro de {colSchema.refTable || 'tabla relacionada'} --</option>
                         {products.map((prod, idx) => {
                           const keys = Object.keys(prod);
-                          const valKey = keys.find(k => /sku|id|codigo|code/i.test(k)) || keys[0];
-                          const labelKey = keys.find(k => /desc|nombre|name|title|producto/i.test(k)) || keys[1] || keys[0];
+                          const targetSchema = colSchema.refTable ? sheetConfig.schema?.[colSchema.refTable] : undefined;
+                          
+                          // Look for explicit schema marked key/label first
+                          let valKey = targetSchema ? Object.keys(targetSchema).find(k => targetSchema[k]?.isKey) : undefined;
+                          let labelKey = targetSchema ? Object.keys(targetSchema).find(k => targetSchema[k]?.isLabel) : undefined;
+                          
+                          // Fallback to semantic matching
+                          if (!valKey) {
+                            valKey = keys.find(k => /sku|id|codigo|code/i.test(k)) || keys[0];
+                          }
+                          if (!labelKey) {
+                            labelKey = keys.find(k => /desc|nombre|name|title|producto/i.test(k)) || keys[1] || keys[0];
+                          }
+
                           const val = valKey ? prod[valKey] : '';
                           const label = labelKey ? prod[labelKey] : val;
                           if (!val) return null;

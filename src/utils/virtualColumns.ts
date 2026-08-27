@@ -53,5 +53,37 @@ export const VIRTUAL_COLUMNS: VirtualColumn[] = [
       
       return formatDisplayDate(dRet);
     }
+  },
+  {
+    id: 'proveedor_relacionado',
+    label: 'Proveedor (Catálogo)',
+    supportedViews: ['main'],
+    calculate: (item, headers, allData) => {
+      const { products } = allData || {};
+      if (!products || products.length === 0) return '-';
+
+      const skuCol = findColumnBySemantic(headers, 'sku');
+      const rutCol = headers.find(h => /rut.*prov|prov.*rut|rut/i.test(h));
+      
+      const itemSku = skuCol ? item[skuCol] : null;
+      const itemRut = rutCol ? item[rutCol] : null;
+
+      if (!itemSku && !itemRut) return '-';
+
+      const productEntry = products.find((p: any) => {
+        const keys = Object.keys(p);
+        const pSkuCol = keys.find(k => /sku|código|codigo|cod_producto|cod.*producto/i.test(k));
+        const pRutCol = keys.find(k => /rut/i.test(k));
+
+        if (itemSku && pSkuCol && String(p[pSkuCol]).trim() === String(itemSku).trim()) return true;
+        if (itemRut && pRutCol && String(p[pRutCol]).trim() === String(itemRut).trim()) return true;
+        return false;
+      });
+
+      if (!productEntry) return '-';
+
+      const provKey = Object.keys(productEntry).find(k => /proveedor|nombre_prov|razon_social|marca|vendor/i.test(k));
+      return provKey && productEntry[provKey] ? String(productEntry[provKey]) : '-';
+    }
   }
 ];

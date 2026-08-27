@@ -1216,6 +1216,48 @@ export const InventoryDashboard: React.FC = () => {
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (!activeSheet || selectedRowIds.length === 0) return;
+    const confirmed = window.confirm(`¿Estás seguro de que deseas eliminar ${selectedRowIds.length} registros seleccionados? Esta acción no se puede deshacer.`);
+    if (!confirmed) return;
+
+    const originalItems = [...items];
+    const originalMainItems = [...allMainItems];
+
+    try {
+      setIsSaving(true);
+      setItems(prev => prev.filter(i => !selectedRowIds.includes(i._rowIndex as number)));
+      if (activeView === 'main') {
+        setAllMainItems(prev => prev.filter(i => !selectedRowIds.includes(i._rowIndex as number)));
+      }
+
+      for (const rowIndex of selectedRowIds) {
+        try {
+          await deleteRow(activeSheet.sheetId, rowIndex);
+        } catch (err) {
+          console.warn(`Error deleting row ${rowIndex} in cloud, adding to offline queue`, err);
+          await enqueueMutation({
+            type: 'delete',
+            sheetId: activeSheet.sheetId,
+            sheetTitle: activeSheet.title,
+            rowIndex
+          });
+        }
+      }
+
+      const count = selectedRowIds.length;
+      setSelectedRowIds([]);
+      await fetchData(sheetConfig, activeView, true);
+      alert(`¡Se eliminaron ${count} registros exitosamente!`);
+    } catch (err: any) {
+      setItems(originalItems);
+      setAllMainItems(originalMainItems);
+      alert(`Error en eliminación masiva: ${err.message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (loading && !metadata) {
     return <SkeletonLoader />;
   }
@@ -1566,10 +1608,10 @@ export const InventoryDashboard: React.FC = () => {
                 )}
                 
                 <button 
-                  onClick={() => { alert('Eliminación en masa requiere conexión con la API de Google Sheets para optimización de cuotas.'); }}
-                  className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
+                  onClick={handleBulkDelete}
+                  className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5 bg-rose-600/40 text-rose-200 border border-rose-500/40 hover:bg-rose-600/60"
                 >
-                  <Trash2 className="w-3.5 h-3.5 text-rose-400" /> Eliminar
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" /> Eliminar ({selectedRowIds.length})
                 </button>
                 
                 <button 

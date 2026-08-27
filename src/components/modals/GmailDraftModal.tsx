@@ -94,7 +94,6 @@ export const GmailDraftModal: React.FC<GmailDraftModalProps> = ({
   const toggleColumn = (col: string) => {
     setVisibleColumns(prev => {
       if (prev.includes(col)) {
-        if (prev.length <= 1) return prev; // Keep at least one column
         return prev.filter(k => k !== col);
       } else {
         return [...prev, col];
@@ -103,17 +102,22 @@ export const GmailDraftModal: React.FC<GmailDraftModalProps> = ({
   };
 
   const removeColumn = (col: string) => {
-    setVisibleColumns(prev => {
-      if (prev.length <= 1) return prev;
-      return prev.filter(k => k !== col);
-    });
+    setVisibleColumns(prev => prev.filter(k => k !== col));
   };
 
   const resetDefaultColumns = () => {
     setVisibleColumns(availableColumns);
   };
 
-  const tableHtml = generateItemsHtmlTable(
+  const selectAllColumns = () => {
+    setVisibleColumns(availableColumns);
+  };
+
+  const clearAllColumns = () => {
+    setVisibleColumns([]);
+  };
+
+  const tableHtml = visibleColumns.length > 0 ? generateItemsHtmlTable(
     selectedItems, 
     headers, 
     customAliases, 
@@ -123,7 +127,7 @@ export const GmailDraftModal: React.FC<GmailDraftModalProps> = ({
       policies
     },
     visibleColumns
-  );
+  ) : '';
 
   const fullHtmlBody = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.6;">
@@ -180,7 +184,7 @@ export const GmailDraftModal: React.FC<GmailDraftModalProps> = ({
         to: toEmail.trim(),
         subject: subject.trim(),
         bodyHtml: fullHtmlBody,
-        bodyText: `${introText}\n\n[Ver tabla adjunta en HTML]\n\n${footerText}`
+        bodyText: `${introText}${visibleColumns.length > 0 ? '\n\n[Ver tabla adjunta en HTML]\n\n' : '\n\n'}${footerText}`
       });
       setDraftSuccess('¡Borrador creado exitosamente en tu cuenta de Gmail!');
     } catch (err: any) {
@@ -470,14 +474,22 @@ export const GmailDraftModal: React.FC<GmailDraftModalProps> = ({
                     <Columns className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     <span>Columnas de la Tabla ({visibleColumns.length}/{availableColumns.length})</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={clearAllColumns}
+                      className="text-[11px] font-semibold text-slate-500 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 flex items-center gap-1 transition-colors"
+                      title="Quitar todas las columnas"
+                    >
+                      <X className="w-3 h-3" />
+                      <span>Sin Tabla</span>
+                    </button>
                     <button
                       onClick={resetDefaultColumns}
                       className="text-[11px] font-semibold text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 flex items-center gap-1 transition-colors"
                       title="Seleccionar todas las columnas"
                     >
                       <RotateCcw className="w-3 h-3" />
-                      <span>Restablecer Todas</span>
+                      <span>Todas</span>
                     </button>
                   </div>
                 </div>

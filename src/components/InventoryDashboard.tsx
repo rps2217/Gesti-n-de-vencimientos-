@@ -86,7 +86,7 @@ import { SkeletonLoader } from './common/SkeletonLoader';
 import { useToast } from './common/ToastContainer';
 
 export const InventoryDashboard: React.FC = () => {
-  const { showToast } = useToast();
+  const { showToast, updateToast } = useToast();
   const [metadata, setMetadata] = useState<SpreadsheetMetadata | null>(null);
   const [activeSheet, setActiveSheet] = useState<SheetProperties | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -1191,26 +1191,35 @@ export const InventoryDashboard: React.FC = () => {
 
       setItems(updatedItems);
 
+      const totalEdit = selectedRowIds.length;
+      const toastId = showToast(`Actualizando registros... ${totalEdit} restantes`, 'loading', 'Edición Masiva', 0);
+      let remainingEdit = totalEdit;
+
       for (const rowIndex of selectedRowIds) {
         const itemToUpdate = updatedItems.find(i => i._rowIndex === rowIndex);
-        if (!itemToUpdate) continue;
-        const rowValues = currentHeaders.map(h => itemToUpdate[h] || '');
-        try {
-          await updateRow(activeSheet.title, rowIndex, rowValues);
-        } catch (err) {
-          console.warn(`Error updating row ${rowIndex} in cloud, adding to offline queue`, err);
-          await enqueueMutation({
-            type: 'update',
-            sheetTitle: activeSheet.title,
-            rowIndex,
-            values: rowValues
-          });
+        if (itemToUpdate) {
+          const rowValues = currentHeaders.map(h => itemToUpdate[h] || '');
+          try {
+            await updateRow(activeSheet.title, rowIndex, rowValues);
+          } catch (err) {
+            console.warn(`Error updating row ${rowIndex} in cloud, adding to offline queue`, err);
+            await enqueueMutation({
+              type: 'update',
+              sheetTitle: activeSheet.title,
+              rowIndex,
+              values: rowValues
+            });
+          }
+        }
+        remainingEdit--;
+        if (remainingEdit > 0) {
+          updateToast(toastId, `Actualizando registros... ${remainingEdit} restantes`, 'loading', 'Edición Masiva', 0);
         }
       }
 
       setSelectedRowIds([]);
       await fetchData(sheetConfig, activeView, true);
-      showToast(`¡Se actualizaron ${selectedRowIds.length} registros exitosamente con la información masiva!`, 'success', 'Edición Masiva');
+      showToast(`¡Se actualizaron ${totalEdit} registros exitosamente con la información masiva!`, 'success', 'Edición Masiva');
     } catch (err: any) {
       setItems(originalItems);
       showToast(`Error en actualización masiva: ${err.message}`, 'error', 'Error en Edición');
@@ -1225,7 +1234,7 @@ export const InventoryDashboard: React.FC = () => {
     if (!confirmed) return;
 
     const count = selectedRowIds.length;
-    showToast(`Eliminando ${count} registros en Google Sheets (proceso en segundo plano)...`, 'loading', 'Eliminación Masiva', 0);
+    const toastId = showToast(`Eliminando registros... ${count} restantes`, 'loading', 'Eliminación Masiva', 0);
 
     const originalItems = [...items];
     const originalMainItems = [...allMainItems];
@@ -1237,6 +1246,7 @@ export const InventoryDashboard: React.FC = () => {
         setAllMainItems(prev => prev.filter(i => !selectedRowIds.includes(i._rowIndex as number)));
       }
 
+      let remainingDelete = count;
       for (const rowIndex of selectedRowIds) {
         try {
           await deleteRow(activeSheet.sheetId, rowIndex);
@@ -1248,6 +1258,10 @@ export const InventoryDashboard: React.FC = () => {
             sheetTitle: activeSheet.title,
             rowIndex
           });
+        }
+        remainingDelete--;
+        if (remainingDelete > 0) {
+          updateToast(toastId, `Eliminando registros... ${remainingDelete} restantes`, 'loading', 'Eliminación Masiva', 0);
         }
       }
 

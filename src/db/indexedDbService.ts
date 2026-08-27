@@ -72,7 +72,19 @@ class IndexedDbService {
         };
 
         request.onsuccess = () => {
-          resolve(request.result);
+          const db = request.result;
+
+          // Reset the connection if it's closed or if a version change occurs
+          db.onclose = () => {
+            this.dbPromise = null;
+          };
+
+          db.onversionchange = () => {
+            db.close();
+            this.dbPromise = null;
+          };
+
+          resolve(db);
         };
 
         request.onerror = () => {

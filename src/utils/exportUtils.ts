@@ -42,7 +42,7 @@ export function exportToExcel(
   const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
 
   // Auto-calculate column widths
-  const colWidths = headers.map((header, colIndex) => {
+  const colWidths = allHeaders.map((header, colIndex) => {
     let maxLen = header.length;
     for (let rowIndex = 1; rowIndex < worksheetData.length; rowIndex++) {
       const cellVal = String(worksheetData[rowIndex][colIndex] || '');

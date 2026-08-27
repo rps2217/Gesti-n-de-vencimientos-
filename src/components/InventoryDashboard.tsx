@@ -23,7 +23,7 @@ import {
   Plus, Edit2, Trash2, RefreshCw, Loader2, Database, AlertCircle, Package, 
   FileSpreadsheet, Printer, Settings, FileText, Search, X, Truck, RotateCcw, 
   PackageX, Sparkles, Clock, Clock3, Flame, AlertTriangle, CheckCircle2, FilterX, 
-  Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown, Menu, Scan, GripVertical, Tag, Mail, ChevronDown, Check, MoreVertical, Building2
+  Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown, Menu, Scan, GripVertical, Tag, Mail, MessageSquare, ChevronDown, Check, MoreVertical, Building2
 } from 'lucide-react';
 
 // Utilities & Hooks
@@ -80,6 +80,7 @@ import { usePrecomputedColumns } from '../hooks/usePrecomputedColumns';
 import { TicketPrintView } from './views/TicketPrintView';
 import { TicketConfigModal } from './modals/TicketConfigModal';
 import { GmailDraftModal } from './modals/GmailDraftModal';
+import { WhatsAppModal } from './modals/WhatsAppModal';
 import { UniversalImportModal } from './modals/UniversalImportModal';
 import { GlobalTicketConfig, ViewTicketConfig } from '../types';
 import { SkeletonLoader } from './common/SkeletonLoader';
@@ -189,6 +190,8 @@ export const InventoryDashboard: React.FC = () => {
   const [globalTicketConfig, setGlobalTicketConfig] = useState<GlobalTicketConfig>({});
   const [isTicketConfigOpen, setIsTicketConfigOpen] = useState(false);
   const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
+  const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
+  const [whatsAppModalItems, setWhatsAppModalItems] = useState<any[]>([]);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
 
@@ -1482,6 +1485,10 @@ export const InventoryDashboard: React.FC = () => {
                 onEventFilterClick={handleEventFilterClick}
                 onFrcBodFilterClick={handleFrcBodFilterClick}
                 onOpenQuickTraspaso={handleOpenQuickTraspaso}
+                onOpenWhatsApp={(item) => {
+                  setWhatsAppModalItems([item]);
+                  setIsWhatsAppModalOpen(true);
+                }}
                 frcBodFilter={frcBodFilter}
                 setFrcBodFilter={setFrcBodFilter}
                 sheetConfig={sheetConfig}
@@ -1570,6 +1577,17 @@ export const InventoryDashboard: React.FC = () => {
                   className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 bg-red-600/40 text-red-200 border border-red-500/40 shadow-sm"
                 >
                   <Mail className="w-3.5 h-3.5 text-red-400" /> Borrador Gmail
+                </button>
+
+                <button 
+                  onClick={() => {
+                    const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
+                    setWhatsAppModalItems(selectedItems);
+                    setIsWhatsAppModalOpen(true);
+                  }}
+                  className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 bg-emerald-600/40 text-emerald-200 border border-emerald-500/40 shadow-sm"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-emerald-400" /> WhatsApp ({selectedRowIds.length})
                 </button>
                 
                 <button 
@@ -1735,6 +1753,15 @@ export const InventoryDashboard: React.FC = () => {
         allMainItems={allMainItems}
         products={products}
         policies={policies}
+      />
+
+      {/* WHATSAPP MODAL */}
+      <WhatsAppModal
+        isOpen={isWhatsAppModalOpen}
+        onClose={() => setIsWhatsAppModalOpen(false)}
+        selectedItems={whatsAppModalItems.length > 0 ? whatsAppModalItems : (selectedRowIds.length > 0 ? filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number)) : filteredItems)}
+        headers={headers}
+        customAliases={sheetConfig.customAliases}
       />
 
       {/* 6. COLUMN MANAGER MODAL */}

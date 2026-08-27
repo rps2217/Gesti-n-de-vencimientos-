@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Menu, Search, X, FilterX, Scan, Download, ChevronDown, 
-  Mail, Flame, FileSpreadsheet, Printer, RefreshCw 
+  Mail, Flame, FileSpreadsheet, Printer, RefreshCw, MessageSquare 
 } from 'lucide-react';
 import { InventoryItem, SheetConfig } from '../../types';
 import { VIRTUAL_COLUMNS } from '../../utils/virtualColumns';
@@ -21,6 +21,7 @@ interface DashboardTopNavProps {
   isActionsMenuOpen: boolean;
   setIsActionsMenuOpen: (open: boolean) => void;
   setIsGmailModalOpen: (open: boolean) => void;
+  setIsWhatsAppModalOpen?: (open: boolean) => void;
   setIsPmReportOpen: (open: boolean) => void;
   drainageReportItems: InventoryItem[];
   headers: string[];
@@ -49,6 +50,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
   isActionsMenuOpen,
   setIsActionsMenuOpen,
   setIsGmailModalOpen,
+  setIsWhatsAppModalOpen,
   setIsPmReportOpen,
   drainageReportItems,
   headers,
@@ -164,6 +166,22 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
                   <div className="min-w-0 flex-1">
                     <div className="font-bold text-slate-800 dark:text-slate-100">Borrador Gmail</div>
                     <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">Generar correo formateado</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsWhatsAppModalOpen?.(true);
+                    setIsActionsMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors group"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                    <MessageSquare className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold text-slate-800 dark:text-slate-100">WhatsApp Web</div>
+                    <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">Enviar mensaje predefinido</div>
                   </div>
                 </button>
 

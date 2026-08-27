@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
-  CheckCircle2, Clock3, Edit2, Plus, Trash2, Building2 
+  CheckCircle2, Clock3, Edit2, Plus, Trash2, Building2, MessageSquare 
 } from 'lucide-react';
 import { InventoryItem } from '../../types';
 import { 
@@ -12,13 +12,14 @@ import {
   renderEventIcon 
 } from '../../utils/dateCalculations';
 import { ColumnMetadata } from '../../hooks/usePrecomputedColumns';
+import { findPhoneColumn } from '../../utils/columnAliases';
 
 export interface InventoryTableRowProps {
   item: InventoryItem;
   virtualIndex: number;
   headers: string[];
   visibleColumnMeta: ColumnMetadata[];
-  activeView: 'main' | 'events' | 'products' | 'policies';
+  activeView: 'main' | 'events' | 'products' | 'policies' | string;
   isSelected: boolean;
   frcBodFilter: string[];
   getColWidth: (headerId: string, label: string) => number;
@@ -31,6 +32,7 @@ export interface InventoryTableRowProps {
   onEventFilterClick: (eventCat: any, isMulti: boolean) => void;
   onFrcBodFilterClick: (bodVal: string, isMulti: boolean) => void;
   onOpenQuickTraspaso: (item: InventoryItem) => void;
+  onOpenWhatsApp?: (item: InventoryItem) => void;
 }
 
 export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
@@ -51,12 +53,17 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
   onEventFilterClick,
   onFrcBodFilterClick,
   onOpenQuickTraspaso,
+  onOpenWhatsApp,
 }) => {
   const eventCategory = getEventCategory(item, headers);
   const status = getItemStatus(item, headers);
   const isEventView = activeView === 'events';
   const eventResStatus = isEventView ? getItemResolutionStatus(item, headers) : null;
   const isProductsView = activeView === 'products';
+  
+  const hasPhone = useMemo(() => {
+    return headers.some(h => /tel|cel|phone|whatsapp|wsp/i.test(h)) || /contacto|contact/i.test(String(activeView));
+  }, [headers, activeView]);
 
   let rowBgClass = 'hover:bg-slate-50/80 dark:hover:bg-slate-800/60';
   if (isSelected) {
@@ -257,10 +264,19 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
 
       {/* Row Actions */}
       <td 
-        className="p-4 text-right sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 transition-colors shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)] w-20 min-w-[80px]" 
+        className="p-4 text-right sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 transition-colors shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)] w-28 min-w-[110px]" 
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-end gap-1">
+          {hasPhone && (
+            <button 
+              onClick={() => onOpenWhatsApp?.(item)} 
+              className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              title="Enviar mensaje de WhatsApp"
+            >
+              <MessageSquare className="w-4 h-4"/>
+            </button>
+          )}
           <button 
             onClick={() => onDeleteRow(item)} 
             className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-slate-800 rounded-lg transition-colors"

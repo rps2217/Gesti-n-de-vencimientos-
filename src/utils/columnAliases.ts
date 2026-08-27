@@ -287,3 +287,12 @@ export function detectAllColumnSemantics(
 
   return map;
 }
+
+/**
+ * Helper to find phone/whatsapp column
+ */
+export function findPhoneColumn(headers: string[]): string | undefined {
+  if (!headers || headers.length === 0) return undefined;
+  return headers.find(h => /tel|cel|phone|whatsapp|wsp|m[oó]vil|fono/i.test(h));
+}
+

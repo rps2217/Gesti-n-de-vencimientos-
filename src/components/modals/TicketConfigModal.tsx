@@ -31,10 +31,13 @@ export const TicketConfigModal: React.FC<TicketConfigModalProps> = ({
   if (!isOpen) return null;
 
   const handleUpdate = (header: string, updates: Partial<TicketColumnConfig>) => {
-    setLocalConfig(prev => ({
-      ...prev,
-      [header]: { ...prev[header], ...updates }
-    }));
+    setLocalConfig(prev => {
+      const current = prev[header] || { show: false, size: 10, bold: false };
+      return {
+        ...prev,
+        [header]: { ...current, ...updates }
+      };
+    });
   };
 
   const renderConfigRow = (header: string) => {

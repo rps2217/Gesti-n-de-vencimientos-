@@ -491,7 +491,7 @@ export const SchemaEditorView: React.FC<SchemaEditorViewProps> = ({
                     multiple
                     value={uvc.sourceColumns}
                     onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                      const selected = Array.from(e.target.selectedOptions, option => option.value);
+                      const selected = Array.from(e.target.selectedOptions as HTMLCollectionOf<HTMLOptionElement>).map(option => option.value);
                       const updated = [...(sheetConfig.userVirtualColumns || [])];
                       updated[index].sourceColumns = selected;
                       saveConfig({ ...sheetConfig, userVirtualColumns: updated });

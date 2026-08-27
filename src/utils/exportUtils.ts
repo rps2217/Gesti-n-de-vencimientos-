@@ -5,13 +5,33 @@ import { formatDisplayDate } from './pureCalculations';
  * Universal, clean Excel exporter with automatic column width calculation
  * and sanitized formatting for dates and numbers.
  */
-export function exportToExcel(filename: string, headers: string[], items: any[], sheetName = 'Inventario') {
+export function exportToExcel(
+  filename: string, 
+  headers: string[], 
+  items: any[], 
+  sheetName = 'Inventario',
+  virtualColumns?: any[],
+  allData?: any
+) {
   if (!items || !items.length) return;
+
+  // Enhance items with virtual column data
+  const enhancedItems = items.map(item => {
+    const newItem = { ...item };
+    if (virtualColumns) {
+      virtualColumns.forEach(vc => {
+        newItem[vc.label] = vc.calculate(item, headers, allData);
+      });
+    }
+    return newItem;
+  });
+
+  const allHeaders = [...headers, ...(virtualColumns?.map(vc => vc.label) || [])];
 
   // Format headers and rows
   const worksheetData = [
-    headers,
-    ...items.map(item => headers.map(header => {
+    allHeaders,
+    ...enhancedItems.map(item => allHeaders.map(header => {
       const val = item[header];
       if (val === null || val === undefined) return '';
       if (val instanceof Date) return formatDisplayDate(val);

@@ -1397,7 +1397,27 @@ export const InventoryDashboard: React.FC = () => {
 
                       <button
                         onClick={() => {
-                          exportToExcel(`${activeView}_${new Date().toISOString().split('T')[0]}`, headers, filteredItems);
+                          const activeVirtual = [
+                            ...VIRTUAL_COLUMNS.filter(vc => sheetConfig.activeVirtualColumns?.includes(vc.id)),
+                            ...(sheetConfig.userVirtualColumns || []).map(uvc => ({
+                              id: uvc.id,
+                              label: uvc.label,
+                              calculate: (item: any) => {
+                                const values = uvc.sourceColumns.map(sc => item[sc] || '');
+                                if (uvc.operation === 'concatenate') return values.join(' ');
+                                if (uvc.operation === 'sum') return values.reduce((acc, v) => acc + (parseFloat(v) || 0), 0);
+                                if (uvc.operation === 'diff_days') {
+                                   const d1 = parseAnyDate(values[0]);
+                                   const d2 = parseAnyDate(values[1]);
+                                   if (d1 && d2) return Math.round(Math.abs(d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24));
+                                   return '-';
+                                }
+                                return '-';
+                              }
+                            }))
+                          ];
+                          const allData = { products, policies, events: [] };
+                          exportToExcel(`${activeView}_${new Date().toISOString().split('T')[0]}`, headers, filteredItems, 'Inventario', activeVirtual, allData);
                           setIsActionsMenuOpen(false);
                         }}
                         className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
@@ -2160,7 +2180,30 @@ export const InventoryDashboard: React.FC = () => {
                 <button 
                   onClick={() => {
                     const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
-                    exportToExcel(`Seleccion_${new Date().toISOString().split('T')[0]}`, headers, selectedItems);
+                    
+                    // Prepare all virtual columns (system + user)
+                    const activeVirtual = [
+                      ...VIRTUAL_COLUMNS.filter(vc => sheetConfig.activeVirtualColumns?.includes(vc.id)),
+                      ...(sheetConfig.userVirtualColumns || []).map(uvc => ({
+                        id: uvc.id,
+                        label: uvc.label,
+                        calculate: (item: any) => {
+                          const values = uvc.sourceColumns.map(sc => item[sc] || '');
+                          if (uvc.operation === 'concatenate') return values.join(' ');
+                          if (uvc.operation === 'sum') return values.reduce((acc, v) => acc + (parseFloat(v) || 0), 0);
+                          if (uvc.operation === 'diff_days') {
+                             const d1 = parseAnyDate(values[0]);
+                             const d2 = parseAnyDate(values[1]);
+                             if (d1 && d2) return Math.round(Math.abs(d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24));
+                             return '-';
+                          }
+                          return '-';
+                        }
+                      }))
+                    ];
+                    
+                    const allData = { products, policies, events: [] };
+                    exportToExcel(`Seleccion_${new Date().toISOString().split('T')[0]}`, headers, selectedItems, 'Selección', activeVirtual, allData);
                   }}
                   className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
                 >

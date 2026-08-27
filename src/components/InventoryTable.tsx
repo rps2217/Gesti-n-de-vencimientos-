@@ -1,5 +1,5 @@
 import React from 'react';
-import { InventoryItem, EventCategory } from '../types';
+import { InventoryItem, EventCategory, SortConfig } from '../types';
 import { ColumnFilterMenu } from './views/ColumnFilterMenu';
 import { InventoryTableRow } from './views/InventoryTableRow';
 import { ColumnMetadata } from '../hooks/usePrecomputedColumns';
@@ -57,6 +57,8 @@ interface InventoryTableProps {
   groupByColumn?: string;
   toggleGroupCollapse?: (groupKey: string) => void;
   measureElementRef?: (node: HTMLElement | null) => void;
+  sortConfig: SortConfig;
+  handleToggleSort: (columnName: string) => void;
 }
 
 export const InventoryTable: React.FC<InventoryTableProps> = ({
@@ -108,7 +110,9 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   paddingBottom = 0,
   groupByColumn,
   toggleGroupCollapse,
-  measureElementRef
+  measureElementRef,
+  sortConfig,
+  handleToggleSort,
 }) => {
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col h-full">
@@ -255,9 +259,18 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                     title="Mantén presionado y arrastra para reordenar columna"
                   >
                     <div className="flex items-center justify-between gap-1 w-full min-w-0 pr-1">
-                      <div className="flex items-center gap-1 min-w-0 truncate">
+                      <div 
+                        className="flex items-center gap-1 min-w-0 truncate cursor-pointer flex-1"
+                        onClick={() => handleToggleSort(header)}
+                        title={`Click para ordenar por ${header} (${sortConfig.column === header ? (sortConfig.direction === 'asc' ? 'Ascendente ➔ Descendente' : 'Descendente ➔ Quitar') : 'Ascendente'})`}
+                      >
                         <GripVertical className="w-3.5 h-3.5 text-slate-400 dark:text-slate-400 group-hover:text-blue-400 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
                         <span className="truncate font-bold tracking-tight">{header}</span>
+                        {sortConfig.column === header && (
+                          <span className="shrink-0 text-blue-600 dark:text-blue-400 font-bold text-xs ml-0.5">
+                            {sortConfig.direction === 'asc' ? '▲' : '▼'}
+                          </span>
+                        )}
                         {colSchema?.isKey && (
                           <span className="text-[9px] bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 px-1 py-0.2 rounded font-mono font-bold shrink-0">
                             ID

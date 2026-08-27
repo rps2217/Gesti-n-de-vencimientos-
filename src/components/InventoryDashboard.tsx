@@ -54,7 +54,6 @@ import {
 
 // Modals & Drawers & Sub-components
 import { BulkImportFRC } from './BulkImportFRC';
-import { DashboardFilters } from './DashboardFilters';
 import { InventoryTable } from './InventoryTable';
 import { Sidebar } from './navigation/Sidebar';
 import { DashboardTopNav } from './navigation/DashboardTopNav';
@@ -334,6 +333,8 @@ export const InventoryDashboard: React.FC = () => {
     setColumnFilters,
     groupByColumn,
     setGroupByColumn,
+    sortConfig,
+    handleToggleSort,
     collapsedGroups,
     toggleGroupCollapse,
     expandAllGroups,
@@ -1446,6 +1447,8 @@ export const InventoryDashboard: React.FC = () => {
                 groupByColumn={groupByColumn}
                 toggleGroupCollapse={toggleGroupCollapse}
                 measureElementRef={rowVirtualizer.measureElement}
+                sortConfig={sortConfig}
+                handleToggleSort={handleToggleSort}
               />
 
               {/* Footer summary bar */}

@@ -342,6 +342,15 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                         />
                       )}
                     </div>
+                    <div
+                      onMouseDown={(e) => handleStartResize(header, width, e)}
+                      onDoubleClick={() => handleAutoFitColumn(header, header)}
+                      className={`absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400/80 transition-colors z-20 flex items-center justify-center ${
+                        isResizingThis ? 'bg-blue-600 w-2.5' : ''
+                      }`}
+                    >
+                      <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-500 group-hover:bg-blue-500"></div>
+                    </div>
                   </th>
                 );
               })}

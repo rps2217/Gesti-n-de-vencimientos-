@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MessageSquare, X, Send, Phone, User, ExternalLink, CheckCircle } from 'lucide-react';
 import { findPhoneColumn } from '../../utils/columnAliases';
+import { formatPhoneNumber } from '../../utils/pureCalculations';
 
 interface WhatsAppModalProps {
   isOpen: boolean;
@@ -53,20 +54,6 @@ Nuestro Horario de atención es de *Lunes a Viernes de 9:00 a 19:00 pm Y Sábado
     const phone = phoneColumn ? item[phoneColumn] : null;
     return phone !== undefined && phone !== null && String(phone).trim() !== '';
   });
-
-  const formatPhoneNumber = (phone: any) => {
-    let rawPhone = String(phone || '').replace(/[^\d+]/g, '');
-    if (!rawPhone) return '';
-    if (!rawPhone.startsWith('+56')) {
-      if (rawPhone.startsWith('56') && rawPhone.length >= 10) {
-        rawPhone = '+' + rawPhone;
-      } else {
-        rawPhone = rawPhone.replace(/^\+/, '');
-        rawPhone = '+56' + rawPhone;
-      }
-    }
-    return rawPhone;
-  };
 
   const currentContact = validContacts[selectedContactIndex] || selectedItems[0];
   const currentPhone = phoneColumn && currentContact ? formatPhoneNumber(currentContact[phoneColumn]) : '';

@@ -351,3 +351,20 @@ export function calculateWithdrawalDate(dVc: Date, diasRetiro: number): Date {
   const monthsToSubtract = Math.round(diasRetiro / 30);
   return new Date(dVc.getFullYear(), dVc.getMonth() - monthsToSubtract + 1, 0);
 }
+
+/**
+ * Clean and format phone numbers, ensuring they have the +56 prefix (Chile)
+ */
+export function formatPhoneNumber(phone: any): string {
+  let rawPhone = String(phone || '').replace(/[^\d+]/g, '');
+  if (!rawPhone) return '';
+  if (!rawPhone.startsWith('+56')) {
+    if (rawPhone.startsWith('56') && rawPhone.length >= 10) {
+      rawPhone = '+' + rawPhone;
+    } else {
+      rawPhone = rawPhone.replace(/^\+/, '');
+      rawPhone = '+56' + rawPhone;
+    }
+  }
+  return rawPhone;
+}

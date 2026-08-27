@@ -83,8 +83,10 @@ import { GmailDraftModal } from './modals/GmailDraftModal';
 import { UniversalImportModal } from './modals/UniversalImportModal';
 import { GlobalTicketConfig, ViewTicketConfig } from '../types';
 import { SkeletonLoader } from './common/SkeletonLoader';
+import { useToast } from './common/ToastContainer';
 
 export const InventoryDashboard: React.FC = () => {
+  const { showToast } = useToast();
   const [metadata, setMetadata] = useState<SpreadsheetMetadata | null>(null);
   const [activeSheet, setActiveSheet] = useState<SheetProperties | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -126,15 +128,16 @@ export const InventoryDashboard: React.FC = () => {
 
   const handleSyncOfflineQueue = async () => {
     if (offlineQueue.length === 0) return;
+    const toastId = showToast(`Sincronizando ${offlineQueue.length} cambios pendientes con Google Sheets...`, 'loading', 'Sincronización', 0);
     try {
       const res = await syncQueue();
       if (res && res.success) {
-        alert(`¡Se sincronizaron exitosamente ${res.count} mutaciones en Google Sheets!`);
+        showToast(`¡Se sincronizaron exitosamente ${res.count} mutaciones en Google Sheets!`, 'success', 'Sincronización Exitosa');
       } else if (res && res.errors && res.errors.length > 0) {
-        alert(`Hubo errores al sincronizar parte de la cola: ${res.errors.join(', ')}`);
+        showToast(`Hubo errores al sincronizar: ${res.errors.join(', ')}`, 'error', 'Sincronización Parcial');
       }
     } catch (err: any) {
-      alert(`Error sincronizando cola offline: ${err.message}`);
+      showToast(`Error sincronizando cola offline: ${err.message}`, 'error', 'Error de Sincronización');
     }
   };
 
@@ -1207,10 +1210,10 @@ export const InventoryDashboard: React.FC = () => {
 
       setSelectedRowIds([]);
       await fetchData(sheetConfig, activeView, true);
-      alert(`¡Se actualizaron ${selectedRowIds.length} registros exitosamente con la información masiva!`);
+      showToast(`¡Se actualizaron ${selectedRowIds.length} registros exitosamente con la información masiva!`, 'success', 'Edición Masiva');
     } catch (err: any) {
       setItems(originalItems);
-      alert(`Error en actualización masiva: ${err.message}`);
+      showToast(`Error en actualización masiva: ${err.message}`, 'error', 'Error en Edición');
     } finally {
       setIsSaving(false);
     }
@@ -1220,6 +1223,9 @@ export const InventoryDashboard: React.FC = () => {
     if (!activeSheet || selectedRowIds.length === 0) return;
     const confirmed = window.confirm(`¿Estás seguro de que deseas eliminar ${selectedRowIds.length} registros seleccionados? Esta acción no se puede deshacer.`);
     if (!confirmed) return;
+
+    const count = selectedRowIds.length;
+    showToast(`Eliminando ${count} registros en Google Sheets (proceso en segundo plano)...`, 'loading', 'Eliminación Masiva', 0);
 
     const originalItems = [...items];
     const originalMainItems = [...allMainItems];
@@ -1245,14 +1251,13 @@ export const InventoryDashboard: React.FC = () => {
         }
       }
 
-      const count = selectedRowIds.length;
       setSelectedRowIds([]);
       await fetchData(sheetConfig, activeView, true);
-      alert(`¡Se eliminaron ${count} registros exitosamente!`);
+      showToast(`¡Se eliminaron ${count} registros exitosamente en Google Sheets!`, 'success', 'Eliminación Completada');
     } catch (err: any) {
       setItems(originalItems);
       setAllMainItems(originalMainItems);
-      alert(`Error en eliminación masiva: ${err.message}`);
+      showToast(`Error en eliminación masiva: ${err.message}`, 'error', 'Error de Eliminación');
     } finally {
       setIsSaving(false);
     }

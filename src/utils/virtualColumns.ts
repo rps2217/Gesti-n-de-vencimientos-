@@ -1,4 +1,4 @@
-import { VirtualColumn } from '../types';
+import { VirtualColumn, UserVirtualColumn } from '../types';
 import { findColumnBySemantic } from './columnAliases';
 import { parseAnyDate, formatDisplayDate, calculateWithdrawalDate } from './dateCalculations';
 
@@ -17,21 +17,16 @@ export const VIRTUAL_COLUMNS: VirtualColumn[] = [
       const dVc = parseAnyDate(item[vcCol]);
       if (!dVc) return '-';
 
-      // 1. Get SKU (Use semantic search or direct lookup)
       const sku = skuCol ? item[skuCol] : null;
 
-      // 2. RUT_PROVEEDOR_VC = LOOKUP([_THISROW].[SKU_VC], "CATALOGO", "COD PRODUCTO", "RUT PROVEEDOR")
       const productEntry = products?.find((p: any) => {
         const pSku = p['COD PRODUCTO'] || p['C'] || p['Código'] || p['Código Producto'];
         return String(pSku).trim() === String(sku).trim();
       });
       const rutProveedor = productEntry ? (productEntry['RUT PROVEEDOR'] || productEntry['F'] || productEntry['RUT']) : null;
 
-      // 3. DIAS_RETIRO_VC = [RUT_PROVEEDOR_VC].[RETIRO (DÍAS)]
-      // Policies: A is RUT, H is RETIRO (DÍAS)
-      let diasRetiro = 30; // Default
+      let diasRetiro = 30; 
       
-      // Try to get dias_retiro directly from the item first (it's already loaded in the data)
       const diasRetiroCol = findColumnBySemantic(headers, 'dias_retiro');
       if (diasRetiroCol && item[diasRetiroCol]) {
         diasRetiro = parseInt(String(item[diasRetiroCol])) || 30;
@@ -47,8 +42,6 @@ export const VIRTUAL_COLUMNS: VirtualColumn[] = [
         }
       }
       
-      // 4. FECHA_RETIRO_VC = EOMONTH(FECHA_VC, -(DIAS_RETIRO_VC / 30))
-      // Logic: Subtract months based on policy (days/30), project to end of month.
       const dRet = calculateWithdrawalDate(dVc, diasRetiro);
       
       return formatDisplayDate(dRet);
@@ -87,3 +80,30 @@ export const VIRTUAL_COLUMNS: VirtualColumn[] = [
     }
   }
 ];
+
+export const calculateVirtualColumnValue = (
+  col: VirtualColumn | UserVirtualColumn,
+  item: any,
+  headers: string[],
+  allData: any
+): string | number => {
+  // Check if it's a System Virtual Column
+  if ('calculate' in col && typeof col.calculate === 'function') {
+    return col.calculate(item, headers, allData);
+  }
+  
+  // Handle User Virtual Columns
+  const uvc = col as UserVirtualColumn;
+  const values = uvc.sourceColumns.map(sc => item[sc] || '');
+  
+  if (uvc.operation === 'concatenate') return values.join(' ');
+  if (uvc.operation === 'sum') return values.reduce((acc, v) => acc + (parseFloat(String(v)) || 0), 0);
+  if (uvc.operation === 'diff_days') {
+     const d1 = parseAnyDate(values[0]);
+     const d2 = parseAnyDate(values[1]);
+     if (d1 && d2) return Math.round(Math.abs(d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24));
+     return '-';
+  }
+  
+  return '-';
+};

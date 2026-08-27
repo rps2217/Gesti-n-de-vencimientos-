@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { formatDisplayDate } from './pureCalculations';
+import { calculateVirtualColumnValue } from './virtualColumns';
 
 /**
  * Universal, clean Excel exporter with automatic column width calculation
@@ -20,7 +21,7 @@ export function exportToExcel(
     const newItem = { ...item };
     if (virtualColumns) {
       virtualColumns.forEach(vc => {
-        newItem[vc.label] = vc.calculate(item, headers, allData);
+        newItem[vc.label] = calculateVirtualColumnValue(vc, item, headers, allData);
       });
     }
     return newItem;

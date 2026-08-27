@@ -54,6 +54,7 @@ import {
 
 // Modals & Drawers & Sub-components
 import { BulkImportFRC } from './BulkImportFRC';
+import { DashboardFilters } from './DashboardFilters';
 import { Sidebar } from './navigation/Sidebar';
 import { SchemaEditorView } from './views/SchemaEditorView';
 import { AnalyticsDashboard } from './views/AnalyticsDashboard';

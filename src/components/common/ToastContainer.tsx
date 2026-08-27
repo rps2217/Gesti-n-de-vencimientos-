@@ -23,12 +23,21 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const showToast = useCallback((message: string, type: ToastType = 'info', title?: string, duration: number = 4000) => {
     const id = Math.random().toString(36).substring(2, 9);
-    setToasts(prev => [...prev, { id, message, title, type }]);
+    
+    setToasts(prev => {
+      // If new toast is success or error, remove any lingering loading toasts
+      const filtered = (type === 'success' || type === 'error') 
+        ? prev.filter(t => t.type !== 'loading') 
+        : prev;
+      return [...filtered, { id, message, title, type }];
+    });
 
-    if (type !== 'loading' && duration > 0) {
+    // Auto dismiss for non-loading or even loading if duration is specified
+    const dismissTime = type === 'loading' ? 0 : duration;
+    if (dismissTime > 0) {
       setTimeout(() => {
         setToasts(prev => prev.filter(t => t.id !== id));
-      }, duration);
+      }, dismissTime);
     }
     return id;
   }, []);

@@ -226,18 +226,35 @@ export function useInventoryFiltering({
 
   // Options map for column dropdown filter menus
   const columnOptionsMap = useMemo(() => {
+    const map: Record<string, { label: string; value: string }[]> = {};
+    
     if (metrics?.columnOptionsMap && Object.keys(metrics.columnOptionsMap).length > 0) {
-      return metrics.columnOptionsMap;
+      Object.assign(map, metrics.columnOptionsMap);
+    } else {
+      headers.forEach(h => {
+        const uniqueVals = new Set<string>();
+        augmentedItems.forEach(item => {
+          const val = item[h];
+          if (val !== undefined && val !== null && String(val).trim() !== '') {
+            uniqueVals.add(String(val).trim());
+          } else {
+            uniqueVals.add('(Vacío)');
+          }
+        });
+        map[h] = Array.from(uniqueVals)
+          .sort((a, b) => a.localeCompare(b))
+          .slice(0, 100)
+          .map(v => ({ label: v, value: v }));
+      });
     }
 
-    const map: Record<string, { label: string; value: string }[]> = {};
+    // Always ensure active virtual columns are included in columnOptionsMap
     const activeVCs = sheetConfig.activeVirtualColumns || [];
     const activeViewVCs = VIRTUAL_COLUMNS
       .filter(vc => activeVCs.includes(vc.id) && (!vc.supportedViews || vc.supportedViews.includes(activeView)))
       .map(vc => vc.id);
-    const allHeaders = [...headers, ...activeViewVCs];
-    
-    allHeaders.forEach(h => {
+
+    activeViewVCs.forEach(h => {
       const uniqueVals = new Set<string>();
       augmentedItems.forEach(item => {
         const val = item[h];
@@ -252,6 +269,7 @@ export function useInventoryFiltering({
         .slice(0, 100)
         .map(v => ({ label: v, value: v }));
     });
+
     return map;
   }, [augmentedItems, headers, sheetConfig.activeVirtualColumns, metrics, activeView]);
 

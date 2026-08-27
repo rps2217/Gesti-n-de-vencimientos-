@@ -55,7 +55,11 @@ import {
 // Modals & Drawers & Sub-components
 import { BulkImportFRC } from './BulkImportFRC';
 import { DashboardFilters } from './DashboardFilters';
+import { InventoryTable } from './InventoryTable';
 import { Sidebar } from './navigation/Sidebar';
+import { DashboardTopNav } from './navigation/DashboardTopNav';
+import { DashboardPageHeader } from './navigation/DashboardPageHeader';
+import { DashboardFilterPanels } from './views/DashboardFilterPanels';
 import { SchemaEditorView } from './views/SchemaEditorView';
 import { AnalyticsDashboard } from './views/AnalyticsDashboard';
 import { ItemDetailDrawer } from './drawers/ItemDetailDrawer';
@@ -1267,469 +1271,81 @@ export const InventoryDashboard: React.FC = () => {
       <div className="flex-1 flex flex-col overflow-hidden relative">
         
         {/* MACRO SEARCH NAV (Always top, sticky) */}
-        <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 z-20 sticky top-0 shrink-0 px-4 sm:px-8 py-3 flex items-center justify-between gap-4">
-          {/* Mobile Menu Trigger */}
-          <button
-            onClick={() => setIsMobileMenuOpen(true)}
-            className="lg:hidden p-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition-colors shrink-0"
-            title="Abrir menú"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-
-          {/* Search is the hero */}
-          <div className="flex-1 flex justify-center">
-            {(activeView !== 'schema' || searchableHeaders.length > 0) ? (
-              <div className="relative w-full max-w-3xl flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Search className="w-5 h-5 text-slate-400 dark:text-slate-500 absolute left-4 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder={activeView === 'analytics' ? "Explorar y filtrar gráficos por lote, descripción, proveedor..." : `Buscar en todo el inventario (${searchableHeaders.length} columnas)...`}
-                    className="w-full pl-11 pr-10 py-3 bg-slate-200/70 dark:bg-slate-700/80 hover:bg-slate-200 dark:hover:bg-slate-700 border-transparent focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-2xl text-base font-medium text-slate-700 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all"
-                  />
-                  {searchTerm && (
-                    <button
-                      onClick={() => setSearchTerm('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 p-1.5 rounded-full hover:bg-slate-200/60 dark:hover:bg-slate-700 transition-colors"
-                      title="Limpiar búsqueda"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-                {hasActiveFilters && (
-                  <button
-                    onClick={clearAllFilters}
-                    className="flex items-center gap-2 px-4 py-3 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-2xl font-bold transition-colors whitespace-nowrap border border-red-100 dark:border-red-900/50"
-                    title="Limpiar todos los filtros"
-                  >
-                    <FilterX className="w-4 h-4" />
-                    <span className="hidden sm:inline">Limpiar filtros</span>
-                  </button>
-                )}
-                <button
-                  onClick={() => setIsScannerOpen(true)}
-                  className="p-3 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-2xl transition-all shrink-0 flex items-center gap-2 border border-blue-200/60 dark:border-blue-800/60 shadow-sm"
-                  title="Escanear código de barras o QR con la cámara"
-                >
-                  <Scan className="w-5 h-5" />
-                  <span className="text-xs font-bold hidden sm:inline">Escanear</span>
-                </button>
-              </div>
-            ) : (
-              <div className="w-full max-w-3xl py-3" /> /* Spacer */
-            )}
-          </div>
-
-          {/* Global Utils (Export/Share Menu, View Menu, Sync, Refresh) */}
-          <div className="flex items-center gap-2.5 shrink-0">
-            {activeView !== 'schema' && (
-              <>
-                {/* Unified Share / Export Menu */}
-                <div className="relative">
-                  <button
-                    id="actions-dropdown-btn"
-                    onClick={() => setIsActionsMenuOpen(!isActionsMenuOpen)}
-                    className={`text-xs font-bold px-3.5 py-2.5 rounded-xl border transition-all flex items-center gap-1.5 shadow-sm ${
-                      isActionsMenuOpen
-                        ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-transparent'
-                        : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
-                    }`}
-                    title="Opciones de exportación, correo y reportes"
-                  >
-                    <Download className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                    <span>Compartir & Exportar</span>
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isActionsMenuOpen ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {isActionsMenuOpen && (
-                    <div
-                      id="actions-dropdown-menu"
-                      className="absolute right-0 top-full mt-1.5 w-64 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150"
-                    >
-                      <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                        Comunicaciones & Reportes
-                      </div>
-                      
-                      <button
-                        onClick={() => {
-                          setIsGmailModalOpen(true);
-                          setIsActionsMenuOpen(false);
-                        }}
-                        className="w-full text-left px-3.5 py-2 hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors group"
-                      >
-                        <div className="w-7 h-7 rounded-lg bg-red-100 dark:bg-red-900/60 text-red-600 dark:text-red-300 flex items-center justify-center shrink-0">
-                          <Mail className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-bold text-slate-800 dark:text-slate-100">Borrador Gmail</div>
-                          <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
-                            {selectedRowIds.length > 0 ? `${selectedRowIds.length} ítems seleccionados` : 'Todos los mostrados'}
-                          </div>
-                        </div>
-                      </button>
-
-                      {activeView === 'main' && (
-                        <button
-                          onClick={() => {
-                            setIsPmReportOpen(true);
-                            setIsActionsMenuOpen(false);
-                          }}
-                          className="w-full text-left px-3.5 py-2 hover:bg-orange-50 dark:hover:bg-orange-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors group"
-                        >
-                          <div className="w-7 h-7 rounded-lg bg-orange-100 dark:bg-orange-900/60 text-orange-600 dark:text-orange-300 flex items-center justify-center shrink-0">
-                            <Flame className="w-3.5 h-3.5" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="font-bold text-slate-800 dark:text-slate-100">Reporte PM ({drainageReportItems.length})</div>
-                            <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">Resumen de drenaje crítico</div>
-                          </div>
-                        </button>
-                      )}
-
-                      <div className="my-1.5 border-t border-slate-100 dark:border-slate-700/80" />
-
-                      <div className="px-3 py-1 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                        Archivos & Físico
-                      </div>
-
-                      <button
-                        onClick={() => {
-                          const activeVirtual = [
-                            ...VIRTUAL_COLUMNS.filter(vc => sheetConfig.activeVirtualColumns?.includes(vc.id)),
-                            ...(sheetConfig.userVirtualColumns || []).map(uvc => ({
-                              id: uvc.id,
-                              label: uvc.label,
-                              calculate: (item: any) => {
-                                const values = uvc.sourceColumns.map(sc => item[sc] || '');
-                                if (uvc.operation === 'concatenate') return values.join(' ');
-                                if (uvc.operation === 'sum') return values.reduce((acc, v) => acc + (parseFloat(v) || 0), 0);
-                                if (uvc.operation === 'diff_days') {
-                                   const d1 = parseAnyDate(values[0]);
-                                   const d2 = parseAnyDate(values[1]);
-                                   if (d1 && d2) return Math.round(Math.abs(d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24));
-                                   return '-';
-                                }
-                                return '-';
-                              }
-                            }))
-                          ];
-                          const allData = { products, policies, events: [] };
-                          exportToExcel(`${activeView}_${new Date().toISOString().split('T')[0]}`, headers, filteredItems, 'Inventario', activeVirtual, allData);
-                          setIsActionsMenuOpen(false);
-                        }}
-                        className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
-                      >
-                        <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0">
-                          <FileSpreadsheet className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-bold text-slate-800 dark:text-slate-100">Descargar Excel (.xlsx)</div>
-                          <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{filteredItems.length} registros</div>
-                        </div>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          handlePrintTicket(filteredItems);
-                          setIsActionsMenuOpen(false);
-                        }}
-                        className="w-full text-left px-3.5 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
-                      >
-                        <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 flex items-center justify-center shrink-0">
-                          <Printer className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-bold text-slate-800 dark:text-slate-100">Imprimir Ticket Térmico</div>
-                          <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">Formato continuo 80mm/58mm</div>
-                        </div>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-
-            {/* Status & Sync Indicator */}
-            <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-xl text-xs font-semibold shadow-sm">
-              <span className={`w-2 h-2 rounded-full ${isOffline ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
-              <span className="text-slate-700 dark:text-slate-200 hidden md:inline">{isOffline ? 'Offline' : 'Conectado'}</span>
-              {lastCachedAt && (
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono hidden lg:inline">({new Date(lastCachedAt).toLocaleTimeString()})</span>
-              )}
-              {offlineQueue.length > 0 && (
-                <button 
-                  onClick={handleSyncOfflineQueue}
-                  className="ml-1 bg-blue-600 text-white px-2 py-0.5 rounded-lg text-[10px] font-bold hover:bg-blue-700 transition-colors"
-                >
-                  Sincronizar ({offlineQueue.length})
-                </button>
-              )}
-            </div>
-
-            <button onClick={() => fetchData(sheetConfig, activeView, true)} className="text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2.5 rounded-xl font-medium shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 transition-colors" title="Refrescar datos">
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-        </div>
+        <DashboardTopNav
+          isMobileMenuOpen={isMobileMenuOpen}
+          setIsMobileMenuOpen={setIsMobileMenuOpen}
+          activeView={activeView}
+          searchableHeaders={searchableHeaders}
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          hasActiveFilters={hasActiveFilters}
+          clearAllFilters={clearAllFilters}
+          setIsScannerOpen={setIsScannerOpen}
+          isActionsMenuOpen={isActionsMenuOpen}
+          setIsActionsMenuOpen={setIsActionsMenuOpen}
+          setIsGmailModalOpen={setIsGmailModalOpen}
+          setIsPmReportOpen={setIsPmReportOpen}
+          drainageReportItems={drainageReportItems}
+          headers={headers}
+          filteredItems={filteredItems}
+          sheetConfig={sheetConfig}
+          products={products}
+          policies={policies}
+          handlePrintTicket={handlePrintTicket}
+          isOffline={isOffline}
+          lastCachedAt={lastCachedAt}
+          offlineQueue={offlineQueue}
+          handleSyncOfflineQueue={handleSyncOfflineQueue}
+          fetchData={fetchData}
+          loading={loading}
+        />
 
         {/* CONTEXTUAL PAGE HEADER */}
-        <div className="bg-slate-50/50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 px-8 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              {activeView === 'main' ? 'Radar de Vencimientos & Drenaje' :
-               activeView === 'events' ? 'Registro de Incidencias & FRC' : 
-               activeView === 'products' ? 'Catálogo de Productos' : 
-               activeView === 'policies' ? 'Políticas de Canje' : 
-               activeView === 'schema' ? 'Configuración de Datos & Relaciones' :
-               activeView === 'analytics' ? 'Analítica & Dashboard' :
-               activeView}
-              
-              {isRelationalActive && activeView === 'main' && (
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-bold flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Modelo Relacional Activo
-                </span>
-              )}
-            </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              {activeView === 'main' ? 'Monitoreo de lotes críticos, fechas de retiro comercial y solicitud de precio para PM.' :
-               activeView === 'events' ? 'Deterioros de transporte, diferencias de pedido, averías de almacén y devoluciones.' :
-               activeView === 'products' ? 'Maestro de SKUs con relaciones directas hacia vencimientos e incidencias.' :
-               activeView === 'policies' ? 'Reglas de tiempo de anticipación para retiro preventivo de productos.' :
-               activeView === 'schema' ? 'Estructura de columnas, claves ID y sincronización de metadatos.' :
-               activeView === 'analytics' ? 'Gráficos, tendencias de incidencias y proyecciones de vencimiento.' :
-               'Gestión de datos tabulares'}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* View Config & Layout Menu */}
-            {activeView !== 'schema' && activeView !== 'analytics' && (
-              <div className="relative">
-                <button
-                  id="view-dropdown-btn"
-                  onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
-                  className={`text-xs bg-white dark:bg-slate-800 border hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2.5 rounded-xl font-bold transition-all flex items-center gap-1.5 shadow-sm ${
-                    isViewMenuOpen ? 'border-blue-400 dark:border-blue-600 text-blue-600' : 'border-slate-200 dark:border-slate-700'
-                  }`}
-                  title="Configurar columnas, agrupación y visualización"
-                >
-                  <Columns className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  <span>Personalizar Vista</span>
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isViewMenuOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {isViewMenuOpen && (
-                  <div
-                    id="view-dropdown-menu"
-                    className="absolute right-0 top-full mt-1.5 w-60 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150"
-                  >
-                    {/* Quick Grouping inside menu */}
-                    <div className="px-3.5 py-2 border-b border-slate-100 dark:border-slate-700/60 flex flex-col gap-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                          <Tag className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Agrupar por
-                        </span>
-                        {groupByColumn !== 'none' && (
-                          <button
-                            onClick={() => setGroupByColumn('none')}
-                            className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-bold"
-                          >
-                            Quitar
-                          </button>
-                        )}
-                      </div>
-                      <select
-                        value={groupByColumn}
-                        onChange={(e) => setGroupByColumn(e.target.value)}
-                        className="w-full text-xs font-semibold bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      >
-                        <option value="none">Sin agrupación</option>
-                        {visibleHeaders.map(h => (
-                          <option key={h} value={h}>{h}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        setIsColumnManagerOpen(true);
-                        setIsViewMenuOpen(false);
-                      }}
-                      className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
-                    >
-                      <Columns className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                      <span>Gestionar & Ocultar Columnas</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setAreFiltersVisible(!areFiltersVisible);
-                        setIsViewMenuOpen(false);
-                      }}
-                      className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
-                    >
-                      <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                      <span>{areFiltersVisible ? 'Ocultar Paneles de Filtro' : 'Mostrar Paneles de Filtro'}</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setIsTicketConfigOpen(true);
-                        setIsViewMenuOpen(false);
-                      }}
-                      className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
-                    >
-                      <Settings className="w-4 h-4 text-slate-500" />
-                      <span>Configurar Ticket Térmico</span>
-                    </button>
-
-                    {hasCustomColWidths && (
-                      <button
-                        onClick={() => {
-                          handleResetColWidths();
-                          setIsViewMenuOpen(false);
-                        }}
-                        className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
-                      >
-                        <RotateCcw className="w-4 h-4 text-slate-500" />
-                        <span>Restablecer Ancho Columnas</span>
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Quick Grouping Selector */}
-            {activeView !== 'schema' && activeView !== 'analytics' && (
-              <div className="hidden lg:flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 shadow-sm">
-                <Tag className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 mr-2 shrink-0" />
-                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 mr-2">Agrupar:</span>
-                <select
-                  value={groupByColumn}
-                  onChange={(e) => setGroupByColumn(e.target.value)}
-                  className="text-xs font-bold text-slate-700 dark:text-slate-200 bg-transparent border-none focus:outline-none cursor-pointer"
-                  title="Agrupar registros por columna (estilo AppSheet)"
-                >
-                  <option value="none">Sin agrupación</option>
-                  {visibleHeaders.map(h => (
-                    <option key={h} value={h}>{h}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Special Action: Bulk Import FRC */}
-            {activeView === 'events' && (
-              <button
-                onClick={() => setIsBulkImportOpen(true)}
-                className="text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-1.5"
-              >
-                <Plus className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                <span>Importar Masivo FRC</span>
-              </button>
-            )}
-
-            {/* Special Action: Apps Script for Schema */}
-            {activeView === 'schema' && (
-              <button
-                onClick={() => setIsScriptModalOpen(true)}
-                className="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-sm"
-              >
-                <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                <span>Conector Apps Script</span>
-              </button>
-            )}
-
-            {/* Primary Action Button (Add new item) */}
-            {activeView !== 'schema' && activeView !== 'analytics' && (
-              <button 
-                disabled={!activeSheet || isModalOpen} 
-                onClick={() => handleOpenModal()} 
-                className="text-xs bg-blue-600 text-white px-4 py-2.5 rounded-xl font-bold shadow-md shadow-blue-200 dark:shadow-none flex items-center gap-2 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all"
-              >
-                <Plus className="w-4 h-4"/>
-                <span>
-                  {activeView === 'main' ? 'Nuevo Vencimiento' :
-                   activeView === 'events' ? 'Nueva Incidencia' :
-                   activeView === 'products' ? 'Nuevo Producto' :
-                   activeView === 'policies' ? 'Nueva Política' :
-                   'Nuevo Registro'}
-                </span>
-              </button>
-            )}
-          </div>
-        </div>
+        <DashboardPageHeader
+          activeView={activeView}
+          isRelationalActive={isRelationalActive}
+          isViewMenuOpen={isViewMenuOpen}
+          setIsViewMenuOpen={setIsViewMenuOpen}
+          groupByColumn={groupByColumn}
+          setGroupByColumn={setGroupByColumn}
+          visibleHeaders={visibleHeaders}
+          setIsColumnManagerOpen={setIsColumnManagerOpen}
+          areFiltersVisible={areFiltersVisible}
+          setAreFiltersVisible={setAreFiltersVisible}
+          setIsTicketConfigOpen={setIsTicketConfigOpen}
+          hasCustomColWidths={hasCustomColWidths}
+          handleResetColWidths={handleResetColWidths}
+          setIsBulkImportOpen={setIsBulkImportOpen}
+          setIsScriptModalOpen={setIsScriptModalOpen}
+          activeSheet={activeSheet}
+          isModalOpen={isModalOpen}
+          handleOpenModal={handleOpenModal}
+        />
 
         {/* FILTERS & RADAR PANELS (Collapsible) */}
-        {areFiltersVisible && (
-          <>
-            {/* QUICK CHIPS (Píldoras Contextuales) */}
-            {quickChips.length > 0 && activeView !== 'schema' && activeView !== 'analytics' && (
-          <div className="bg-slate-50 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700 px-8 py-2.5 shrink-0 flex items-center gap-2 overflow-x-auto">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mr-2 shrink-0">Filtros Rápidos:</span>
-            {quickChips.map((chip, idx) => (
-              <button
-                key={idx}
-                onClick={() => setActiveQuickChip(activeQuickChip === chip ? null : chip)}
-                className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors shrink-0 ${
-                  activeQuickChip === chip
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                }`}
-              >
-                {chip}
-              </button>
-            ))}
-            {activeQuickChip && (
-              <button
-                onClick={() => setActiveQuickChip(null)}
-                className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 px-2 py-1.5 rounded-full transition-colors shrink-0 underline"
-              >
-                Limpiar filtro
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* INCIDENCIAS & FRC STRIP (When activeView === 'events') */}
-        {activeView === 'events' && activeSheet && (
-          <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-8 py-5 shrink-0 flex flex-col gap-4 shadow-xs">
-            
-            <EventResolutionCards 
-              eventResolutionFilter={eventResolutionFilter} 
-              onFilterClick={(val, isMulti) => setEventResolutionFilter(prev => handleFilterToggle(prev, val, isMulti))}
-              metrics={eventResolutionMetrics} 
-            />
-
-            {/* Categorías FRC Secundarias y Bodegas */}
-            <EventFilterChips 
-              totalItems={items.length} 
-              eventFilter={eventFilter} 
-              onFilterClick={(val, isMulti) => setEventFilter(prev => handleFilterToggle(prev, val, isMulti))}
-              metrics={eventMetrics} 
-              frcBodValues={frcBodValues}
-              frcBodCounts={frcBodCounts}
-              frcBodFilter={frcBodFilter}
-              onFrcBodFilterClick={(val, isMulti) => setFrcBodFilter(prev => handleFilterToggle(prev, val, isMulti))}
-            />
-          </div>
-        )}
-
-        {/* RADAR COMERCIAL (Only in main view, exclusively for Vencimientos) */}
-        {activeView === 'main' && activeSheet && (
-          <PmRadarCards 
-            pmRadarFilter={pmRadarFilter} 
-            onFilterClick={(val, isMulti) => setPmRadarFilter(prev => handleFilterToggle(prev, val, isMulti))}
-            metrics={pmMetrics} 
-          />
-        )}
-          </>
-        )}
+        <DashboardFilterPanels
+          areFiltersVisible={areFiltersVisible}
+          quickChips={quickChips}
+          activeQuickChip={activeQuickChip}
+          setActiveQuickChip={setActiveQuickChip}
+          activeView={activeView}
+          activeSheet={activeSheet}
+          items={items}
+          eventResolutionFilter={eventResolutionFilter}
+          setEventResolutionFilter={setEventResolutionFilter}
+          handleFilterToggle={handleFilterToggle}
+          eventResolutionMetrics={eventResolutionMetrics}
+          eventFilter={eventFilter}
+          setEventFilter={setEventFilter}
+          eventMetrics={eventMetrics}
+          frcBodValues={frcBodValues}
+          frcBodCounts={frcBodCounts}
+          frcBodFilter={frcBodFilter}
+          setFrcBodFilter={setFrcBodFilter}
+          pmRadarFilter={pmRadarFilter}
+          setPmRadarFilter={setPmRadarFilter}
+          pmMetrics={pmMetrics}
+        />
 
         {/* Content Body */}
         <div className="flex-1 overflow-auto p-6">
@@ -1779,345 +1395,59 @@ export const InventoryDashboard: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col h-full">
-              <div className="flex-1 overflow-auto relative" ref={tableContainerRef}>
-                <table className="text-left border-collapse" style={{ width: 'max-content', minWidth: '100%' }}>
-                  <thead className="bg-slate-100 dark:bg-slate-700/90 sticky top-0 border-b border-slate-200 dark:border-slate-600/80 text-xs font-bold text-slate-700 dark:text-slate-100 uppercase tracking-wider select-none z-10 shadow-sm">
-                    <tr>
-                      {/* Selection Header */}
-                      <th className="p-4 text-center bg-slate-100 dark:bg-slate-700/90 border-b border-slate-200 dark:border-slate-600/80" style={{ width: '48px', minWidth: '48px' }}>
-                        <div className="flex items-center justify-center">
-                          <input
-                            type="checkbox"
-                            className="w-4 h-4 text-blue-600 rounded border-slate-300 dark:border-slate-600 dark:bg-slate-800 focus:ring-blue-500 cursor-pointer"
-                            checked={filteredItems.length > 0 && selectedRowIds.length === filteredItems.length}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedRowIds(filteredItems.map(i => i._rowIndex as number));
-                              } else {
-                                setSelectedRowIds([]);
-                              }
-                            }}
-                            title="Seleccionar todos"
-                          />
-                        </div>
-                      </th>
-                      {/* Fixed Row Index Header */}
-                      <th 
-                        style={{ width: `${getColWidth('_row', '#')}px`, minWidth: '50px' }} 
-                        className="p-4 text-center text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-700/90 border-b border-slate-200 dark:border-slate-600/80 relative group font-bold"
-                      >
-                        <span>#</span>
-                        <div
-                          onMouseDown={(e) => handleStartResize('_row', getColWidth('_row', '#'), e)}
-                          onDoubleClick={() => handleAutoFitColumn('_row', '#')}
-                          title="Arrastra para cambiar ancho (Doble clic para autoajustar)"
-                          className={`absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400/80 transition-colors z-20 flex items-center justify-center ${
-                            resizingCol?.colId === '_row' ? 'bg-blue-600 w-2.5' : ''
-                          }`}
-                        >
-                          <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-500 group-hover:bg-blue-500"></div>
-                        </div>
-                      </th>
+            <div className="h-full flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden min-h-0 relative">
+              <InventoryTable 
+                filteredItems={filteredItems}
+                selectedRowIds={selectedRowIds}
+                setSelectedRowIds={setSelectedRowIds}
+                headers={headers}
+                visibleHeaders={visibleHeaders}
+                visibleColumnMeta={visibleColumnMeta}
+                activeView={activeView}
+                tableContainerRef={tableContainerRef}
+                getColWidth={getColWidth}
+                handleStartResize={handleStartResize}
+                handleAutoFitColumn={handleAutoFitColumn}
+                resizingCol={resizingCol}
+                pmRadarFilter={pmRadarFilter}
+                setPmRadarFilter={setPmRadarFilter}
+                handleFilterToggle={handleFilterToggle}
+                onSelectRow={handleSelectRow}
+                onClickItem={handleRowClick}
+                onDeleteRow={handleDelete}
+                onPmRadarFilterClick={handlePmRadarFilterClick}
+                onEventResolutionFilterClick={handleEventResolutionFilterClick}
+                onEventFilterClick={handleEventFilterClick}
+                onFrcBodFilterClick={handleFrcBodFilterClick}
+                onOpenQuickTraspaso={handleOpenQuickTraspaso}
+                frcBodFilter={frcBodFilter}
+                setFrcBodFilter={setFrcBodFilter}
+                sheetConfig={sheetConfig}
+                activeSheet={activeSheet}
+                draggedCol={draggedCol}
+                setDraggedCol={setDraggedCol}
+                dragOverCol={dragOverCol}
+                setDragOverCol={setDragOverCol}
+                handleColumnDrop={handleColumnDrop}
+                eventFilter={eventFilter}
+                setEventFilter={setEventFilter}
+                eventResolutionFilter={eventResolutionFilter}
+                setEventResolutionFilter={setEventResolutionFilter}
+                columnFilters={columnFilters}
+                setColumnFilters={setColumnFilters}
+                columnOptionsMap={columnOptionsMap}
+                frcBodValues={frcBodValues}
+                frcBodCounts={frcBodCounts}
+                frcBodCol={frcBodCol}
+                virtualRows={virtualRows}
+                paginatedDisplayRows={paginatedDisplayRows}
+                paddingTop={paddingTop}
+                paddingBottom={paddingBottom}
+                groupByColumn={groupByColumn}
+                toggleGroupCollapse={toggleGroupCollapse}
+                measureElementRef={rowVirtualizer.measureElement}
+              />
 
-                      {/* Expiration Status Header (Main view only) */}
-                      {activeView === 'main' && (
-                        <th 
-                          style={{ width: `${getColWidth('_status', 'Estado / Radar PM')}px`, minWidth: '130px' }} 
-                          className="p-3 bg-slate-100 dark:bg-slate-700/90 text-slate-700 dark:text-slate-100 border-b border-slate-200 dark:border-slate-600/80 relative group font-bold"
-                        >
-                          <div className="flex items-center justify-between gap-1 w-full min-w-0 pr-1">
-                            <span className="truncate pr-1">Estado / Radar PM</span>
-                            <ColumnFilterMenu
-                              title="Estado Radar PM"
-                              options={[
-                                { label: 'En Regla', value: 'en_regla', badgeClass: 'text-emerald-600 dark:text-emerald-400' },
-                                { label: 'Drenaje', value: 'drainage', badgeClass: 'text-amber-600 dark:text-amber-400' },
-                                { label: 'Próximo a Retiro', value: 'upcoming', badgeClass: 'text-rose-600 dark:text-rose-400' },
-                                { label: 'Retirar YA', value: 'retire_now', badgeClass: 'text-red-600 dark:text-red-400' }
-                              ]}
-                              selectedValues={pmRadarFilter}
-                              onToggle={(val, isMulti) => setPmRadarFilter(prev => handleFilterToggle(prev, val, isMulti))}
-                              onClear={() => setPmRadarFilter([])}
-                            />
-                          </div>
-                          <div
-                            onMouseDown={(e) => handleStartResize('_status', getColWidth('_status', 'Estado / Radar PM'), e)}
-                            onDoubleClick={() => handleAutoFitColumn('_status', 'Estado / Radar PM')}
-                            title="Arrastra para cambiar ancho (Doble clic para autoajustar)"
-                            className={`absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400/80 transition-colors z-20 flex items-center justify-center ${
-                              resizingCol?.colId === '_status' ? 'bg-blue-600 w-2.5' : ''
-                            }`}
-                          >
-                            <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-500 group-hover:bg-blue-500"></div>
-                          </div>
-                        </th>
-                      )}
-
-                      {/* Resolution Status Header (Events view only) */}
-                      {activeView === 'events' && (
-                        <th 
-                          style={{ width: `${getColWidth('_res_status', 'Estado Gestión')}px`, minWidth: '125px' }} 
-                          className="p-4 bg-slate-100 dark:bg-slate-700/90 text-slate-700 dark:text-slate-100 border-b border-slate-200 dark:border-slate-600/80 relative group font-bold"
-                        >
-                          <div className="truncate pr-2">Estado Gestión</div>
-                          <div
-                            onMouseDown={(e) => handleStartResize('_res_status', getColWidth('_res_status', 'Estado Gestión'), e)}
-                            onDoubleClick={() => handleAutoFitColumn('_res_status', 'Estado Gestión')}
-                            title="Arrastra para cambiar ancho (Doble clic para autoajustar)"
-                            className={`absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400/80 transition-colors z-20 flex items-center justify-center ${
-                              resizingCol?.colId === '_res_status' ? 'bg-blue-600 w-2.5' : ''
-                            }`}
-                          >
-                            <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-500 group-hover:bg-blue-500"></div>
-                          </div>
-                        </th>
-                      )}
-
-                      {/* Visible Column Headers */}
-                      {visibleHeaders.map((header, idx) => {
-                        const colSchema = sheetConfig.schema?.[activeSheet?.title || '']?.[header];
-                        const width = getColWidth(header, header, colSchema?.type);
-                        const isResizingThis = resizingCol?.colId === header;
-                        const isDraggingThis = draggedCol === header;
-                        const isDropTarget = dragOverCol === header && draggedCol !== header;
-                        
-                        const isEventCol = /^frc(_|\s)?even/i.test(header.trim()) || findColumnBySemantic(headers, 'tipo_evento') === header;
-                        const isTraspasoCol = /traspaso/i.test(header) || findColumnBySemantic(headers, 'n_traspaso') === header;
-                        const isBodCol = header === frcBodCol || /^frc(_|\s)?bod/i.test(header.trim()) || findColumnBySemantic(headers, 'frc_bod') === header || /bodega/i.test(header.trim());
-
-                        const alignRight = idx > visibleHeaders.length - 3;
-
-                        return (
-                          <th 
-                            key={header} 
-                            style={{ width: `${width}px`, minWidth: '85px' }}
-                            className={`p-3 bg-slate-100 dark:bg-slate-700/90 text-slate-700 dark:text-slate-100 border-b border-slate-200 dark:border-slate-600/80 relative group transition-all cursor-grab active:cursor-grabbing hover:bg-slate-200/90 dark:hover:bg-slate-600/90 dark:hover:text-white select-none ${
-                              isDraggingThis ? 'opacity-40 scale-[0.98]' : ''
-                            } ${
-                              isDropTarget ? 'ring-2 ring-blue-500 ring-inset bg-blue-50/50 dark:bg-blue-950/50 shadow-inner' : ''
-                            }`}
-                            draggable={true}
-                            onDragStart={(e) => {
-                              setDraggedCol(header);
-                              e.dataTransfer.setData('text/plain', header);
-                              e.dataTransfer.effectAllowed = 'move';
-                            }}
-                            onDragOver={(e) => {
-                              e.preventDefault();
-                              e.dataTransfer.dropEffect = 'move';
-                              if (dragOverCol !== header) {
-                                setDragOverCol(header);
-                              }
-                            }}
-                            onDragLeave={() => {
-                              if (dragOverCol === header) {
-                                setDragOverCol(null);
-                              }
-                            }}
-                            onDrop={(e) => {
-                              e.preventDefault();
-                              const droppedHeader = e.dataTransfer.getData('text/plain');
-                              setDraggedCol(null);
-                              setDragOverCol(null);
-                              if (droppedHeader) {
-                                handleColumnDrop(header, droppedHeader);
-                              }
-                            }}
-                            onDragEnd={() => {
-                              setDraggedCol(null);
-                              setDragOverCol(null);
-                            }}
-                            title="Mantén presionado y arrastra para reordenar columna"
-                          >
-                            <div className="flex items-center justify-between gap-1 w-full min-w-0 pr-1">
-                              <div className="flex items-center gap-1 min-w-0 truncate">
-                                <GripVertical className="w-3.5 h-3.5 text-slate-400 dark:text-slate-400 group-hover:text-blue-400 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                <span className="truncate font-bold tracking-tight">{header}</span>
-                                {colSchema?.isKey && (
-                                  <span className="text-[9px] bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 px-1 py-0.2 rounded font-mono font-bold shrink-0">
-                                    ID
-                                  </span>
-                                )}
-                                {colSchema?.type === 'ref' && (
-                                  <span className="text-[9px] bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 px-1 py-0.2 rounded font-mono shrink-0">
-                                    REF
-                                  </span>
-                                )}
-                              </div>
-
-                              {isEventCol ? (
-                                <ColumnFilterMenu
-                                  title="Incidencias"
-                                  options={(Object.keys(EVENT_CATEGORIES) as EventCategory[]).map(cat => ({
-                                    label: EVENT_CATEGORIES[cat].name,
-                                    value: cat,
-                                    badgeClass: EVENT_CATEGORIES[cat].badgeText
-                                  }))}
-                                  selectedValues={eventFilter}
-                                  onToggle={(val, isMulti) => setEventFilter(prev => handleFilterToggle(prev, val, isMulti))}
-                                  onClear={() => setEventFilter([])}
-                                  alignRight={alignRight}
-                                />
-                              ) : isBodCol && frcBodValues.length > 0 ? (
-                                <ColumnFilterMenu
-                                  title="Bodegas (FRC_BOD)"
-                                  options={frcBodValues.map(bod => ({
-                                    label: `${bod} (${frcBodCounts[bod] || 0})`,
-                                    value: bod,
-                                    badgeClass: 'text-sky-600 dark:text-sky-400 font-bold'
-                                  }))}
-                                  selectedValues={frcBodFilter}
-                                  onToggle={(val, isMulti) => setFrcBodFilter(prev => handleFilterToggle(prev, val, isMulti))}
-                                  onClear={() => setFrcBodFilter([])}
-                                  alignRight={alignRight}
-                                />
-                              ) : isTraspasoCol ? (
-                                <ColumnFilterMenu
-                                  title="Traspaso / Estado"
-                                  options={[
-                                    { label: '--- Estado ---', value: 'header_status', disabled: true },
-                                    { label: 'Pendientes', value: 'pending', badgeClass: 'text-amber-600 dark:text-amber-400' },
-                                    { label: 'Realizados', value: 'completed', badgeClass: 'text-emerald-600 dark:text-emerald-400' },
-                                    { label: '--- Documentos ---', value: 'header_docs', disabled: true },
-                                    ...(columnOptionsMap[header] || [])
-                                  ]}
-                                  selectedValues={eventResolutionFilter}
-                                  onToggle={(val, isMulti) => setEventResolutionFilter(prev => handleFilterToggle(prev, val, isMulti))}
-                                  onClear={() => setEventResolutionFilter([])}
-                                  alignRight={alignRight}
-                                />
-                              ) : (
-                                <ColumnFilterMenu
-                                  title={header}
-                                  options={columnOptionsMap[header] || []}
-                                  selectedValues={columnFilters[header] || []}
-                                  onToggle={(val, isMulti) => setColumnFilters(prev => ({
-                                    ...prev,
-                                    [header]: handleFilterToggle(prev[header] || [], val, isMulti)
-                                  }))}
-                                  onClear={() => setColumnFilters(prev => ({ ...prev, [header]: [] }))}
-                                  alignRight={alignRight}
-                                />
-                              )}
-                            </div>
-
-                            {/* Resizer Handle */}
-                            <div
-                              onMouseDown={(e) => handleStartResize(header, width, e)}
-                              onDoubleClick={() => handleAutoFitColumn(header, header)}
-                              title="Arrastra para cambiar ancho (Doble clic para autoajustar)"
-                              className={`absolute right-0 top-0 bottom-0 w-2.5 cursor-col-resize hover:bg-blue-400/80 transition-colors z-20 flex items-center justify-center ${
-                                isResizingThis ? 'bg-blue-600 w-3' : ''
-                              }`}
-                            >
-                              <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-500 group-hover:bg-blue-500"></div>
-                            </div>
-                          </th>
-                        );
-                      })}
-                      
-                      {/* Fixed Actions Column Header */}
-                      <th className="p-4 text-right bg-slate-100 dark:bg-slate-700/90 text-slate-700 dark:text-slate-100 border-b border-slate-200 dark:border-slate-600/80 sticky right-0 z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)] w-24 min-w-[96px] font-bold">
-                        Acciones
-                      </th>
-                    </tr>
-                  </thead>
-                  
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm text-slate-700 dark:text-slate-200">
-                    {filteredItems.length === 0 ? (
-                      <tr>
-                        <td colSpan={visibleHeaders.length + (activeView === 'main' || activeView === 'events' ? 4 : 3)} className="p-8 text-center text-slate-400 dark:text-slate-500">
-                          {searchTerm 
-                            ? 'No se encontraron resultados que coincidan con la búsqueda.' 
-                            : 'No hay datos en esta hoja.'}
-                        </td>
-                      </tr>
-                    ) : (<>
-                      {paddingTop > 0 && (
-                        <tr><td style={{ height: `${paddingTop}px` }} colSpan={visibleHeaders.length + (activeView === 'main' || activeView === 'events' ? 4 : 3)} /></tr>
-                      )}
-                      {virtualRows.map((virtualRow) => {
-                        const rowData = paginatedDisplayRows[virtualRow.index];
-                        const idx = virtualRow.index;
-                        if (!rowData) return null;
-
-                        // RENDER GROUP HEADER ROW
-                        if (rowData.type === 'header') {
-                          const isCollapsed = rowData.isCollapsed;
-                          return (
-                            <tr
-                              key={`group-hdr-${rowData.groupKey}-${idx}`}
-                              data-index={virtualRow.index}
-                              ref={rowVirtualizer.measureElement}
-                              onClick={() => toggleGroupCollapse(rowData.groupKey)}
-                              className="bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 cursor-pointer select-none border-y-2 border-slate-200 dark:border-slate-700 transition-colors"
-                              title={isCollapsed ? 'Clic para expandir grupo' : 'Clic para contraer grupo'}
-                            >
-                              <td
-                                colSpan={visibleHeaders.length + (activeView === 'main' || activeView === 'events' ? 4 : 3)}
-                                className="px-4 py-2.5"
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-5 h-5 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 flex items-center justify-center">
-                                      <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
-                                    </div>
-                                    <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                                      {groupByColumn}:
-                                    </span>
-                                    <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">
-                                      {rowData.groupKey}
-                                    </span>
-                                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 font-mono font-bold">
-                                      {rowData.count} {rowData.count === 1 ? 'registro' : 'registros'}
-                                    </span>
-                                  </div>
-                                  <span className="text-[11px] text-slate-400 dark:text-slate-500 italic">
-                                    {isCollapsed ? 'Contraído (clic para ver)' : 'Expandido'}
-                                  </span>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        }
-
-                        // RENDER NORMAL DATA ROW (Memoized for 60fps high performance)
-                        const item = rowData.item;
-                        const isSelected = selectedRowIds.includes(item._rowIndex as number);
-
-                        return (
-                          <InventoryTableRow
-                            key={`item-${item._rowIndex || idx}`}
-                            item={item}
-                            virtualIndex={virtualRow.index}
-                            headers={headers}
-                            visibleColumnMeta={visibleColumnMeta}
-                            activeView={activeView as any}
-                            isSelected={isSelected}
-                            frcBodFilter={frcBodFilter}
-                            getColWidth={getColWidth}
-                            measureElementRef={rowVirtualizer.measureElement}
-                            onSelectRow={handleSelectRow}
-                            onClickItem={handleRowClick}
-                            onDeleteRow={handleDelete}
-                            onPmRadarFilterClick={handlePmRadarFilterClick}
-                            onEventResolutionFilterClick={handleEventResolutionFilterClick}
-                            onEventFilterClick={handleEventFilterClick}
-                            onFrcBodFilterClick={handleFrcBodFilterClick}
-                            onOpenQuickTraspaso={handleOpenQuickTraspaso}
-                          />
-                        );
-                      })}
-                      {paddingBottom > 0 && (
-                        <tr><td style={{ height: `${paddingBottom}px` }} colSpan={visibleHeaders.length + (activeView === 'main' || activeView === 'events' ? 4 : 3)} /></tr>
-                      )}
-                    </>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              
               {/* Footer summary bar */}
               <div className="p-3 bg-slate-100 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 flex flex-col sm:flex-row justify-between items-center gap-2">
                 <div className="flex items-center gap-3">

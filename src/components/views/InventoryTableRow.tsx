@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { 
-  CheckCircle2, Clock3, Edit2, Plus, Trash2, Building2, MessageSquare 
+  CheckCircle2, Clock3, Edit2, Plus, Trash2, Building2, MessageSquare, Mail 
 } from 'lucide-react';
 import { InventoryItem } from '../../types';
 import { 
@@ -12,7 +12,7 @@ import {
   renderEventIcon 
 } from '../../utils/dateCalculations';
 import { ColumnMetadata } from '../../hooks/usePrecomputedColumns';
-import { findPhoneColumn } from '../../utils/columnAliases';
+import { findPhoneColumn, findEmailColumn } from '../../utils/columnAliases';
 
 export interface InventoryTableRowProps {
   item: InventoryItem;
@@ -33,6 +33,7 @@ export interface InventoryTableRowProps {
   onFrcBodFilterClick: (bodVal: string, isMulti: boolean) => void;
   onOpenQuickTraspaso: (item: InventoryItem) => void;
   onOpenWhatsApp?: (item: InventoryItem) => void;
+  onOpenEmail?: (item: InventoryItem) => void;
 }
 
 export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
@@ -54,6 +55,7 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
   onFrcBodFilterClick,
   onOpenQuickTraspaso,
   onOpenWhatsApp,
+  onOpenEmail,
 }) => {
   const eventCategory = getEventCategory(item, headers);
   const status = getItemStatus(item, headers);
@@ -62,8 +64,14 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
   const isProductsView = activeView === 'products';
   
   const hasPhone = useMemo(() => {
-    return headers.some(h => /tel|cel|phone|whatsapp|wsp/i.test(h)) || /contacto|contact/i.test(String(activeView));
-  }, [headers, activeView]);
+    const pCol = findPhoneColumn(headers);
+    return !!pCol && !!item[pCol];
+  }, [headers, item]);
+
+  const hasEmail = useMemo(() => {
+    const eCol = findEmailColumn(headers);
+    return !!eCol && !!item[eCol];
+  }, [headers, item]);
 
   let rowBgClass = 'hover:bg-slate-50/80 dark:hover:bg-slate-800/60';
   if (isSelected) {
@@ -268,6 +276,15 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-end gap-1">
+          {hasEmail && (
+            <button 
+              onClick={() => onOpenEmail?.(item)} 
+              className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              title="Enviar Correo Electrónico"
+            >
+              <Mail className="w-4 h-4"/>
+            </button>
+          )}
           {hasPhone && (
             <button 
               onClick={() => onOpenWhatsApp?.(item)} 

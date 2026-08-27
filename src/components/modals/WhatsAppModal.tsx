@@ -40,11 +40,12 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      const todayStr = new Date().toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      setMessage(`Hola, nos comunicamos desde el sistema de gestión (${activeViewTitle}). Tenemos información importante respecto a sus registros de inventario y vencimientos (${todayStr}). Quedamos atentos a su respuesta.`);
+      setMessage(`Estimado Cliente le escribimos de *Farmacias Knop Antofagasta*.
+Para avisarle que tenemos disponible :*Fitocannabinoide gotas*.
+Nuestro Horario de atención es de *Lunes a Viernes de 9:00 a 19:00 pm Y Sábado de 10:00 am a 15:00 pm* *Cerrado Domingos y festivos*`);
       setSelectedContactIndex(0);
     }
-  }, [isOpen, activeViewTitle]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

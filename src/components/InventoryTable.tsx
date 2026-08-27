@@ -32,6 +32,7 @@ interface InventoryTableProps {
   onFrcBodFilterClick: (bodVal: string, isMulti: boolean) => void;
   onOpenQuickTraspaso: (item: InventoryItem) => void;
   onOpenWhatsApp?: (item: InventoryItem) => void;
+  onOpenEmail?: (item: InventoryItem) => void;
   frcBodFilter: string[];
   setFrcBodFilter: React.Dispatch<React.SetStateAction<string[]>>;
   sheetConfig: any;
@@ -87,6 +88,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   onFrcBodFilterClick,
   onOpenQuickTraspaso,
   onOpenWhatsApp,
+  onOpenEmail,
   frcBodFilter,
   setFrcBodFilter,
   sheetConfig,
@@ -428,6 +430,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                     onFrcBodFilterClick={onFrcBodFilterClick}
                     onOpenQuickTraspaso={onOpenQuickTraspaso}
                     onOpenWhatsApp={onOpenWhatsApp}
+                    onOpenEmail={onOpenEmail}
                   />
                 );
               })}

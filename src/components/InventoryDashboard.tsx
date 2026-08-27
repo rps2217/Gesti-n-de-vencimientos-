@@ -190,6 +190,7 @@ export const InventoryDashboard: React.FC = () => {
   const [globalTicketConfig, setGlobalTicketConfig] = useState<GlobalTicketConfig>({});
   const [isTicketConfigOpen, setIsTicketConfigOpen] = useState(false);
   const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
+  const [gmailModalItems, setGmailModalItems] = useState<any[]>([]);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [whatsAppModalItems, setWhatsAppModalItems] = useState<any[]>([]);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
@@ -1489,6 +1490,10 @@ export const InventoryDashboard: React.FC = () => {
                   setWhatsAppModalItems([item]);
                   setIsWhatsAppModalOpen(true);
                 }}
+                onOpenEmail={(item) => {
+                  setGmailModalItems([item]);
+                  setIsGmailModalOpen(true);
+                }}
                 frcBodFilter={frcBodFilter}
                 setFrcBodFilter={setFrcBodFilter}
                 sheetConfig={sheetConfig}
@@ -1741,8 +1746,11 @@ export const InventoryDashboard: React.FC = () => {
       {/* GMAIL DRAFT MODAL */}
       <GmailDraftModal
         isOpen={isGmailModalOpen}
-        onClose={() => setIsGmailModalOpen(false)}
-        selectedItems={selectedRowIds.length > 0 ? filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number)) : filteredItems}
+        onClose={() => {
+          setIsGmailModalOpen(false);
+          setGmailModalItems([]);
+        }}
+        selectedItems={gmailModalItems.length > 0 ? gmailModalItems : (selectedRowIds.length > 0 ? filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number)) : filteredItems)}
         headers={visibleHeaders.length > 0 ? visibleHeaders : headers}
         customAliases={sheetConfig.customAliases}
         activeViewTitle={

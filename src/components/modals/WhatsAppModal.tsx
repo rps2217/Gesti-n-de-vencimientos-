@@ -53,15 +53,29 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
     return phone !== undefined && phone !== null && String(phone).trim() !== '';
   });
 
+  const formatPhoneNumber = (phone: any) => {
+    let rawPhone = String(phone || '').replace(/[^\d+]/g, '');
+    if (!rawPhone) return '';
+    if (!rawPhone.startsWith('+56')) {
+      if (rawPhone.startsWith('56') && rawPhone.length >= 10) {
+        rawPhone = '+' + rawPhone;
+      } else {
+        rawPhone = rawPhone.replace(/^\+/, '');
+        rawPhone = '+56' + rawPhone;
+      }
+    }
+    return rawPhone;
+  };
+
   const currentContact = validContacts[selectedContactIndex] || selectedItems[0];
-  const currentPhone = phoneColumn && currentContact ? String(currentContact[phoneColumn] || '').replace(/[^\d+]/g, '') : '';
+  const currentPhone = phoneColumn && currentContact ? formatPhoneNumber(currentContact[phoneColumn]) : '';
   const currentName = nameColumn && currentContact ? String(currentContact[nameColumn] || 'Contacto') : 'Contacto';
 
   const handleSendWhatsApp = (contactItem?: any) => {
     const targetItem = contactItem || currentContact;
     if (!targetItem || !phoneColumn) return;
 
-    const rawPhone = String(targetItem[phoneColumn] || '').replace(/[^\d+]/g, '');
+    const rawPhone = formatPhoneNumber(targetItem[phoneColumn]);
     if (!rawPhone) {
       alert('El contacto seleccionado no cuenta con un número de teléfono válido.');
       return;
@@ -74,7 +88,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
 
   const handleSendAll = () => {
     validContacts.forEach((item, idx) => {
-      const rawPhone = String(item[phoneColumn || ''] || '').replace(/[^\d+]/g, '');
+      const rawPhone = formatPhoneNumber(item[phoneColumn || '']);
       if (rawPhone) {
         const url = `https://wa.me/${rawPhone}?text=${encodeURIComponent(message)}`;
         setTimeout(() => {

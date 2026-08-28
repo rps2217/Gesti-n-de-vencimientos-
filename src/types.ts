@@ -42,6 +42,7 @@ export interface SheetConfig {
   userVirtualColumns?: UserVirtualColumn[];
   customAliases?: Record<string, string[]>;
   tableBulkActions?: Record<string, TableBulkActionSetting>;
+  slices?: TableSlice[];
 }
 
 export type ColumnType = 'text' | 'longtext' | 'number' | 'date' | 'datetime' | 'enum' | 'enumlist' | 'ref' | 'calculated' | 'virtual';
@@ -123,4 +124,30 @@ export type SortDirection = 'asc' | 'desc' | null;
 export interface SortConfig {
   column: string | null;
   direction: SortDirection;
+}
+
+export type SliceColor = 'blue' | 'rose' | 'amber' | 'emerald' | 'purple' | 'indigo' | 'slate';
+
+export interface SliceFilterConfig {
+  searchTerm?: string;
+  quickChip?: string | null;
+  eventFilter?: string[];
+  pmRadarFilter?: string[];
+  eventResolutionFilter?: ('pending' | 'completed')[];
+  frcBodFilter?: string[];
+  columnFilters?: Record<string, string[]>;
+}
+
+export interface TableSlice {
+  id: string;
+  name: string;
+  description?: string;
+  tableKey: string; // 'main' | 'events' | 'products' | 'policies' or custom sheet title
+  icon?: string; // Lucide icon identifier
+  color?: SliceColor;
+  isBuiltIn?: boolean;
+  filterConfig: SliceFilterConfig;
+  sortConfig?: SortConfig;
+  groupByColumn?: string;
+  visibleColumns?: string[];
 }

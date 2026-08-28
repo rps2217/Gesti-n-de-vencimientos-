@@ -92,7 +92,36 @@ Resuelve el problema común de las hojas de cálculo con encabezados inconsisten
 - **Persistencia en `SheetConfig`**: Se almacena en `sheetConfig.bulkActionSettings[tableKey][actionId]` y se sincroniza con el almacenamiento local y en la nube.
 - **Panel Modular y Reutilizable (`TableBulkActionsPanel.tsx`)**: Componente centralizado que gestiona los selectores de tabla, badges de detección y controles de 3 estados, utilizado tanto en el modal específico `BulkActionsConfigModal.tsx` como en la pestaña de ajustes globales `GlobalConfigModal.tsx`.
 
-### E. Componentes de UI
+### E. Funcionalidades Avanzadas Estilo AppSheet (`Ref`, `Show_If` y `Valid_If`)
+- **Referencias Cruzadas y De-referenciación (`src/utils/referenceResolver.ts`)**:
+  - `findMasterProduct` y `searchMasterProducts`: Búsqueda tolerante e interactiva en el catálogo maestro (`products`) por SKU, nombre, proveedor o categoría.
+  - `dereferenceMasterProduct`: Propagación atómica automática de campos maestros (Descripción, Proveedor, Costo/Precio, Categoría y Política) hacia las columnas correspondientes en la hoja activa al seleccionar o ingresar un SKU.
+  - Sincronización instantánea de política comercial para el cálculo automático de la fecha de retiro preventivo.
+  - Tarjeta de enlace maestro (`Ref: Catálogo Maestro`) visible tanto en el formulario (`ItemFormModal`) como en el panel de detalle (`ItemDetailDrawer`).
+- **Formularios Dinámicos y Reglas de Visibilidad (`src/utils/dynamicFormRules.ts`)**:
+  - `evaluateShowIf`: Evalúa la visibilidad condicional de campos según la categoría de evento seleccionada (`TRANSPORTE`, `DIFERENCIA`, `AVERIA`, `CALIDAD`, `CANJES`, `VENCIMIENTO`).
+  - Mantiene siempre visibles los identificadores primarios y campos con datos ingresados, reduciendo la fricción cognitiva al ocultar campos no relevantes para la categoría activa.
+  - Selector en barra de control de formulario para alternar entre "Campos Relevantes" y "Mostrar Todos".
+  - `getOperationalSuggestions` (`Valid_If` contextual): Sugerencias operativas rápidas con un clic para alimentar las observaciones de bodega según la incidencia.
+  - Atajos numéricos para cantidades (`+1`, `+5`, `+10`, `+25`, `+50`) y asistente de folios de traspaso (`TR-xxxxx` / `Marcar Pendiente`).
+
+### F. Slices y Vistas Personalizadas Estilo AppSheet (`src/utils/sliceRegistry.ts`)
+- **Concepto de Slice**: En AppSheet, un "Slice" es una vista filtrada de una tabla que define un subconjunto de filas (criterios y filtros guardados), un ordenamiento predeterminado, una columna de agrupación opcional y una selección personalizada de columnas visibles.
+- **Slices Nativos Preconfigurados (`BUILT_IN_SLICES`)**:
+  - Para `main` (Radar de Vencimientos): *Vencidos & Críticos*, *Próximos a Retiro*, *Lotes con Alto Stock*, *Pendientes de Liquidación/PM*.
+  - Para `events` (FRC / Incidencias): *Averías & Deterioro Transporte*, *Diferencias Pendientes Traspaso*, *Pendientes de Resolución*, *Incidencias de Calidad*.
+  - Para `products`: *Productos con Política Asignada*, *Sin Política Comercial*.
+  - Para `policies`: *Políticas con Mayor Anticipación (>60d)*.
+- **Slices Personalizados Creados por el Usuario**:
+  - El usuario puede capturar en un clic sus filtros, agrupaciones, columnas visibles y ordenamiento actual con el modal `SliceEditorModal.tsx`.
+  - Personalización de color, icono, nombre y descripción explicativa.
+  - Persistencia doble: en `localStorage` (`appsheet_custom_slices`) y en `sheetConfig.slices` para sincronización en la nube con Google Sheets/PropertiesService.
+- **Barra Selectora de Slices (`SliceSelectorBar.tsx`)**:
+  - Ubicada directamente sobre la tabla principal con navegación horizontal fluida.
+  - Contadores de filas en tiempo real (`computeSliceCounts`) calculados en una sola pasada de alto rendimiento.
+  - Badges cromáticos personalizables con acceso rápido a edición, eliminación y restablecimiento de vista ("Todas las Filas").
+
+### G. Componentes de UI
 - **`App.tsx`**: Administra el estado global de los datos de inventario, pestañas activas (Dashboard vs Schema Editor), modales y conectividad con Google Sheets / datos locales.
 - **`InventoryDashboard.tsx`**: Tabla interactiva con filtros avanzados, búsqueda rápida, tarjetas de resumen KPI y botones de acción rápida.
 - **`ItemDetailDrawer.tsx`**: Drawer lateral que agrupa toda la trazabilidad de un SKU (historial de vencimientos, lotes y eventos relacionados).

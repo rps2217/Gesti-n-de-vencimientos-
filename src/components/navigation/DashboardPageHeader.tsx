@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Sparkles, Columns, ChevronDown, Tag, Sliders, Settings, 
-  RotateCcw, Plus 
+  RotateCcw, Plus, Layers 
 } from 'lucide-react';
 import { SheetProperties } from '../../types';
 
@@ -24,6 +24,7 @@ interface DashboardPageHeaderProps {
   activeSheet: SheetProperties | null;
   isModalOpen: boolean;
   handleOpenModal: () => void;
+  onOpenCreateSlice?: () => void;
 }
 
 export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
@@ -45,6 +46,7 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
   activeSheet,
   isModalOpen,
   handleOpenModal,
+  onOpenCreateSlice,
 }) => {
   return (
     <div className="bg-slate-50/50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 px-8 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -134,6 +136,19 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
                   <Columns className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                   <span>Gestionar & Ocultar Columnas</span>
                 </button>
+
+                {onOpenCreateSlice && (
+                  <button
+                    onClick={() => {
+                      onOpenCreateSlice();
+                      setIsViewMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
+                  >
+                    <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span>Crear Vista Personalizada (Slice)</span>
+                  </button>
+                )}
 
                 <button
                   onClick={() => {

@@ -37,6 +37,7 @@ import {
   getItemResolutionStatus
 } from '../utils/dateCalculations';
 import { findColumnBySemantic } from '../utils/columnAliases';
+import { findMasterProduct, dereferenceMasterProduct } from '../utils/referenceResolver';
 import { VIRTUAL_COLUMNS } from '../utils/virtualColumns';
 import { useColumnResize } from '../hooks/useColumnResize';
 import { useColumnManager } from '../hooks/useColumnManager';
@@ -84,9 +85,17 @@ import { WhatsAppModal } from './modals/WhatsAppModal';
 import { UniversalImportModal } from './modals/UniversalImportModal';
 import { BulkActionsConfigModal } from './modals/BulkActionsConfigModal';
 import { buildBulkActionContext, isActionEnabledForTable } from '../utils/bulkActionsRegistry';
-import { GlobalTicketConfig, ViewTicketConfig } from '../types';
+import { GlobalTicketConfig, ViewTicketConfig, TableSlice } from '../types';
 import { SkeletonLoader } from './common/SkeletonLoader';
 import { useToast } from './common/ToastContainer';
+import { 
+  loadCustomSlices, 
+  saveCustomSlices, 
+  getSlicesForTable, 
+  computeSliceCounts 
+} from '../utils/sliceRegistry';
+import { SliceSelectorBar } from './slices/SliceSelectorBar';
+import { SliceEditorModal } from './modals/SliceEditorModal';
 
 export const InventoryDashboard: React.FC = () => {
   const { showToast, updateToast } = useToast();
@@ -314,6 +323,7 @@ export const InventoryDashboard: React.FC = () => {
     moveColumn,
     showAllColumns,
     resetColumnOrder,
+    setVisibleColumns,
     columnOrders
   } = useColumnManager({
     headers,
@@ -349,6 +359,7 @@ export const InventoryDashboard: React.FC = () => {
     groupByColumn,
     setGroupByColumn,
     sortConfig,
+    setSortConfig,
     handleToggleSort,
     collapsedGroups,
     toggleGroupCollapse,
@@ -393,11 +404,118 @@ export const InventoryDashboard: React.FC = () => {
     activeQuickChip !== null ||
     Object.values(columnFilters).some((vals: string[]) => vals && vals.length > 0);
 
-  const clearAllFilters = () => {
+  const clearAllFilters = useCallback(() => {
     setSearchTerm('');
     setActiveQuickChip(null);
     clearHookFilters();
-  };
+  }, [clearHookFilters]);
+
+  // AppSheet Pattern: Slices / Vistas Personalizadas
+  const [customSlices, setCustomSlices] = useState<TableSlice[]>(() => loadCustomSlices());
+  const [activeSliceId, setActiveSliceId] = useState<string | null>(null);
+  const [isSliceModalOpen, setIsSliceModalOpen] = useState(false);
+  const [editingSliceModalItem, setEditingSliceModalItem] = useState<TableSlice | null>(null);
+
+  // Reset slice selection when active table/view changes
+  useEffect(() => {
+    setActiveSliceId(null);
+  }, [activeView]);
+
+  // Compute all slices available for current table
+  const currentTableSlices = useMemo(() => {
+    return getSlicesForTable(activeView, customSlices, sheetConfig.slices);
+  }, [activeView, customSlices, sheetConfig.slices]);
+
+  const activeSlice = useMemo(() => {
+    if (!activeSliceId) return null;
+    return currentTableSlices.find(s => s.id === activeSliceId) || null;
+  }, [currentTableSlices, activeSliceId]);
+
+  // High-performance single-pass slice live counts
+  const sliceCounts = useMemo(() => {
+    return computeSliceCounts(augmentedItems, currentTableSlices, headers, frcBodCol);
+  }, [augmentedItems, currentTableSlices, headers, frcBodCol]);
+
+  const handleSelectSlice = useCallback((slice: TableSlice | null) => {
+    if (!slice) {
+      setActiveSliceId(null);
+      clearAllFilters();
+      showAllColumns();
+      return;
+    }
+
+    setActiveSliceId(slice.id);
+
+    // Apply slice filters
+    setSearchTerm(slice.filterConfig.searchTerm || '');
+    setActiveQuickChip(slice.filterConfig.quickChip || null);
+    setEventFilter(slice.filterConfig.eventFilter || []);
+    setPmRadarFilter(slice.filterConfig.pmRadarFilter || []);
+    setEventResolutionFilter(slice.filterConfig.eventResolutionFilter || []);
+    setFrcBodFilter(slice.filterConfig.frcBodFilter || []);
+    setColumnFilters(slice.filterConfig.columnFilters || {});
+
+    // Apply slice grouping if defined
+    if (slice.groupByColumn) {
+      setGroupByColumn(slice.groupByColumn);
+    }
+
+    // Apply slice sorting if defined
+    if (slice.sortConfig) {
+      setSortConfig(slice.sortConfig);
+    }
+
+    // Apply slice visible columns (AppSheet slice feature)
+    if (slice.visibleColumns && slice.visibleColumns.length > 0) {
+      setVisibleColumns(slice.visibleColumns);
+    } else {
+      showAllColumns();
+    }
+  }, [clearAllFilters, showAllColumns, setVisibleColumns, setSortConfig, setGroupByColumn, setEventFilter, setPmRadarFilter, setEventResolutionFilter, setFrcBodFilter, setColumnFilters]);
+
+  const handleSaveSlice = useCallback((slice: TableSlice) => {
+    setCustomSlices(prev => {
+      const exists = prev.some(s => s.id === slice.id);
+      const updated = exists ? prev.map(s => s.id === slice.id ? slice : s) : [...prev, slice];
+      saveCustomSlices(updated);
+      return updated;
+    });
+
+    const updatedConfig: SheetConfig = {
+      ...sheetConfig,
+      slices: [
+        ...(sheetConfig.slices || []).filter(s => s.id !== slice.id),
+        slice
+      ]
+    };
+    setSheetConfig(updatedConfig);
+    saveConfig(updatedConfig);
+
+    showToast(`Vista personalizada "${slice.name}" guardada con éxito`, 'success');
+    handleSelectSlice(slice);
+  }, [sheetConfig, saveConfig, showToast, handleSelectSlice]);
+
+  const handleDeleteSlice = useCallback((sliceId: string) => {
+    setCustomSlices(prev => {
+      const updated = prev.filter(s => s.id !== sliceId);
+      saveCustomSlices(updated);
+      return updated;
+    });
+
+    if (sheetConfig.slices) {
+      const updatedConfig: SheetConfig = {
+        ...sheetConfig,
+        slices: sheetConfig.slices.filter(s => s.id !== sliceId)
+      };
+      setSheetConfig(updatedConfig);
+      saveConfig(updatedConfig);
+    }
+
+    if (activeSliceId === sliceId) {
+      handleSelectSlice(null);
+    }
+    showToast('Slice eliminado', 'info');
+  }, [sheetConfig, saveConfig, activeSliceId, handleSelectSlice, showToast]);
 
   const totalPages = pageSize === 'all' || groupByColumn !== 'none' ? 1 : Math.ceil(filteredItems.length / (pageSize as number)) || 1;
 
@@ -958,16 +1076,10 @@ export const InventoryDashboard: React.FC = () => {
     }
 
     if (skuCol && name === skuCol && products.length > 0) {
-      const prodSkuCol = Object.keys(products[0]).find(k => /sku|código|codigo/i.test(k));
-      if (prodSkuCol) {
-        const product = products.find(p => String(p[prodSkuCol]).trim() === value.trim());
-        if (product) {
-          headers.forEach(h => {
-            if (h !== skuCol && product[h] !== undefined && product[h] !== '') {
-              newForm[h] = product[h];
-            }
-          });
-        }
+      const masterProduct = findMasterProduct(value, products, sheetConfig.customAliases);
+      if (masterProduct) {
+        const dereferenced = dereferenceMasterProduct(masterProduct, headers, sheetConfig.customAliases);
+        Object.assign(newForm, dereferenced);
       }
     }
 
@@ -977,20 +1089,19 @@ export const InventoryDashboard: React.FC = () => {
 
       if (!currentPolicy && skuCol && products.length > 0) {
         const currentSku = newForm[skuCol];
-        const prodSkuCol = Object.keys(products[0]).find(k => /sku|código|codigo/i.test(k));
-        const prodPolicyCol = Object.keys(products[0]).find(k => /política|politica/i.test(k));
-        if (prodSkuCol && prodPolicyCol) {
-          const product = products.find(p => String(p[prodSkuCol]).trim() === String(currentSku).trim());
-          if (product) currentPolicy = product[prodPolicyCol];
+        const masterProduct = findMasterProduct(currentSku, products, sheetConfig.customAliases);
+        if (masterProduct) {
+          const prodPolicyCol = Object.keys(masterProduct).find(k => /política|politica/i.test(k));
+          if (prodPolicyCol) currentPolicy = masterProduct[prodPolicyCol];
         }
       }
 
       if (currentExpiry && currentPolicy && policies.length > 0) {
-        const polKeyCol = Object.keys(policies[0]).find(k => /política|politica|tipo|canje/i.test(k));
+        const polKeyCol = Object.keys(policies[0]).find(k => /política|politica|tipo|canje|familia/i.test(k));
         const polDaysCol = Object.keys(policies[0]).find(k => /dias|días|anticipacion|tiempo/i.test(k));
         
         if (polKeyCol && polDaysCol) {
-          const matchedPolicy = policies.find(p => String(p[polKeyCol]).trim() === String(currentPolicy).trim());
+          const matchedPolicy = policies.find(p => String(p[polKeyCol]).trim().toLowerCase() === String(currentPolicy).trim().toLowerCase());
           if (matchedPolicy) {
             const days = parseInt(matchedPolicy[polDaysCol], 10);
             if (!isNaN(days)) {
@@ -1009,6 +1120,51 @@ export const InventoryDashboard: React.FC = () => {
       }
     }
     
+    setFormData(newForm);
+  };
+
+  const handleBatchFormUpdate = (updates: Record<string, string>) => {
+    let newForm = { ...formData, ...updates };
+
+    if (Object.keys(updates).some(k => formErrors[k])) {
+      setFormErrors(prev => {
+        const next = { ...prev };
+        Object.keys(updates).forEach(k => delete next[k]);
+        return next;
+      });
+    }
+
+    const expiryCol = headers.find(h => /vencimiento|caducidad|expiración|fecha_vc/i.test(h));
+    const withdrawalCol = headers.find(h => /retiro|canje/i.test(h));
+    const formPolicyCol = headers.find(h => /política|politica/i.test(h));
+
+    if (withdrawalCol && expiryCol) {
+      const currentExpiry = newForm[expiryCol];
+      let currentPolicy = formPolicyCol ? newForm[formPolicyCol] : null;
+
+      if (currentExpiry && currentPolicy && policies.length > 0) {
+        const polKeyCol = Object.keys(policies[0]).find(k => /política|politica|tipo|canje|familia/i.test(k));
+        const polDaysCol = Object.keys(policies[0]).find(k => /dias|días|anticipacion|tiempo/i.test(k));
+        if (polKeyCol && polDaysCol) {
+          const matchedPolicy = policies.find(p => String(p[polKeyCol]).trim().toLowerCase() === String(currentPolicy).trim().toLowerCase());
+          if (matchedPolicy) {
+            const days = parseInt(matchedPolicy[polDaysCol], 10);
+            if (!isNaN(days)) {
+              const expDate = parseAnyDate(currentExpiry);
+              if (expDate) {
+                const d = new Date(expDate.getTime());
+                d.setDate(d.getDate() - days);
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                newForm[withdrawalCol] = `${yyyy}-${mm}-${dd}`;
+              }
+            }
+          }
+        }
+      }
+    }
+
     setFormData(newForm);
   };
 
@@ -1397,7 +1553,32 @@ export const InventoryDashboard: React.FC = () => {
           activeSheet={activeSheet}
           isModalOpen={isModalOpen}
           handleOpenModal={handleOpenModal}
+          onOpenCreateSlice={() => {
+            setEditingSliceModalItem(null);
+            setIsSliceModalOpen(true);
+          }}
         />
+
+        {/* SLICES & CUSTOM VIEWS BAR (AppSheet Pattern) */}
+        {activeView !== 'schema' && activeView !== 'analytics' && activeSheet && (
+          <SliceSelectorBar
+            slices={currentTableSlices}
+            activeSliceId={activeSliceId}
+            onSelectSlice={handleSelectSlice}
+            sliceCounts={sliceCounts}
+            totalItemsCount={items.length}
+            hasActiveFilters={hasActiveFilters}
+            onOpenCreateSlice={() => {
+              setEditingSliceModalItem(null);
+              setIsSliceModalOpen(true);
+            }}
+            onEditSlice={(slice) => {
+              setEditingSliceModalItem(slice);
+              setIsSliceModalOpen(true);
+            }}
+            activeSlice={activeSlice}
+          />
+        )}
 
         {/* FILTERS & RADAR PANELS (Collapsible) */}
         <DashboardFilterPanels
@@ -1714,6 +1895,8 @@ export const InventoryDashboard: React.FC = () => {
         }}
         allMainItems={allMainItems}
         policies={policies}
+        products={products}
+        customAliases={sheetConfig.customAliases}
       />
 
       {/* 2. PM DRAINAGE REPORT MODAL */}
@@ -1746,6 +1929,8 @@ export const InventoryDashboard: React.FC = () => {
         isSaving={isSaving}
         sheetConfig={sheetConfig}
         products={products}
+        onBatchUpdateFormData={handleBatchFormUpdate}
+        policies={policies}
       />
 
       {/* 5. GLOBAL CONFIG MODAL */}
@@ -1898,6 +2083,32 @@ export const InventoryDashboard: React.FC = () => {
         activeView={activeView}
         headers={headers}
         metadata={metadata}
+      />
+
+      {/* SLICE EDITOR MODAL (AppSheet Slices) */}
+      <SliceEditorModal
+        isOpen={isSliceModalOpen}
+        onClose={() => {
+          setIsSliceModalOpen(false);
+          setEditingSliceModalItem(null);
+        }}
+        tableKey={activeView}
+        headers={headers}
+        currentFilters={{
+          searchTerm,
+          quickChip: activeQuickChip,
+          eventFilter,
+          pmRadarFilter,
+          eventResolutionFilter,
+          frcBodFilter,
+          columnFilters
+        }}
+        currentSort={sortConfig}
+        currentGroupBy={groupByColumn}
+        currentVisibleHeaders={visibleHeaders}
+        editingSlice={editingSliceModalItem}
+        onSaveSlice={handleSaveSlice}
+        onDeleteSlice={handleDeleteSlice}
       />
     </div>
 

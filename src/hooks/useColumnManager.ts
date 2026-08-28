@@ -26,6 +26,7 @@ export interface UseColumnManagerReturn {
   moveColumn: (colId: string, direction: 'up' | 'down') => void;
   showAllColumns: () => void;
   resetColumnOrder: () => void;
+  setVisibleColumns: (colIds: string[]) => void;
   columnOrders: Record<string, string[]>;
   hiddenColumns: Record<string, string[]>;
 }
@@ -213,6 +214,22 @@ export function useColumnManager({
     }));
   }, [activeView, combinedCandidates]);
 
+  const setVisibleColumns = useCallback((colIds: string[]) => {
+    if (!colIds || colIds.length === 0) return;
+    const toHide = combinedCandidates.filter(id => !colIds.includes(id));
+    setHiddenColumns(prev => ({
+      ...prev,
+      [activeView]: toHide
+    }));
+    setColumnOrders(prev => {
+      const remaining = combinedCandidates.filter(id => !colIds.includes(id));
+      return {
+        ...prev,
+        [activeView]: [...colIds, ...remaining]
+      };
+    });
+  }, [activeView, combinedCandidates]);
+
   return {
     visibleHeaders,
     allManageableColumns,
@@ -222,6 +239,7 @@ export function useColumnManager({
     moveColumn,
     showAllColumns,
     resetColumnOrder,
+    setVisibleColumns,
     columnOrders,
     hiddenColumns
   };

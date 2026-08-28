@@ -9,6 +9,7 @@ interface WhatsAppModalProps {
   selectedItems: any[];
   headers: string[];
   activeViewTitle?: string;
+  customAliases?: Record<string, string[]>;
 }
 
 export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
@@ -16,7 +17,8 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
   onClose,
   selectedItems,
   headers,
-  activeViewTitle = 'Contactos'
+  activeViewTitle = 'Contactos',
+  customAliases
 }) => {
   const [message, setMessage] = useState('');
   const [selectedContactIndex, setSelectedContactIndex] = useState<number>(0);
@@ -26,12 +28,12 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
     if (!headers || headers.length === 0) {
       if (selectedItems[0]) {
         const sampleHeaders = Object.keys(selectedItems[0]);
-        return findPhoneColumn(sampleHeaders) || sampleHeaders.find(h => /tel|cel|phone/i.test(h));
+        return findPhoneColumn(sampleHeaders, customAliases);
       }
       return undefined;
     }
-    return findPhoneColumn(headers) || headers.find(h => /tel|cel|phone/i.test(h));
-  }, [headers, selectedItems]);
+    return findPhoneColumn(headers, customAliases);
+  }, [headers, selectedItems, customAliases]);
 
   // Find name or label column
   const nameColumn = useMemo(() => {

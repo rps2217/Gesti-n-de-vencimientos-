@@ -34,6 +34,8 @@ export interface InventoryTableRowProps {
   onOpenQuickTraspaso: (item: InventoryItem) => void;
   onOpenWhatsApp?: (item: InventoryItem) => void;
   onOpenEmail?: (item: InventoryItem) => void;
+  isWhatsAppEnabled?: boolean;
+  isEmailEnabled?: boolean;
 }
 
 export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
@@ -56,6 +58,8 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
   onOpenQuickTraspaso,
   onOpenWhatsApp,
   onOpenEmail,
+  isWhatsAppEnabled = true,
+  isEmailEnabled = true,
 }) => {
   const eventCategory = getEventCategory(item, headers);
   const status = getItemStatus(item, headers);
@@ -276,7 +280,7 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-end gap-1">
-          {hasEmail && (
+          {hasEmail && isEmailEnabled && (
             <button 
               onClick={() => onOpenEmail?.(item)} 
               className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
@@ -285,7 +289,7 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
               <Mail className="w-4 h-4"/>
             </button>
           )}
-          {hasPhone && (
+          {hasPhone && isWhatsAppEnabled && (
             <button 
               onClick={() => onOpenWhatsApp?.(item)} 
               className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-slate-800 rounded-lg transition-colors"

@@ -19,7 +19,9 @@ export type KnownFieldSemantic =
   | 'proveedor'
   | 'dias_anticipacion'
   | 'dias_retiro'
-  | 'n_traspaso';
+  | 'n_traspaso'
+  | 'telefono'
+  | 'email';
 
 const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
   id: [
@@ -204,6 +206,30 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
     /^warehouse$/i,
     /frc.*bod/i,
     /bod/i
+  ],
+  telefono: [
+    /^tel[eé]fono$/i,
+    /^telefono$/i,
+    /^tel$/i,
+    /^celular$/i,
+    /^cel$/i,
+    /^phone$/i,
+    /^whatsapp$/i,
+    /^wsp$/i,
+    /^fono$/i,
+    /^m[oó]vil$/i,
+    /^movil$/i,
+    /^numero(_|\s)?(de)?(_|\s)?contacto$/i,
+    /^contacto(_|\s)?tel[eé]fono$/i,
+    /^tel[eé]fono(_|\s)?contacto$/i
+  ],
+  email: [
+    /^email$/i,
+    /^e-mail$/i,
+    /^correo$/i,
+    /^correo(_|\s)?electr[oó]nico$/i,
+    /^correo(_|\s)?contacto$/i,
+    /^mail$/i
   ]
 };
 
@@ -275,7 +301,7 @@ export function detectAllColumnSemantics(
   const semantics: KnownFieldSemantic[] = [
     'id', 'sku', 'descripcion', 'fecha_vc', 'fecha_retiro', 'mes', 'anio', 
     'cantidad', 'lote', 'politica', 'dias_anticipacion', 'dias_retiro', 'tipo_evento', 
-    'frc_bod', 'precio', 'observacion', 'proveedor', 'n_traspaso'
+    'frc_bod', 'precio', 'observacion', 'proveedor', 'n_traspaso', 'telefono', 'email'
   ];
 
   semantics.forEach(semantic => {
@@ -291,16 +317,18 @@ export function detectAllColumnSemantics(
 /**
  * Helper to find phone/whatsapp column
  */
-export function findPhoneColumn(headers: string[]): string | undefined {
+export function findPhoneColumn(headers: string[], customAliases?: Record<string, string[]>): string | undefined {
   if (!headers || headers.length === 0) return undefined;
-  return headers.find(h => /tel|cel|phone|whatsapp|wsp|m[oó]vil|fono/i.test(h));
+  return findColumnBySemantic(headers, 'telefono', customAliases) 
+    || headers.find(h => /tel|cel|phone|whatsapp|wsp|m[oó]vil|fono/i.test(h));
 }
 
 /**
  * Helper to find email column
  */
-export function findEmailColumn(headers: string[]): string | undefined {
+export function findEmailColumn(headers: string[], customAliases?: Record<string, string[]>): string | undefined {
   if (!headers || headers.length === 0) return undefined;
-  return headers.find(h => /email|e-mail|correo|mail/i.test(h));
+  return findColumnBySemantic(headers, 'email', customAliases)
+    || headers.find(h => /email|e-mail|correo|mail/i.test(h));
 }
 

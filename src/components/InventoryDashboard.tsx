@@ -82,6 +82,8 @@ import { TicketConfigModal } from './modals/TicketConfigModal';
 import { GmailDraftModal } from './modals/GmailDraftModal';
 import { WhatsAppModal } from './modals/WhatsAppModal';
 import { UniversalImportModal } from './modals/UniversalImportModal';
+import { BulkActionsConfigModal } from './modals/BulkActionsConfigModal';
+import { buildBulkActionContext, isActionEnabledForTable } from '../utils/bulkActionsRegistry';
 import { GlobalTicketConfig, ViewTicketConfig } from '../types';
 import { SkeletonLoader } from './common/SkeletonLoader';
 import { useToast } from './common/ToastContainer';
@@ -193,8 +195,14 @@ export const InventoryDashboard: React.FC = () => {
   const [gmailModalItems, setGmailModalItems] = useState<any[]>([]);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [whatsAppModalItems, setWhatsAppModalItems] = useState<any[]>([]);
+  const [isBulkActionsConfigOpen, setIsBulkActionsConfigOpen] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
+
+  // Contextual intelligence for bulk actions on the current table
+  const bulkActionCtx = useMemo(() => {
+    return buildBulkActionContext(headers, activeView, activeSheet?.title);
+  }, [headers, activeView, activeSheet?.title]);
 
   // Close menus on click outside
   useEffect(() => {
@@ -1341,6 +1349,7 @@ export const InventoryDashboard: React.FC = () => {
           isMobileMenuOpen={isMobileMenuOpen}
           setIsMobileMenuOpen={setIsMobileMenuOpen}
           activeView={activeView}
+          activeSheetTitle={activeSheet?.title}
           searchableHeaders={searchableHeaders}
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
@@ -1350,7 +1359,9 @@ export const InventoryDashboard: React.FC = () => {
           isActionsMenuOpen={isActionsMenuOpen}
           setIsActionsMenuOpen={setIsActionsMenuOpen}
           setIsGmailModalOpen={setIsGmailModalOpen}
+          setIsWhatsAppModalOpen={setIsWhatsAppModalOpen}
           setIsPmReportOpen={setIsPmReportOpen}
+          onOpenBulkActionsConfig={() => setIsBulkActionsConfigOpen(true)}
           drainageReportItems={drainageReportItems}
           headers={headers}
           filteredItems={filteredItems}
@@ -1494,6 +1505,8 @@ export const InventoryDashboard: React.FC = () => {
                   setGmailModalItems([item]);
                   setIsGmailModalOpen(true);
                 }}
+                isWhatsAppEnabled={isActionEnabledForTable('whatsapp', bulkActionCtx, sheetConfig)}
+                isEmailEnabled={isActionEnabledForTable('gmail', bulkActionCtx, sheetConfig)}
                 frcBodFilter={frcBodFilter}
                 setFrcBodFilter={setFrcBodFilter}
                 sheetConfig={sheetConfig}
@@ -1567,72 +1580,79 @@ export const InventoryDashboard: React.FC = () => {
               </div>
               
               <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => {
-                    const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
-                    handlePrintTicket(selectedItems);
-                  }}
-                  className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
-                >
-                  <Printer className="w-3.5 h-3.5 text-indigo-400" /> Imprimir Ticket
-                </button>
+                {isActionEnabledForTable('ticket', bulkActionCtx, sheetConfig) && (
+                  <button 
+                    onClick={() => {
+                      const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
+                      handlePrintTicket(selectedItems);
+                    }}
+                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-indigo-400" /> Imprimir Ticket
+                  </button>
+                )}
                 
-                <button 
-                  onClick={() => setIsGmailModalOpen(true)}
-                  className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 bg-red-600/40 text-red-200 border border-red-500/40 shadow-sm"
-                >
-                  <Mail className="w-3.5 h-3.5 text-red-400" /> Borrador Gmail
-                </button>
+                {isActionEnabledForTable('gmail', bulkActionCtx, sheetConfig) && (
+                  <button 
+                    onClick={() => setIsGmailModalOpen(true)}
+                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 bg-red-600/40 text-red-200 border border-red-500/40 shadow-sm"
+                  >
+                    <Mail className="w-3.5 h-3.5 text-red-400" /> Borrador Gmail
+                  </button>
+                )}
 
-                <button 
-                  onClick={() => {
-                    const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
-                    setWhatsAppModalItems(selectedItems);
-                    setIsWhatsAppModalOpen(true);
-                  }}
-                  className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 bg-emerald-600/40 text-emerald-200 border border-emerald-500/40 shadow-sm"
-                >
-                  <MessageSquare className="w-3.5 h-3.5 text-emerald-400" /> WhatsApp ({selectedRowIds.length})
-                </button>
+                {isActionEnabledForTable('whatsapp', bulkActionCtx, sheetConfig) && (
+                  <button 
+                    onClick={() => {
+                      const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
+                      setWhatsAppModalItems(selectedItems);
+                      setIsWhatsAppModalOpen(true);
+                    }}
+                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 bg-emerald-600/40 text-emerald-200 border border-emerald-500/40 shadow-sm"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-emerald-400" /> WhatsApp ({selectedRowIds.length})
+                  </button>
+                )}
                 
-                <button 
-                  onClick={() => {
-                    const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
-                    
-                    // Prepare all virtual columns (system + user)
-                    const activeVirtual = [
-                      ...VIRTUAL_COLUMNS.filter(vc => sheetConfig.activeVirtualColumns?.includes(vc.id)),
-                      ...(sheetConfig.userVirtualColumns || []).map(uvc => ({
-                        id: uvc.id,
-                        label: uvc.label,
-                        calculate: (item: any) => {
-                          const values = uvc.sourceColumns.map(sc => item[sc] || '');
-                          if (uvc.operation === 'concatenate') return values.join(' ');
-                          if (uvc.operation === 'sum') return values.reduce((acc, v) => acc + (parseFloat(v) || 0), 0);
-                          if (uvc.operation === 'diff_days') {
-                             const d1 = parseAnyDate(values[0]);
-                             const d2 = parseAnyDate(values[1]);
-                             if (d1 && d2) return Math.round(Math.abs(d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24));
-                             return '-';
+                {isActionEnabledForTable('excel', bulkActionCtx, sheetConfig) && (
+                  <button 
+                    onClick={() => {
+                      const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
+                      
+                      // Prepare all virtual columns (system + user)
+                      const activeVirtual = [
+                        ...VIRTUAL_COLUMNS.filter(vc => sheetConfig.activeVirtualColumns?.includes(vc.id)),
+                        ...(sheetConfig.userVirtualColumns || []).map(uvc => ({
+                          id: uvc.id,
+                          label: uvc.label,
+                          calculate: (item: any) => {
+                            const values = uvc.sourceColumns.map(sc => item[sc] || '');
+                            if (uvc.operation === 'concatenate') return values.join(' ');
+                            if (uvc.operation === 'sum') return values.reduce((acc, v) => acc + (parseFloat(v) || 0), 0);
+                            if (uvc.operation === 'diff_days') {
+                               const d1 = parseAnyDate(values[0]);
+                               const d2 = parseAnyDate(values[1]);
+                               if (d1 && d2) return Math.round(Math.abs(d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24));
+                               return '-';
+                            }
+                            return '-';
                           }
-                          return '-';
-                        }
-                      }))
-                    ];
-                    
-                    const allData = { products, policies, events: [] };
-                    exportToExcel(`Seleccion_${new Date().toISOString().split('T')[0]}`, headers, selectedItems, 'Selección', activeVirtual, allData);
-                  }}
-                  className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
-                >
-                  <Download className="w-3.5 h-3.5 text-blue-400" /> Exportar a Excel
-                </button>
+                        }))
+                      ];
+                      
+                      const allData = { products, policies, events: [] };
+                      exportToExcel(`Seleccion_${new Date().toISOString().split('T')[0]}`, headers, selectedItems, 'Selección', activeVirtual, allData);
+                    }}
+                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
+                  >
+                    <Download className="w-3.5 h-3.5 text-blue-400" /> Exportar a Excel
+                  </button>
+                )}
                 
-                {activeView === 'main' && (
+                {isActionEnabledForTable('pm_report', bulkActionCtx, sheetConfig) && (
                   <button 
                     onClick={() => { 
                       setIsPmReportOpen(true); 
-                      // Note: Optionally we could pass selected items directly to PM Report here
                     }}
                     className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
                   >
@@ -1640,7 +1660,7 @@ export const InventoryDashboard: React.FC = () => {
                   </button>
                 )}
 
-                {activeView === 'events' && (
+                {isActionEnabledForTable('bulk_edit', bulkActionCtx, sheetConfig) && (
                   <button 
                     onClick={() => setIsBulkEditOpen(true)}
                     className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5 bg-blue-600/40 text-blue-200 border border-blue-500/40"
@@ -1649,16 +1669,28 @@ export const InventoryDashboard: React.FC = () => {
                   </button>
                 )}
                 
+                {isActionEnabledForTable('delete', bulkActionCtx, sheetConfig) && (
+                  <button 
+                    onClick={handleBulkDelete}
+                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5 bg-rose-600/40 text-rose-200 border border-rose-500/40 hover:bg-rose-600/60"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-400" /> Eliminar ({selectedRowIds.length})
+                  </button>
+                )}
+
+                <div className="h-4 w-px bg-slate-600 my-auto mx-0.5"></div>
+
                 <button 
-                  onClick={handleBulkDelete}
-                  className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5 bg-rose-600/40 text-rose-200 border border-rose-500/40 hover:bg-rose-600/60"
+                  onClick={() => setIsBulkActionsConfigOpen(true)}
+                  className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-700 transition-colors flex items-center justify-center shrink-0"
+                  title="Configurar acciones visibles para esta tabla"
                 >
-                  <Trash2 className="w-3.5 h-3.5 text-rose-400" /> Eliminar ({selectedRowIds.length})
+                  <Sliders className="w-4 h-4" />
                 </button>
                 
                 <button 
                   onClick={() => setSelectedRowIds([])}
-                  className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-700 ml-2 transition-colors flex items-center justify-center shrink-0"
+                  className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-700 transition-colors flex items-center justify-center shrink-0"
                   title="Deseleccionar todo"
                 >
                   <X className="w-4 h-4" />
@@ -1726,6 +1758,8 @@ export const InventoryDashboard: React.FC = () => {
         metadata={metadata}
         fetchData={fetchData}
         activeView={activeView}
+        activeSheetTitle={activeSheet?.title || activeView}
+        headers={headers}
       />
 
       {/* BARCODE SCANNER MODAL */}
@@ -1766,7 +1800,10 @@ export const InventoryDashboard: React.FC = () => {
       {/* WHATSAPP MODAL */}
       <WhatsAppModal
         isOpen={isWhatsAppModalOpen}
-        onClose={() => setIsWhatsAppModalOpen(false)}
+        onClose={() => {
+          setIsWhatsAppModalOpen(false);
+          setWhatsAppModalItems([]);
+        }}
         selectedItems={whatsAppModalItems.length > 0 ? whatsAppModalItems : (selectedRowIds.length > 0 ? filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number)) : filteredItems)}
         headers={headers}
         customAliases={sheetConfig.customAliases}
@@ -1848,6 +1885,19 @@ export const InventoryDashboard: React.FC = () => {
             setIsSaving(false);
           }
         }}
+      />
+
+      {/* BULK ACTIONS CONFIGURATION MODAL */}
+      <BulkActionsConfigModal
+        isOpen={isBulkActionsConfigOpen}
+        onClose={() => setIsBulkActionsConfigOpen(false)}
+        sheetConfig={sheetConfig}
+        setSheetConfig={setSheetConfig}
+        saveConfig={saveConfig}
+        activeSheetTitle={activeSheet?.title || ''}
+        activeView={activeView}
+        headers={headers}
+        metadata={metadata}
       />
     </div>
 

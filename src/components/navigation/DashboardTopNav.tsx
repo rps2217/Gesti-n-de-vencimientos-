@@ -1,17 +1,19 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   Menu, Search, X, FilterX, Scan, Download, ChevronDown, 
-  Mail, Flame, FileSpreadsheet, Printer, RefreshCw, MessageSquare 
+  Mail, Flame, FileSpreadsheet, Printer, RefreshCw, MessageSquare, Sliders 
 } from 'lucide-react';
 import { InventoryItem, SheetConfig } from '../../types';
 import { VIRTUAL_COLUMNS } from '../../utils/virtualColumns';
 import { parseAnyDate } from '../../utils/dateCalculations';
 import { exportToExcel } from '../../utils/exportUtils';
+import { buildBulkActionContext, isActionEnabledForTable } from '../../utils/bulkActionsRegistry';
 
 interface DashboardTopNavProps {
   isMobileMenuOpen: boolean;
   setIsMobileMenuOpen: (open: boolean) => void;
   activeView: string;
+  activeSheetTitle?: string;
   searchableHeaders: string[];
   searchTerm: string;
   setSearchTerm: (term: string) => void;
@@ -23,6 +25,7 @@ interface DashboardTopNavProps {
   setIsGmailModalOpen: (open: boolean) => void;
   setIsWhatsAppModalOpen?: (open: boolean) => void;
   setIsPmReportOpen: (open: boolean) => void;
+  onOpenBulkActionsConfig?: () => void;
   drainageReportItems: InventoryItem[];
   headers: string[];
   filteredItems: InventoryItem[];
@@ -41,6 +44,7 @@ interface DashboardTopNavProps {
 export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
   setIsMobileMenuOpen,
   activeView,
+  activeSheetTitle,
   searchableHeaders,
   searchTerm,
   setSearchTerm,
@@ -52,6 +56,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
   setIsGmailModalOpen,
   setIsWhatsAppModalOpen,
   setIsPmReportOpen,
+  onOpenBulkActionsConfig,
   drainageReportItems,
   headers,
   filteredItems,
@@ -66,6 +71,16 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
   fetchData,
   loading
 }) => {
+  const bulkActionCtx = useMemo(() => {
+    return buildBulkActionContext(headers, activeView, activeSheetTitle);
+  }, [headers, activeView, activeSheetTitle]);
+
+  const isWhatsAppActive = isActionEnabledForTable('whatsapp', bulkActionCtx, sheetConfig);
+  const isGmailActive = isActionEnabledForTable('gmail', bulkActionCtx, sheetConfig);
+  const isPmReportActive = isActionEnabledForTable('pm_report', bulkActionCtx, sheetConfig);
+  const isTicketActive = isActionEnabledForTable('ticket', bulkActionCtx, sheetConfig);
+  const isExcelActive = isActionEnabledForTable('excel', bulkActionCtx, sheetConfig);
+
   return (
     <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 z-20 sticky top-0 shrink-0 px-4 sm:px-8 py-3 flex items-center justify-between gap-4">
       {/* Mobile Menu Trigger */}
@@ -153,39 +168,43 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
                 <div className="px-3 py-1 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                   Comunicación & Reportes
                 </div>
-                <button
-                  onClick={() => {
-                    setIsGmailModalOpen(true);
-                    setIsActionsMenuOpen(false);
-                  }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors group"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-red-100 dark:bg-red-900/60 text-red-600 dark:text-red-300 flex items-center justify-center shrink-0">
-                    <Mail className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-bold text-slate-800 dark:text-slate-100">Borrador Gmail</div>
-                    <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">Generar correo formateado</div>
-                  </div>
-                </button>
+                {isGmailActive && (
+                  <button
+                    onClick={() => {
+                      setIsGmailModalOpen(true);
+                      setIsActionsMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3.5 py-2 hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors group"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-red-100 dark:bg-red-900/60 text-red-600 dark:text-red-300 flex items-center justify-center shrink-0">
+                      <Mail className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-slate-800 dark:text-slate-100">Borrador Gmail</div>
+                      <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">Generar correo formateado</div>
+                    </div>
+                  </button>
+                )}
 
-                <button
-                  onClick={() => {
-                    setIsWhatsAppModalOpen?.(true);
-                    setIsActionsMenuOpen(false);
-                  }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors group"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0">
-                    <MessageSquare className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-bold text-slate-800 dark:text-slate-100">WhatsApp Web</div>
-                    <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">Enviar mensaje predefinido</div>
-                  </div>
-                </button>
+                {isWhatsAppActive && (
+                  <button
+                    onClick={() => {
+                      setIsWhatsAppModalOpen?.(true);
+                      setIsActionsMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors group"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                      <MessageSquare className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-slate-800 dark:text-slate-100">WhatsApp Web</div>
+                      <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">Enviar mensaje predefinido</div>
+                    </div>
+                  </button>
+                )}
 
-                {activeView === 'main' && (
+                {isPmReportActive && (
                   <button
                     onClick={() => {
                       setIsPmReportOpen(true);
@@ -207,55 +226,82 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
                 <div className="px-3 py-1 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                   Archivos & Físico
                 </div>
-                <button
-                  onClick={() => {
-                    const activeVirtual = [
-                      ...VIRTUAL_COLUMNS.filter(vc => sheetConfig.activeVirtualColumns?.includes(vc.id)),
-                      ...(sheetConfig.userVirtualColumns || []).map(uvc => ({
-                        id: uvc.id,
-                        label: uvc.label,
-                        calculate: (item: any) => {
-                          const values = uvc.sourceColumns.map(sc => item[sc] || '');
-                          if (uvc.operation === 'concatenate') return values.join(' ');
-                          if (uvc.operation === 'sum') return values.reduce((acc, v) => acc + (parseFloat(v) || 0), 0);
-                          if (uvc.operation === 'diff_days') { 
-                            const d1 = parseAnyDate(values[0]); 
-                            const d2 = parseAnyDate(values[1]); 
-                            if (d1 && d2) return Math.round(Math.abs(d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24)); 
-                            return '-'; 
-                          }
-                          return '-';
-                        }
-                      }))
-                    ];
-                    const allData = { products, policies, events: [] };
-                    exportToExcel(`${activeView}_${new Date().toISOString().split('T')[0]}`, headers, filteredItems, 'Inventario', activeVirtual, allData);
-                    setIsActionsMenuOpen(false);
-                  }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0">
-                    <FileSpreadsheet className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-bold text-slate-800 dark:text-slate-100">Descargar Excel (.xlsx)</div>
-                    <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{filteredItems.length} registros</div>
-                  </div>
-                </button>
 
+                {isExcelActive && (
+                  <button
+                    onClick={() => {
+                      const activeVirtual = [
+                        ...VIRTUAL_COLUMNS.filter(vc => sheetConfig.activeVirtualColumns?.includes(vc.id)),
+                        ...(sheetConfig.userVirtualColumns || []).map(uvc => ({
+                          id: uvc.id,
+                          label: uvc.label,
+                          calculate: (item: any) => {
+                            const values = uvc.sourceColumns.map(sc => item[sc] || '');
+                            if (uvc.operation === 'concatenate') return values.join(' ');
+                            if (uvc.operation === 'sum') return values.reduce((acc, v) => acc + (parseFloat(v) || 0), 0);
+                            if (uvc.operation === 'diff_days') { 
+                              const d1 = parseAnyDate(values[0]); 
+                              const d2 = parseAnyDate(values[1]); 
+                              if (d1 && d2) return Math.round(Math.abs(d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24)); 
+                              return '-'; 
+                            }
+                            return '-';
+                          }
+                        }))
+                      ];
+                      const allData = { products, policies, events: [] };
+                      exportToExcel(`${activeView}_${new Date().toISOString().split('T')[0]}`, headers, filteredItems, 'Inventario', activeVirtual, allData);
+                      setIsActionsMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-slate-800 dark:text-slate-100">Descargar Excel (.xlsx)</div>
+                      <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{filteredItems.length} registros</div>
+                    </div>
+                  </button>
+                )}
+
+                {isTicketActive && (
+                  <button
+                    onClick={() => {
+                      handlePrintTicket(filteredItems);
+                      setIsActionsMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3.5 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 flex items-center justify-center shrink-0">
+                      <Printer className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-slate-800 dark:text-slate-100">Imprimir Ticket Térmico</div>
+                      <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">Formato continuo 80mm/58mm</div>
+                    </div>
+                  </button>
+                )}
+
+                {/* Scoping and Configuration Trigger */}
+                <div className="my-1.5 border-t border-slate-100 dark:border-slate-700/80" />
                 <button
                   onClick={() => {
-                    handlePrintTicket(filteredItems);
+                    onOpenBulkActionsConfig?.();
                     setIsActionsMenuOpen(false);
                   }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
+                  className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-600 dark:text-slate-300 text-xs font-semibold flex items-center gap-2.5 transition-colors group"
                 >
-                  <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 flex items-center justify-center shrink-0">
-                    <Printer className="w-3.5 h-3.5" />
+                  <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center shrink-0 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                    <Sliders className="w-3.5 h-3.5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="font-bold text-slate-800 dark:text-slate-100">Imprimir Ticket Térmico</div>
-                    <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">Formato continuo 80mm/58mm</div>
+                    <div className="font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                      Configurar Acciones...
+                    </div>
+                    <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
+                      Personalizar para esta tabla
+                    </div>
                   </div>
                 </button>
               </div>

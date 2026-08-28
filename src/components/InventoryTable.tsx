@@ -33,6 +33,8 @@ interface InventoryTableProps {
   onOpenQuickTraspaso: (item: InventoryItem) => void;
   onOpenWhatsApp?: (item: InventoryItem) => void;
   onOpenEmail?: (item: InventoryItem) => void;
+  isWhatsAppEnabled?: boolean;
+  isEmailEnabled?: boolean;
   frcBodFilter: string[];
   setFrcBodFilter: React.Dispatch<React.SetStateAction<string[]>>;
   sheetConfig: any;
@@ -89,6 +91,8 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   onOpenQuickTraspaso,
   onOpenWhatsApp,
   onOpenEmail,
+  isWhatsAppEnabled,
+  isEmailEnabled,
   frcBodFilter,
   setFrcBodFilter,
   sheetConfig,
@@ -440,6 +444,8 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                     onOpenQuickTraspaso={onOpenQuickTraspaso}
                     onOpenWhatsApp={onOpenWhatsApp}
                     onOpenEmail={onOpenEmail}
+                    isWhatsAppEnabled={isWhatsAppEnabled}
+                    isEmailEnabled={isEmailEnabled}
                   />
                 );
               })}

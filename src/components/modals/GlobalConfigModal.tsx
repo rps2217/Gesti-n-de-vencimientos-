@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Settings, X, Database, FileSpreadsheet, Package, FileText, CheckCircle2, Sliders, BookOpen, Plus, Trash2 } from 'lucide-react';
 import { SheetConfig, SpreadsheetMetadata } from '../../types';
+import { TableBulkActionsPanel } from '../settings/TableBulkActionsPanel';
 
 interface GlobalConfigModalProps {
   isOpen: boolean;
@@ -11,6 +12,9 @@ interface GlobalConfigModalProps {
   metadata: SpreadsheetMetadata | null;
   fetchData: (config?: SheetConfig, view?: string) => Promise<void>;
   activeView: string;
+  activeSheetTitle?: string;
+  headers?: string[];
+  initialTab?: 'sheets' | 'dictionary' | 'bulkActions';
 }
 
 const SEMANTIC_FIELDS = [
@@ -25,6 +29,8 @@ const SEMANTIC_FIELDS = [
   { key: 'n_traspaso', label: 'N° de Traspaso / Resolución' },
   { key: 'observacion', label: 'Observación / Comentarios' },
   { key: 'proveedor', label: 'Proveedor / Laboratorio' },
+  { key: 'telefono', label: 'Teléfono / WhatsApp / Contacto' },
+  { key: 'email', label: 'Correo Electrónico / Email' },
   { key: 'precio', label: 'Precio / Costo' },
   { key: 'id', label: 'ID / Folio' }
 ];
@@ -37,9 +43,12 @@ export const GlobalConfigModal: React.FC<GlobalConfigModalProps> = ({
   saveConfig,
   metadata,
   fetchData,
-  activeView
+  activeView,
+  activeSheetTitle = '',
+  headers = [],
+  initialTab = 'sheets'
 }) => {
-  const [activeTab, setActiveTab] = useState<'sheets' | 'dictionary'>('sheets');
+  const [activeTab, setActiveTab] = useState<'sheets' | 'dictionary' | 'bulkActions'>(initialTab);
   const [selectedField, setSelectedField] = useState<string>('sku');
   const [newAliasInput, setNewAliasInput] = useState<string>('');
 
@@ -118,6 +127,17 @@ export const GlobalConfigModal: React.FC<GlobalConfigModalProps> = ({
           >
             <BookOpen className="w-4 h-4" />
             <span>Diccionario de Cabeceras (Aliases)</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('bulkActions')}
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === 'bulkActions'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            <Sliders className="w-4 h-4" />
+            <span>Acciones Masivas por Tabla</span>
           </button>
         </div>
 
@@ -224,7 +244,7 @@ export const GlobalConfigModal: React.FC<GlobalConfigModalProps> = ({
                 </select>
               </div>
             </>
-          ) : (
+          ) : activeTab === 'dictionary' ? (
             <div className="space-y-4">
               <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/60 rounded-2xl p-4 text-xs text-blue-700 dark:text-blue-300">
                 <p className="font-bold mb-1">Diccionario de Mapeo Dinámico</p>
@@ -292,6 +312,16 @@ export const GlobalConfigModal: React.FC<GlobalConfigModalProps> = ({
                 )}
               </div>
             </div>
+          ) : (
+            <TableBulkActionsPanel
+              sheetConfig={sheetConfig}
+              setSheetConfig={setSheetConfig}
+              saveConfig={saveConfig}
+              activeSheetTitle={activeSheetTitle}
+              activeView={activeView}
+              headers={headers}
+              metadata={metadata}
+            />
           )}
         </div>
 

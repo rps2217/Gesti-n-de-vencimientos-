@@ -27,6 +27,11 @@ export interface UserVirtualColumn {
   sourceColumns: string[];
 }
 
+export interface TableBulkActionSetting {
+  enabled?: string[];
+  disabled?: string[];
+}
+
 export interface SheetConfig {
   main?: string;
   events?: string;
@@ -35,6 +40,8 @@ export interface SheetConfig {
   schema?: Record<string, Record<string, ColumnSchema>>;
   activeVirtualColumns?: string[];
   userVirtualColumns?: UserVirtualColumn[];
+  customAliases?: Record<string, string[]>;
+  tableBulkActions?: Record<string, TableBulkActionSetting>;
 }
 
 export type ColumnType = 'text' | 'longtext' | 'number' | 'date' | 'datetime' | 'enum' | 'enumlist' | 'ref' | 'calculated' | 'virtual';

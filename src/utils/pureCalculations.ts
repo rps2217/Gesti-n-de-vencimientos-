@@ -356,15 +356,16 @@ export function calculateWithdrawalDate(dVc: Date, diasRetiro: number): Date {
  * Clean and format phone numbers, ensuring they have the +56 prefix (Chile)
  */
 export function formatPhoneNumber(phone: any): string {
-  let rawPhone = String(phone || '').replace(/[^\d+]/g, '');
+  let rawPhone = String(phone || '').trim().replace(/[^\d+]/g, '');
   if (!rawPhone) return '';
-  if (!rawPhone.startsWith('+56')) {
-    if (rawPhone.startsWith('56') && rawPhone.length >= 10) {
-      rawPhone = '+' + rawPhone;
-    } else {
-      rawPhone = rawPhone.replace(/^\+/, '');
-      rawPhone = '+56' + rawPhone;
-    }
+  // If it already has an international prefix with '+'
+  if (rawPhone.startsWith('+')) {
+    return rawPhone;
   }
-  return rawPhone;
+  // If starts with 56 and is 11 digits (Chile country code without +)
+  if (rawPhone.startsWith('56') && rawPhone.length >= 10) {
+    return '+' + rawPhone;
+  }
+  // Default Chilean prefix
+  return '+56' + rawPhone;
 }

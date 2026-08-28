@@ -3,7 +3,8 @@ import { Mail, X, Check, Copy, Download, ExternalLink, Loader2, Sparkles, AlertC
 import { 
   createGmailDraft, 
   generateItemsHtmlTable,
-  formatVirtualHeaderLabel
+  formatVirtualHeaderLabel,
+  escapeHtml
 } from '../../lib/gmailService';
 
 declare global {
@@ -129,11 +130,14 @@ export const GmailDraftModal: React.FC<GmailDraftModalProps> = ({
     visibleColumns
   ) : '';
 
+  const safeIntro = escapeHtml(introText);
+  const safeFooter = escapeHtml(footerText);
+
   const fullHtmlBody = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.6;">
-      <p style="white-space: pre-line; margin-bottom: 16px;">${introText}</p>
+      <p style="white-space: pre-line; margin-bottom: 16px;">${safeIntro}</p>
       ${tableHtml}
-      <p style="white-space: pre-line; margin-top: 20px;">${footerText}</p>
+      <p style="white-space: pre-line; margin-top: 20px;">${safeFooter}</p>
       <hr style="border: none; border-top: 1px solid #e2e8f0; margin-top: 30px; margin-bottom: 12px;" />
       <p style="font-size: 11px; color: #94a3b8; font-style: italic;">Generado automáticamente desde el Gestor de Vencimientos e Incidencias.</p>
     </div>

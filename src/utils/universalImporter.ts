@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import { findColumnBySemantic, KnownFieldSemantic } from './columnAliases';
 
 export interface ParsedSpreadsheetResult {
@@ -160,6 +159,7 @@ export function parseDelimitedText(text: string, customDelimiter?: string): { he
  * Universal Excel / Binary Spreadsheet parser using XLSX
  */
 export async function parseExcelBuffer(buffer: ArrayBuffer): Promise<ParsedSpreadsheetResult> {
+  const XLSX = await import('xlsx');
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) {

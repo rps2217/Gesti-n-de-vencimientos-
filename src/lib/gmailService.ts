@@ -200,6 +200,19 @@ export interface RelationalContext {
   policies?: any[];
 }
 
+/**
+ * Escapes special characters for safe inclusion in HTML bodies and templates
+ */
+export function escapeHtml(str: unknown): string {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function formatVirtualHeaderLabel(header: string): string {
   switch (header) {
     case '_virtual_dias_vencimiento':
@@ -314,12 +327,12 @@ export function generateItemsHtmlTable(
               retFormatted = formatDisplayDate(dRet);
             }
           }
-          return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; color: #d97706; font-weight: 600; white-space: nowrap;">${retFormatted}</td>`;
+          return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; color: #d97706; font-weight: 600; white-space: nowrap;">${escapeHtml(retFormatted)}</td>`;
         }
 
         // Generic fallback for virtual columns
         const val = item[header] !== undefined && item[header] !== null ? String(item[header]) : '-';
-        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0;">${val}</td>`;
+        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0;">${escapeHtml(val)}</td>`;
       }
 
       // 2. Real Table Header from the active sheet
@@ -382,8 +395,8 @@ export function generateItemsHtmlTable(
         }
       }
 
-      // Display empty fallback
-      const displayVal = cellVal !== '' ? cellVal : '-';
+      // Display empty fallback (escaped)
+      const displayVal = cellVal !== '' ? escapeHtml(cellVal) : '-';
 
       // Style cell based on type
       if (isTraspasoCol && displayVal !== '-') {
@@ -431,7 +444,7 @@ export function generateItemsHtmlTable(
     const isCant = findColumnBySemantic([header], 'cantidad', customAliases) !== null || /cant|stock|qty/i.test(header) || isVirtual;
     const isPrice = findColumnBySemantic([header], 'precio', customAliases) !== null || /precio|costo/i.test(header);
     const align = isCant ? 'text-align: center;' : isPrice ? 'text-align: right;' : 'text-align: left;';
-    return `<th style="padding: 12px; border: 1px solid #1e293b; ${align} white-space: nowrap;">${label}</th>`;
+    return `<th style="padding: 12px; border: 1px solid #1e293b; ${align} white-space: nowrap;">${escapeHtml(label)}</th>`;
   }).join('');
 
   return `

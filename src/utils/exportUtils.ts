@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import { formatDisplayDate } from './pureCalculations';
 import { calculateVirtualColumnValue } from './virtualColumns';
 
@@ -6,7 +5,7 @@ import { calculateVirtualColumnValue } from './virtualColumns';
  * Universal, clean Excel exporter with automatic column width calculation
  * and sanitized formatting for dates and numbers.
  */
-export function exportToExcel(
+export async function exportToExcel(
   filename: string, 
   headers: string[], 
   items: any[], 
@@ -15,6 +14,8 @@ export function exportToExcel(
   allData?: any
 ) {
   if (!items || !items.length) return;
+
+  const XLSX = await import('xlsx');
 
   // Enhance items with virtual column data
   const enhancedItems = items.map(item => {

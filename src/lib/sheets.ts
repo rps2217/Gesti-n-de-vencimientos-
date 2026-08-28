@@ -233,9 +233,14 @@ export async function saveCloudConfig(config: any, configSheetName = '_CONFIG_AP
   }
 }
 
-export const APPS_SCRIPT_TEMPLATE = `// Google Apps Script (Code.gs) - Versión con soporte completo para PropertiesService
+export const APPS_SCRIPT_TEMPLATE = `// Google Apps Script (Code.gs) - Versión con control de concurrencia
 function doPost(e) {
+  // Inicializar candado para evitar colisiones (Race Conditions) en operaciones concurrentes
+  const lock = LockService.getScriptLock();
   try {
+    // Esperar hasta 30 segundos para obtener acceso exclusivo
+    lock.waitLock(30000);
+
     const payload = JSON.parse(e.postData.contents);
     const action = payload.action;
     const spreadsheetId = payload.spreadsheetId;
@@ -311,6 +316,9 @@ function doPost(e) {
     return responseJson({ error: 'Acción no soportada: ' + action });
   } catch (err) {
     return responseJson({ error: err.toString() });
+  } finally {
+    // Siempre liberar el candado para no bloquear futuros requests
+    lock.releaseLock();
   }
 }
 

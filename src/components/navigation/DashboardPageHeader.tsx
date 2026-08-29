@@ -1,9 +1,9 @@
 import React from 'react';
 import { 
   Sparkles, Columns, ChevronDown, Tag, Sliders, Settings, 
-  RotateCcw, Plus, Layers 
+  RotateCcw, Plus, Layers, Edit2, SlidersHorizontal 
 } from 'lucide-react';
-import { SheetProperties } from '../../types';
+import { SheetProperties, TableSlice } from '../../types';
 
 interface DashboardPageHeaderProps {
   activeView: string;
@@ -25,6 +25,9 @@ interface DashboardPageHeaderProps {
   isModalOpen: boolean;
   handleOpenModal: () => void;
   onOpenCreateSlice?: () => void;
+  onOpenSliceManager?: () => void;
+  activeSlice?: TableSlice | null;
+  onEditSlice?: (slice: TableSlice) => void;
 }
 
 export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
@@ -47,6 +50,9 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
   isModalOpen,
   handleOpenModal,
   onOpenCreateSlice,
+  onOpenSliceManager,
+  activeSlice,
+  onEditSlice,
 }) => {
   return (
     <div className="bg-slate-50/50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 px-8 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -126,6 +132,20 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
                   </select>
                 </div>
 
+                {/* Active Slice Quick Edit option if a slice is currently selected */}
+                {activeSlice && onEditSlice && (
+                  <button
+                    onClick={() => {
+                      onEditSlice(activeSlice);
+                      setIsViewMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3.5 py-2.5 bg-blue-50/80 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-xs font-bold flex items-center gap-2.5 transition-colors border-b border-slate-100 dark:border-slate-700/60"
+                  >
+                    <Edit2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span className="truncate">Editar Vista Activa: <strong>{activeSlice.name}</strong></span>
+                  </button>
+                )}
+
                 <button
                   onClick={() => {
                     setIsColumnManagerOpen(true);
@@ -137,6 +157,19 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
                   <span>Gestionar & Ocultar Columnas</span>
                 </button>
 
+                {onOpenSliceManager && (
+                  <button
+                    onClick={() => {
+                      onOpenSliceManager();
+                      setIsViewMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
+                  >
+                    <SlidersHorizontal className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span>Administrar Vistas (Slices)</span>
+                  </button>
+                )}
+
                 {onOpenCreateSlice && (
                   <button
                     onClick={() => {
@@ -145,7 +178,7 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
                     }}
                     className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
                   >
-                    <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <Plus className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     <span>Crear Vista Personalizada (Slice)</span>
                   </button>
                 )}

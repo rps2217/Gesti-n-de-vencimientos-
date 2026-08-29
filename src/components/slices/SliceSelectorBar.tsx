@@ -1,9 +1,9 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { 
   Layers, AlertTriangle, Clock, Truck, Scale, Flame, 
   CheckCircle2, RotateCcw, Bookmark, Sparkles, Package, 
-  FileText, Tag, Filter, ShieldCheck, HelpCircle, 
-  Plus, Edit2, X, SlidersHorizontal 
+  FileText, Tag, Filter, ShieldCheck, 
+  Plus, X, SlidersHorizontal 
 } from 'lucide-react';
 import { TableSlice } from '../../types';
 import { SLICE_COLOR_CLASSES } from '../../utils/sliceRegistry';
@@ -16,7 +16,7 @@ interface SliceSelectorBarProps {
   totalItemsCount: number;
   hasActiveFilters: boolean;
   onOpenCreateSlice: () => void;
-  onEditSlice: (slice: TableSlice) => void;
+  onOpenSliceManager?: () => void;
   activeSlice: TableSlice | null;
 }
 
@@ -64,7 +64,7 @@ export const SliceSelectorBar: React.FC<SliceSelectorBarProps> = ({
   totalItemsCount,
   hasActiveFilters,
   onOpenCreateSlice,
-  onEditSlice,
+  onOpenSliceManager,
   activeSlice
 }) => {
   const isAllRowsActive = activeSliceId === null;
@@ -80,8 +80,9 @@ export const SliceSelectorBar: React.FC<SliceSelectorBarProps> = ({
 
         {/* Pill 0: Todas las Filas */}
         <button
+          type="button"
           onClick={() => onSelectSlice(null)}
-          className={`text-xs px-3 py-1.5 rounded-xl font-bold transition-all shrink-0 flex items-center gap-2 border ${
+          className={`text-xs px-3 py-1.5 rounded-xl font-bold transition-all shrink-0 flex items-center gap-2 border cursor-pointer ${
             isAllRowsActive
               ? 'bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-800 dark:border-slate-100 shadow-sm'
               : 'bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white'
@@ -98,7 +99,7 @@ export const SliceSelectorBar: React.FC<SliceSelectorBarProps> = ({
           </span>
         </button>
 
-        {/* Slice Pills */}
+        {/* Slice Pills (Clean buttons without dangling hover icons) */}
         {slices.map((slice) => {
           const isActive = activeSliceId === slice.id;
           const count = sliceCounts[slice.id] ?? 0;
@@ -106,70 +107,51 @@ export const SliceSelectorBar: React.FC<SliceSelectorBarProps> = ({
           const colorScheme = SLICE_COLOR_CLASSES[color] || SLICE_COLOR_CLASSES.blue;
 
           return (
-            <div key={slice.id} className="relative group shrink-0 flex items-center">
-              <button
-                onClick={() => onSelectSlice(isActive ? null : slice)}
-                className={`text-xs pl-2.5 pr-2 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 border ${
-                  isActive
-                    ? `${colorScheme.activeBg} ${colorScheme.activeText} border-transparent shadow-sm ring-2 ${colorScheme.ring}`
-                    : `${colorScheme.bg} ${colorScheme.text} ${colorScheme.border} hover:opacity-90`
-                }`}
-                title={slice.description || slice.name}
-              >
-                <SliceIcon iconName={slice.icon} className="w-3.5 h-3.5 shrink-0" />
-                <span className="whitespace-nowrap">{slice.name}</span>
-                
-                {/* Live Count Badge */}
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono font-bold ml-0.5 ${
-                  isActive
-                    ? 'bg-white/25 text-white'
-                    : `${colorScheme.badgeBg} ${colorScheme.badgeText}`
-                }`}>
-                  {count}
-                </span>
+            <button
+              key={slice.id}
+              type="button"
+              onClick={() => onSelectSlice(isActive ? null : slice)}
+              className={`text-xs px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 border shrink-0 cursor-pointer ${
+                isActive
+                  ? `${colorScheme.activeBg} ${colorScheme.activeText} border-transparent shadow-sm ring-2 ${colorScheme.ring}`
+                  : `${colorScheme.bg} ${colorScheme.text} ${colorScheme.border} hover:opacity-90`
+              }`}
+              title={slice.description || slice.name}
+            >
+              <SliceIcon iconName={slice.icon} className="w-3.5 h-3.5 shrink-0" />
+              <span className="whitespace-nowrap">{slice.name}</span>
+              
+              {/* Live Count Badge */}
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono font-bold ml-0.5 ${
+                isActive
+                  ? 'bg-white/25 text-white'
+                  : `${colorScheme.badgeBg} ${colorScheme.badgeText}`
+              }`}>
+                {count}
+              </span>
 
-                {!slice.isBuiltIn && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 ml-0.5" title="Slice personalizado de usuario" />
-                )}
-              </button>
-
-              {/* Edit / Customize button for slices */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEditSlice(slice);
-                }}
-                className="opacity-0 group-hover:opacity-100 p-1 -ml-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-opacity bg-white dark:bg-slate-800 rounded-md shadow-xs border border-slate-200 dark:border-slate-700 cursor-pointer"
-                title={slice.isBuiltIn ? "Personalizar o crear copia de este Slice" : "Editar o configurar este Slice"}
-              >
-                <Edit2 className="w-3 h-3" />
-              </button>
-            </div>
+              {!slice.isBuiltIn && (
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 ml-0.5" title="Vista personalizada de usuario" />
+              )}
+            </button>
           );
         })}
       </div>
 
-      {/* Right Controls: Active indicator & Create button */}
-      <div className="flex items-center gap-2.5 shrink-0">
+      {/* Right Controls */}
+      <div className="flex items-center gap-2 shrink-0">
+        {/* Active Slice Dismiss Indicator */}
         {activeSlice && (
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 text-blue-700 dark:text-blue-300 text-xs font-semibold">
             <Filter className="w-3 h-3 text-blue-500" />
             <span className="hidden sm:inline">Slice activo:</span>
-            <strong className="font-bold">{activeSlice.name}</strong>
-
-            {/* Quick Edit button for active slice */}
-            <button
-              onClick={() => onEditSlice(activeSlice)}
-              className="ml-0.5 p-0.5 rounded-md hover:bg-blue-200/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 transition-colors cursor-pointer"
-              title="Ajustar o editar este Slice"
-            >
-              <Edit2 className="w-3 h-3" />
-            </button>
+            <strong className="font-bold max-w-[120px] truncate" title={activeSlice.name}>{activeSlice.name}</strong>
 
             {/* Dismiss Slice button */}
             <button
+              type="button"
               onClick={() => onSelectSlice(null)}
-              className="p-0.5 rounded-md hover:bg-blue-200/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 transition-colors cursor-pointer"
+              className="ml-0.5 p-0.5 rounded-md hover:bg-blue-200/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 transition-colors cursor-pointer"
               title="Quitar filtro de slice (Volver a Todas las Filas)"
             >
               <X className="w-3 h-3" />
@@ -177,9 +159,24 @@ export const SliceSelectorBar: React.FC<SliceSelectorBarProps> = ({
           </div>
         )}
 
+        {/* Administrar Vistas Button */}
+        {onOpenSliceManager && (
+          <button
+            type="button"
+            onClick={onOpenSliceManager}
+            className="text-xs px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            title="Administrar todas las vistas y slices de esta tabla"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+            <span className="hidden sm:inline">Administrar</span>
+          </button>
+        )}
+
+        {/* Create / Capture Slice Button */}
         <button
+          type="button"
           onClick={onOpenCreateSlice}
-          className={`text-xs px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 border shadow-2xs ${
+          className={`text-xs px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 border shadow-2xs cursor-pointer ${
             hasActiveFilters
               ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500 shadow-amber-200 dark:shadow-none'
               : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'

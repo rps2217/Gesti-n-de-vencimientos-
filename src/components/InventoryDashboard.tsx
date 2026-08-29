@@ -97,6 +97,7 @@ import {
 } from '../utils/sliceRegistry';
 import { SliceSelectorBar } from './slices/SliceSelectorBar';
 import { SliceEditorModal } from './modals/SliceEditorModal';
+import { SliceManagerModal } from './modals/SliceManagerModal';
 
 export const InventoryDashboard: React.FC = () => {
   const { showToast, updateToast } = useToast();
@@ -415,6 +416,7 @@ export const InventoryDashboard: React.FC = () => {
   const [customSlices, setCustomSlices] = useState<TableSlice[]>(() => loadCustomSlices());
   const [activeSliceId, setActiveSliceId] = useState<string | null>(null);
   const [isSliceModalOpen, setIsSliceModalOpen] = useState(false);
+  const [isSliceManagerOpen, setIsSliceManagerOpen] = useState(false);
   const [editingSliceModalItem, setEditingSliceModalItem] = useState<TableSlice | null>(null);
 
   // Reset slice selection when active table/view changes
@@ -1591,6 +1593,12 @@ export const InventoryDashboard: React.FC = () => {
             setEditingSliceModalItem(null);
             setIsSliceModalOpen(true);
           }}
+          onOpenSliceManager={() => setIsSliceManagerOpen(true)}
+          activeSlice={activeSlice}
+          onEditSlice={(slice) => {
+            setEditingSliceModalItem(slice);
+            setIsSliceModalOpen(true);
+          }}
         />
 
         {/* SLICES & CUSTOM VIEWS BAR (AppSheet Pattern) */}
@@ -1606,10 +1614,7 @@ export const InventoryDashboard: React.FC = () => {
               setEditingSliceModalItem(null);
               setIsSliceModalOpen(true);
             }}
-            onEditSlice={(slice) => {
-              setEditingSliceModalItem(slice);
-              setIsSliceModalOpen(true);
-            }}
+            onOpenSliceManager={() => setIsSliceManagerOpen(true)}
             activeSlice={activeSlice}
           />
         )}
@@ -2117,6 +2122,26 @@ export const InventoryDashboard: React.FC = () => {
         activeView={activeView}
         headers={headers}
         metadata={metadata}
+      />
+
+      {/* SLICE MANAGER MODAL */}
+      <SliceManagerModal
+        isOpen={isSliceManagerOpen}
+        onClose={() => setIsSliceManagerOpen(false)}
+        tableKey={activeView}
+        slices={currentTableSlices}
+        sliceCounts={sliceCounts}
+        activeSliceId={activeSliceId}
+        onSelectSlice={handleSelectSlice}
+        onEditSlice={(slice) => {
+          setEditingSliceModalItem(slice);
+          setIsSliceModalOpen(true);
+        }}
+        onCreateSlice={() => {
+          setEditingSliceModalItem(null);
+          setIsSliceModalOpen(true);
+        }}
+        onDeleteSlice={handleDeleteSlice}
       />
 
       {/* SLICE EDITOR MODAL (AppSheet Slices) */}

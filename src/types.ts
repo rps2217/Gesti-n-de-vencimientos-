@@ -139,6 +139,7 @@ export interface SliceFilterConfig {
   eventResolutionFilter?: ('pending' | 'completed')[];
   frcBodFilter?: string[];
   columnFilters?: Record<string, string[]>;
+  dynamicMonthFilter?: number[];
 }
 
 export interface TableSlice {

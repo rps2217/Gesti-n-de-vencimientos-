@@ -50,6 +50,15 @@ const PM_STATUS_OPTIONS = [
   { id: 'en_regla', label: 'Inventario en Regla', icon: 'CheckCircle2', color: 'emerald' }
 ];
 
+const DYNAMIC_MONTH_OPTIONS = [
+  { offset: 1, label: 'Mes Siguiente (+1)', icon: 'Clock', color: 'indigo' },
+  { offset: 2, label: 'En 2 Meses (+2)', icon: 'Clock', color: 'blue' },
+  { offset: 3, label: 'En 3 Meses (+3)', icon: 'Clock', color: 'cyan' },
+  { offset: 4, label: 'En 4 Meses (+4)', icon: 'Clock', color: 'teal' },
+  { offset: 5, label: 'En 5 Meses (+5)', icon: 'Clock', color: 'emerald' },
+  { offset: 6, label: 'En 6 Meses (+6)', icon: 'Clock', color: 'emerald' },
+];
+
 const EVENT_CATEGORY_OPTIONS = [
   { id: 'TRANSPORTE', label: 'Transporte', icon: 'Truck', color: 'blue' },
   { id: 'DIFERENCIA', label: 'Diferencia Stock', icon: 'Scale', color: 'purple' },
@@ -167,6 +176,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
           quickChip: currentFilters.quickChip || undefined,
           eventFilter: currentFilters.eventFilter?.length ? [...currentFilters.eventFilter] : undefined,
           pmRadarFilter: currentFilters.pmRadarFilter?.length ? [...currentFilters.pmRadarFilter] : undefined,
+          dynamicMonthFilter: currentFilters.dynamicMonthFilter?.length ? [...currentFilters.dynamicMonthFilter] : undefined,
           eventResolutionFilter: currentFilters.eventResolutionFilter?.length ? [...currentFilters.eventResolutionFilter] : undefined,
           frcBodFilter: currentFilters.frcBodFilter?.length ? [...currentFilters.frcBodFilter] : undefined,
           columnFilters: currentFilters.columnFilters && Object.keys(currentFilters.columnFilters).length > 0
@@ -210,6 +220,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
       quickChip: currentFilters.quickChip || undefined,
       eventFilter: currentFilters.eventFilter?.length ? [...currentFilters.eventFilter] : undefined,
       pmRadarFilter: currentFilters.pmRadarFilter?.length ? [...currentFilters.pmRadarFilter] : undefined,
+      dynamicMonthFilter: currentFilters.dynamicMonthFilter?.length ? [...currentFilters.dynamicMonthFilter] : undefined,
       eventResolutionFilter: currentFilters.eventResolutionFilter?.length ? [...currentFilters.eventResolutionFilter] : undefined,
       frcBodFilter: currentFilters.frcBodFilter?.length ? [...currentFilters.frcBodFilter] : undefined,
       columnFilters: currentFilters.columnFilters && Object.keys(currentFilters.columnFilters).length > 0
@@ -250,6 +261,19 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
       return {
         ...prev,
         pmRadarFilter: updated.length > 0 ? updated : undefined
+      };
+    });
+  };
+
+  const handleToggleDynamicMonth = (offset: number) => {
+    setFilterConfig(prev => {
+      const current = prev.dynamicMonthFilter || [];
+      const updated = current.includes(offset)
+        ? current.filter(o => o !== offset)
+        : [...current, offset];
+      return {
+        ...prev,
+        dynamicMonthFilter: updated.length > 0 ? updated : undefined
       };
     });
   };
@@ -330,6 +354,9 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
   if (filterConfig.quickChip) filterSummary.push(`Píldora: "${filterConfig.quickChip}"`);
   if (filterConfig.pmRadarFilter && filterConfig.pmRadarFilter.length > 0) {
     filterSummary.push(`Radar PM: ${filterConfig.pmRadarFilter.join(', ')}`);
+  }
+  if (filterConfig.dynamicMonthFilter && filterConfig.dynamicMonthFilter.length > 0) {
+    filterSummary.push(`Meses Futuros: +${filterConfig.dynamicMonthFilter.join(', +')}`);
   }
   if (filterConfig.eventFilter && filterConfig.eventFilter.length > 0) {
     filterSummary.push(`Categorías: ${filterConfig.eventFilter.join(', ')}`);
@@ -654,6 +681,50 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
                         key={opt.id}
                         type="button"
                         onClick={() => handleTogglePmStatus(opt.id)}
+                        className={`text-xs p-2 rounded-xl font-bold border transition-all flex items-center justify-between cursor-pointer ${
+                          isSelected
+                            ? `${scheme.bg} ${scheme.text} ${scheme.border} ring-2 ${scheme.ring}`
+                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <SliceIcon iconName={opt.icon} className="w-3.5 h-3.5" />
+                          <span>{opt.label}</span>
+                        </span>
+                        {isSelected && <Check className="w-3.5 h-3.5" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2.5. Filtros de Meses Futuros Dinámicos */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Filtro Dinámico de Vencimiento (Meses adelante)</span>
+                  </label>
+                  {filterConfig.dynamicMonthFilter && filterConfig.dynamicMonthFilter.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setFilterConfig(prev => ({ ...prev, dynamicMonthFilter: undefined }))}
+                      className="text-[10px] text-red-500 hover:underline font-bold cursor-pointer"
+                    >
+                      Limpiar
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {DYNAMIC_MONTH_OPTIONS.map((opt) => {
+                    const isSelected = (filterConfig.dynamicMonthFilter || []).includes(opt.offset);
+                    const scheme = SLICE_COLOR_CLASSES[opt.color] || SLICE_COLOR_CLASSES.blue;
+                    return (
+                      <button
+                        key={opt.offset}
+                        type="button"
+                        onClick={() => handleToggleDynamicMonth(opt.offset)}
                         className={`text-xs p-2 rounded-xl font-bold border transition-all flex items-center justify-between cursor-pointer ${
                           isSelected
                             ? `${scheme.bg} ${scheme.text} ${scheme.border} ring-2 ${scheme.ring}`

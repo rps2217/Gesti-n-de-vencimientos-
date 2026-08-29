@@ -14,6 +14,7 @@ export interface WorkerNormalizedItem {
   statusCode: ItemStatusCode;
   daysToRetire: number | null;
   daysToExpiry: number | null;
+  expiryMonthOffset: number | null;
   isResolved: boolean;
   traspasoVal: string | null;
   bodegaVal: string;
@@ -74,6 +75,7 @@ export type WorkerInMessage =
         eventResolutionFilter: string[];
         pmRadarFilter: string[];
         columnFilters: Record<string, string[]>;
+        dynamicMonthFilter: number[];
       };
     };
 
@@ -197,6 +199,7 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
         statusCode: statusRaw.code,
         daysToRetire: statusRaw.daysToRetire,
         daysToExpiry: statusRaw.daysToExpiry,
+        expiryMonthOffset: statusRaw.expiryMonthOffset,
         isResolved: res.isResolved,
         traspasoVal: res.traspasoNumber || null,
         bodegaVal,
@@ -258,7 +261,8 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
       frcBodCol,
       eventResolutionFilter,
       pmRadarFilter,
-      columnFilters
+      columnFilters,
+      dynamicMonthFilter
     } = payload;
 
     const hasEventFilter = activeView === 'events' && eventFilter.length > 0;
@@ -306,6 +310,11 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
             matchPm = true;
           else if (pmRadarFilterSet.has('en_regla') && item.statusCode === 'NORMAL') matchPm = true;
           if (!matchPm) continue;
+        }
+        if (dynamicMonthFilter && dynamicMonthFilter.length > 0) {
+          if (item.expiryMonthOffset === null || !dynamicMonthFilter.includes(item.expiryMonthOffset)) {
+            continue;
+          }
         }
       } else if (activeView === 'events') {
         if (eventFilterSet) {

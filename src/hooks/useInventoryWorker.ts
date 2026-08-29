@@ -20,6 +20,7 @@ export interface UseInventoryWorkerProps {
   eventResolutionFilter: string[];
   pmRadarFilter: string[];
   columnFilters: Record<string, string[]>;
+  dynamicMonthFilter?: number[];
 }
 
 export function useInventoryWorker({
@@ -34,7 +35,8 @@ export function useInventoryWorker({
   frcBodFilter,
   eventResolutionFilter,
   pmRadarFilter,
-  columnFilters
+  columnFilters,
+  dynamicMonthFilter = []
 }: UseInventoryWorkerProps) {
   const workerRef = useRef<Worker | null>(null);
   const [isWorkerReady, setIsWorkerReady] = useState(false);
@@ -106,7 +108,8 @@ export function useInventoryWorker({
           frcBodCol,
           eventResolutionFilter,
           pmRadarFilter,
-          columnFilters
+          columnFilters,
+          dynamicMonthFilter
         }
       });
     }
@@ -126,7 +129,8 @@ export function useInventoryWorker({
           frcBodCol,
           eventResolutionFilter,
           pmRadarFilter,
-          columnFilters
+          columnFilters,
+          dynamicMonthFilter
         }
       });
     }
@@ -141,6 +145,7 @@ export function useInventoryWorker({
     eventResolutionFilter,
     pmRadarFilter,
     columnFilters,
+    dynamicMonthFilter,
     isWorkerReady
   ]);
 

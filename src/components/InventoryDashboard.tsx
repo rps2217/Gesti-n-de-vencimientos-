@@ -358,6 +358,8 @@ export const InventoryDashboard: React.FC = () => {
     setPmRadarFilter,
     columnFilters,
     setColumnFilters,
+    dynamicMonthFilter,
+    setDynamicMonthFilter,
     groupByColumn,
     setGroupByColumn,
     sortConfig,
@@ -458,6 +460,7 @@ export const InventoryDashboard: React.FC = () => {
     setEventResolutionFilter(filterConfig.eventResolutionFilter || []);
     setFrcBodFilter(filterConfig.frcBodFilter || []);
     setColumnFilters(filterConfig.columnFilters || {});
+    setDynamicMonthFilter(filterConfig.dynamicMonthFilter || []);
 
     // Apply slice grouping if defined
     if (slice.groupByColumn) {
@@ -475,7 +478,7 @@ export const InventoryDashboard: React.FC = () => {
     } else {
       showAllColumns();
     }
-  }, [clearAllFilters, showAllColumns, setVisibleColumns, setSortConfig, setGroupByColumn, setEventFilter, setPmRadarFilter, setEventResolutionFilter, setFrcBodFilter, setColumnFilters]);
+  }, [clearAllFilters, showAllColumns, setVisibleColumns, setSortConfig, setGroupByColumn, setEventFilter, setPmRadarFilter, setEventResolutionFilter, setFrcBodFilter, setColumnFilters, setDynamicMonthFilter]);
 
   const handleSaveSlice = useCallback((slice: TableSlice) => {
     setCustomSlices(prev => {
@@ -2160,7 +2163,8 @@ export const InventoryDashboard: React.FC = () => {
           pmRadarFilter,
           eventResolutionFilter,
           frcBodFilter,
-          columnFilters
+          columnFilters,
+          dynamicMonthFilter
         }}
         currentSort={sortConfig}
         currentGroupBy={groupByColumn}

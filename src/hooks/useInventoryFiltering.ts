@@ -6,6 +6,7 @@ import {
   getItemResolutionStatus 
 } from '../utils/dateCalculations';
 import { findColumnBySemantic } from '../utils/columnAliases';
+import { parseAnyDate } from '../utils/pureCalculations';
 import { VIRTUAL_COLUMNS } from '../utils/virtualColumns';
 import { sortInventoryItems } from '../utils/sortUtils';
 import { useInventoryWorker } from './useInventoryWorker';
@@ -74,6 +75,7 @@ export function useInventoryFiltering({
   const [eventResolutionFilter, setEventResolutionFilter] = useState<string[]>([]);
   const [pmRadarFilter, setPmRadarFilter] = useState<string[]>([]);
   const [columnFilters, setColumnFilters] = useState<Record<string, string[]>>({});
+  const [dynamicMonthFilter, setDynamicMonthFilter] = useState<number[]>([]);
   const [groupByColumn, setGroupByColumn] = useState<string>('none');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
@@ -108,7 +110,8 @@ export function useInventoryFiltering({
     frcBodFilter,
     eventResolutionFilter,
     pmRadarFilter,
-    columnFilters
+    columnFilters,
+    dynamicMonthFilter
   });
 
   // Single-pass metrics fallback if worker metrics not yet ready
@@ -330,6 +333,22 @@ export function useInventoryFiltering({
             else if (pmRadarFilterSet.has('en_regla') && st.code === 'NORMAL') matchPm = true;
             if (!matchPm) continue;
           }
+          if (dynamicMonthFilter && dynamicMonthFilter.length > 0) {
+            const today = new Date();
+            let dVc = null;
+            const vcCol = findColumnBySemantic(headers, 'fecha_vc');
+            if (vcCol && item[vcCol]) {
+              dVc = parseAnyDate(item[vcCol]);
+            }
+            if (dVc) {
+              const offset = (dVc.getFullYear() - today.getFullYear()) * 12 + dVc.getMonth() - today.getMonth();
+              if (!dynamicMonthFilter.includes(offset)) {
+                continue;
+              }
+            } else {
+              continue;
+            }
+          }
         } else if (activeView === 'events') {
           if (eventFilterSet) {
             const cat = getEventCategory(item, headers);
@@ -397,6 +416,7 @@ export function useInventoryFiltering({
     eventResolutionFilter, 
     pmRadarFilter, 
     columnFilters, 
+    dynamicMonthFilter,
     headers,
     sortConfig
   ]);
@@ -489,6 +509,7 @@ export function useInventoryFiltering({
     setEventResolutionFilter([]);
     setPmRadarFilter([]);
     setColumnFilters({});
+    setDynamicMonthFilter([]);
     setSortConfig({ column: null, direction: null });
   }, []);
 
@@ -507,6 +528,8 @@ export function useInventoryFiltering({
     setPmRadarFilter,
     columnFilters,
     setColumnFilters,
+    dynamicMonthFilter,
+    setDynamicMonthFilter,
     groupByColumn,
     setGroupByColumn,
     collapsedGroups,

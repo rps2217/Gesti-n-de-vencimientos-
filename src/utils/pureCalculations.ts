@@ -269,6 +269,7 @@ export function computeItemRawStatus(item: InventoryItem, headers: string[]): {
   code: ItemStatusCode;
   daysToRetire: number | null;
   daysToExpiry: number | null;
+  expiryMonthOffset: number | null;
 } {
   const retCol = findColumnBySemantic(headers, 'fecha_retiro');
   const vcCol = findColumnBySemantic(headers, 'fecha_vc');
@@ -276,8 +277,11 @@ export function computeItemRawStatus(item: InventoryItem, headers: string[]): {
   const today = getEndOfMonthDate();
   today.setHours(0, 0, 0, 0);
 
+  const realToday = new Date();
+
   let daysToRetire: number | null = null;
   let daysToExpiry: number | null = null;
+  let expiryMonthOffset: number | null = null;
 
   if (retCol && item[retCol]) {
     const dRet = parseAnyDate(item[retCol]);
@@ -295,6 +299,7 @@ export function computeItemRawStatus(item: InventoryItem, headers: string[]): {
 
   if (dVc) {
     daysToExpiry = Math.ceil((dVc.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    expiryMonthOffset = (dVc.getFullYear() - realToday.getFullYear()) * 12 + dVc.getMonth() - realToday.getMonth();
     
     if (!daysToRetire && daysToExpiry !== null) {
       const dRet = new Date(dVc);
@@ -315,7 +320,7 @@ export function computeItemRawStatus(item: InventoryItem, headers: string[]): {
     code = 'DRAINAGE_PM';
   }
 
-  return { code, daysToRetire, daysToExpiry };
+  return { code, daysToRetire, daysToExpiry, expiryMonthOffset };
 }
 
 export function getItemResolutionStatus(item: InventoryItem, headers: string[]): EventResolutionStatus {

@@ -133,19 +133,17 @@ export const SliceSelectorBar: React.FC<SliceSelectorBarProps> = ({
                 )}
               </button>
 
-              {/* Edit button for custom slices */}
-              {!slice.isBuiltIn && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEditSlice(slice);
-                  }}
-                  className="opacity-0 group-hover:opacity-100 p-1 -ml-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-opacity bg-white dark:bg-slate-800 rounded-md shadow-xs border border-slate-200 dark:border-slate-700"
-                  title="Editar o configurar este Slice"
-                >
-                  <Edit2 className="w-3 h-3" />
-                </button>
-              )}
+              {/* Edit / Customize button for slices */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditSlice(slice);
+                }}
+                className="opacity-0 group-hover:opacity-100 p-1 -ml-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-opacity bg-white dark:bg-slate-800 rounded-md shadow-xs border border-slate-200 dark:border-slate-700 cursor-pointer"
+                title={slice.isBuiltIn ? "Personalizar o crear copia de este Slice" : "Editar o configurar este Slice"}
+              >
+                <Edit2 className="w-3 h-3" />
+              </button>
             </div>
           );
         })}
@@ -158,10 +156,21 @@ export const SliceSelectorBar: React.FC<SliceSelectorBarProps> = ({
             <Filter className="w-3 h-3 text-blue-500" />
             <span className="hidden sm:inline">Slice activo:</span>
             <strong className="font-bold">{activeSlice.name}</strong>
+
+            {/* Quick Edit button for active slice */}
+            <button
+              onClick={() => onEditSlice(activeSlice)}
+              className="ml-0.5 p-0.5 rounded-md hover:bg-blue-200/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 transition-colors cursor-pointer"
+              title="Ajustar o editar este Slice"
+            >
+              <Edit2 className="w-3 h-3" />
+            </button>
+
+            {/* Dismiss Slice button */}
             <button
               onClick={() => onSelectSlice(null)}
-              className="ml-1 p-0.5 rounded-md hover:bg-blue-200/50 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 transition-colors"
-              title="Quitar filtro de slice"
+              className="p-0.5 rounded-md hover:bg-blue-200/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 transition-colors cursor-pointer"
+              title="Quitar filtro de slice (Volver a Todas las Filas)"
             >
               <X className="w-3 h-3" />
             </button>

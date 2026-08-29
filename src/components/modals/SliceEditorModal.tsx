@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, Layers, Sparkles, Tag, Check, Trash2, Sliders, 
-  Columns, Filter, ArrowUpDown, Info
+  Columns, Filter, ArrowUpDown, Info, RefreshCw, Copy, 
+  Search, AlertTriangle, Flame, Clock, CheckCircle2, 
+  Truck, Scale, RotateCcw, ShieldCheck, Bookmark, FileText, Package
 } from 'lucide-react';
 import { 
   TableSlice, SliceFilterConfig, SliceColor, SortConfig 
@@ -34,11 +36,27 @@ interface SliceEditorModalProps {
 const AVAILABLE_ICONS = [
   'Layers', 'AlertTriangle', 'Clock', 'Truck', 'Scale', 
   'Flame', 'CheckCircle2', 'RotateCcw', 'Bookmark', 
-  'Sparkles', 'Package', 'FileText', 'Tag', 'Filter'
+  'Sparkles', 'Package', 'FileText', 'Tag', 'Filter', 'ShieldCheck'
 ];
 
 const AVAILABLE_COLORS: SliceColor[] = [
   'blue', 'rose', 'amber', 'emerald', 'purple', 'indigo', 'slate'
+];
+
+const PM_STATUS_OPTIONS = [
+  { id: 'retire_now', label: 'Retiro Urgente', icon: 'AlertTriangle', color: 'rose' },
+  { id: 'drainage', label: 'Radar PM (Drenaje)', icon: 'Flame', color: 'amber' },
+  { id: 'upcoming', label: 'Próximos a Vencer', icon: 'Clock', color: 'indigo' },
+  { id: 'en_regla', label: 'Inventario en Regla', icon: 'CheckCircle2', color: 'emerald' }
+];
+
+const EVENT_CATEGORY_OPTIONS = [
+  { id: 'TRANSPORTE', label: 'Transporte', icon: 'Truck', color: 'blue' },
+  { id: 'DIFERENCIA', label: 'Diferencia Stock', icon: 'Scale', color: 'purple' },
+  { id: 'AVERIA', label: 'Mermas & Averías', icon: 'Flame', color: 'rose' },
+  { id: 'CANJES', label: 'Canjes', icon: 'RotateCcw', color: 'indigo' },
+  { id: 'DEVOLUCION', label: 'Devolución', icon: 'RotateCcw', color: 'amber' },
+  { id: 'CALIDAD', label: 'Calidad', icon: 'ShieldCheck', color: 'emerald' }
 ];
 
 function getSuggestedSliceName(
@@ -95,17 +113,21 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [useCustomColumns, setUseCustomColumns] = useState(false);
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
+  const [columnSearch, setColumnSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'general' | 'filters' | 'columns'>('general');
   const [errors, setErrors] = useState<{ name?: string }>({});
+
+  const isBuiltIn = Boolean(editingSlice?.isBuiltIn);
 
   useEffect(() => {
     if (!isOpen) return;
 
     if (editingSlice) {
-      setName(editingSlice.name);
+      setName(isBuiltIn ? `${editingSlice.name} (Personalizado)` : editingSlice.name);
       setDescription(editingSlice.description || '');
       setIcon(editingSlice.icon || 'Layers');
       setColor(editingSlice.color || 'blue');
-      setFilterConfig(editingSlice.filterConfig || {});
+      setFilterConfig(editingSlice.filterConfig ? { ...editingSlice.filterConfig } : {});
       setGroupByColumn(editingSlice.groupByColumn || 'none');
       if (editingSlice.sortConfig && editingSlice.sortConfig.column) {
         setSortColumn(editingSlice.sortConfig.column);
@@ -150,10 +172,35 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
       setUseCustomColumns(false);
       setSelectedColumns(currentVisibleHeaders.length > 0 ? currentVisibleHeaders : headers);
     }
+    setColumnSearch('');
+    setActiveTab('general');
     setErrors({});
-  }, [isOpen, editingSlice, currentFilters, currentSort, currentGroupBy, currentVisibleHeaders, headers, tableKey]);
+  }, [isOpen, editingSlice, currentFilters, currentSort, currentGroupBy, currentVisibleHeaders, headers, tableKey, isBuiltIn]);
 
   if (!isOpen) return null;
+
+  const handleSyncWithActiveScreen = () => {
+    setFilterConfig({
+      searchTerm: currentFilters.searchTerm || undefined,
+      quickChip: currentFilters.quickChip || undefined,
+      eventFilter: currentFilters.eventFilter?.length ? [...currentFilters.eventFilter] : undefined,
+      pmRadarFilter: currentFilters.pmRadarFilter?.length ? [...currentFilters.pmRadarFilter] : undefined,
+      eventResolutionFilter: currentFilters.eventResolutionFilter?.length ? [...currentFilters.eventResolutionFilter] : undefined,
+      frcBodFilter: currentFilters.frcBodFilter?.length ? [...currentFilters.frcBodFilter] : undefined,
+      columnFilters: currentFilters.columnFilters && Object.keys(currentFilters.columnFilters).length > 0
+        ? { ...currentFilters.columnFilters }
+        : undefined
+    });
+    setGroupByColumn(currentGroupBy || 'none');
+    if (currentSort && currentSort.column) {
+      setSortColumn(currentSort.column);
+      setSortDirection(currentSort.direction === 'desc' ? 'desc' : 'asc');
+    }
+    if (currentVisibleHeaders && currentVisibleHeaders.length > 0) {
+      setSelectedColumns([...currentVisibleHeaders]);
+      setUseCustomColumns(currentVisibleHeaders.length !== headers.length);
+    }
+  };
 
   const handleToggleColumn = (col: string) => {
     setSelectedColumns(prev => 
@@ -169,16 +216,60 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
     setSelectedColumns([]);
   };
 
-  const handleSave = (e?: React.SyntheticEvent) => {
+  const handleTogglePmStatus = (statusId: string) => {
+    setFilterConfig(prev => {
+      const current = prev.pmRadarFilter || [];
+      const updated = current.includes(statusId)
+        ? current.filter(s => s !== statusId)
+        : [...current, statusId];
+      return {
+        ...prev,
+        pmRadarFilter: updated.length > 0 ? updated : undefined
+      };
+    });
+  };
+
+  const handleToggleEventCategory = (catId: string) => {
+    setFilterConfig(prev => {
+      const current = prev.eventFilter || [];
+      const updated = current.includes(catId)
+        ? current.filter(c => c !== catId)
+        : [...current, catId];
+      return {
+        ...prev,
+        eventFilter: updated.length > 0 ? updated : undefined
+      };
+    });
+  };
+
+  const handleToggleEventResolution = (res: 'pending' | 'completed') => {
+    setFilterConfig(prev => {
+      const current = prev.eventResolutionFilter || [];
+      const updated = current.includes(res)
+        ? current.filter(r => r !== res)
+        : [...current, res];
+      return {
+        ...prev,
+        eventResolutionFilter: updated.length > 0 ? updated : undefined
+      };
+    });
+  };
+
+  const handleSave = (e?: React.SyntheticEvent, forceAsNew = false) => {
     if (e) e.preventDefault();
     const cleanName = name.trim();
     if (!cleanName) {
       setErrors({ name: 'El nombre del slice es obligatorio' });
+      setActiveTab('general');
       return;
     }
 
+    const shouldCreateNew = forceAsNew || isBuiltIn || !editingSlice;
+
     const newSlice: TableSlice = {
-      id: editingSlice ? editingSlice.id : `slice_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: shouldCreateNew
+        ? `slice_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+        : editingSlice.id,
       name: cleanName,
       description: description.trim() || undefined,
       tableKey: tableKey || 'main',
@@ -200,6 +291,11 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
     }
   };
 
+  // Filtered headers for visible columns search
+  const filteredHeaders = headers.filter(h => 
+    h.toLowerCase().includes(columnSearch.trim().toLowerCase())
+  );
+
   // Human-readable summary of captured filters
   const filterSummary: string[] = [];
   if (filterConfig.searchTerm) filterSummary.push(`Búsqueda: "${filterConfig.searchTerm}"`);
@@ -218,283 +314,584 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
   }
   if (filterConfig.columnFilters && Object.keys(filterConfig.columnFilters).length > 0) {
     const colCount = Object.keys(filterConfig.columnFilters).length;
-    filterSummary.push(`${colCount} filtro(s) de columnas específicos`);
+    filterSummary.push(`${colCount} filtro(s) de columnas`);
   }
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <form 
         onSubmit={handleSave}
-        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-xl w-full overflow-hidden flex flex-col max-h-[90vh]"
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[92vh]"
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400">
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-800/50">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400">
               <Layers className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
-                {editingSlice ? 'Editar Vista Personalizada (Slice)' : 'Crear Vista Personalizada (Slice)'}
+              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                {isBuiltIn ? (
+                  <>
+                    <span>Personalizar Vista del Sistema</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-semibold">
+                      Copia Personalizada
+                    </span>
+                  </>
+                ) : editingSlice ? (
+                  'Editar Vista Personalizada (Slice)'
+                ) : (
+                  'Crear Vista Personalizada (Slice)'
+                )}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Segmento inteligente de datos basado en filtros, orden y columnas (estilo AppSheet).
+                Segmento inteligente de datos con filtros, orden y columnas dedicadas (estilo AppSheet).
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
+        {/* Tab Navigation */}
+        <div className="flex border-b border-slate-200 dark:border-slate-800 px-6 bg-slate-50/40 dark:bg-slate-900/40">
+          <button
+            type="button"
+            onClick={() => setActiveTab('general')}
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === 'general'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span>1. General & Diseño</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('filters')}
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 relative ${
+              activeTab === 'filters'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            <Filter className="w-3.5 h-3.5" />
+            <span>2. Criterios de Filtrado</span>
+            {filterSummary.length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-mono">
+                {filterSummary.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('columns')}
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 relative ${
+              activeTab === 'columns'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            <Columns className="w-3.5 h-3.5" />
+            <span>3. Columnas & Orden</span>
+            {useCustomColumns && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 font-mono">
+                {selectedColumns.length}
+              </span>
+            )}
+          </button>
+        </div>
+
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {/* Nombre y Descripción */}
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Nombre de la Vista / Slice <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  if (errors.name) setErrors({});
-                }}
-                placeholder="Ej. Mermas Bodega Central, Lotes Mayo 2026, Reclamos Urgentes..."
-                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-medium bg-slate-50 dark:bg-slate-800/50 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.name ? 'border-red-500 bg-red-50/20' : 'border-slate-200 dark:border-slate-700'
-                }`}
-                autoFocus
-              />
-              {errors.name && (
-                <p className="text-xs text-red-500 mt-1.5 font-bold flex items-center gap-1">
-                  <span>⚠️</span> {errors.name}
-                </p>
-              )}
-            </div>
+          {/* TAB 1: GENERAL & DISEÑO */}
+          {activeTab === 'general' && (
+            <div className="space-y-5 animate-in fade-in duration-150">
+              {/* Nombre y Descripción */}
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Nombre del Slice / Vista <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      if (errors.name) setErrors({});
+                    }}
+                    placeholder="Ej. Retiro Urgente Bodega 1, Lotes 2026, Reclamos Chofer..."
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-medium bg-slate-50 dark:bg-slate-800/50 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      errors.name ? 'border-red-500 bg-red-50/20' : 'border-slate-200 dark:border-slate-700'
+                    }`}
+                    autoFocus
+                  />
+                  {errors.name && (
+                    <p className="text-xs text-red-500 mt-1.5 font-bold flex items-center gap-1">
+                      <span>⚠️</span> {errors.name}
+                    </p>
+                  )}
+                </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Descripción Operativa (Opcional)
-              </label>
-              <input
-                type="text"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Breve nota sobre qué registros agrupa este slice..."
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-medium bg-slate-50 dark:bg-slate-800/50 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          {/* Color & Icon Selector */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                Color de Distinción
-              </label>
-              <div className="flex items-center gap-2 flex-wrap">
-                {AVAILABLE_COLORS.map((c) => {
-                  const scheme = SLICE_COLOR_CLASSES[c] || SLICE_COLOR_CLASSES.blue;
-                  const isSelected = color === c;
-                  return (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setColor(c)}
-                      className={`w-7 h-7 rounded-xl border flex items-center justify-center transition-all ${
-                        scheme.bg
-                      } ${scheme.border} ${
-                        isSelected ? 'ring-2 ring-blue-500 scale-110 shadow-xs' : 'hover:scale-105'
-                      }`}
-                      title={`Color ${c}`}
-                    >
-                      {isSelected && <Check className={`w-3.5 h-3.5 ${scheme.text}`} />}
-                    </button>
-                  );
-                })}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Descripción Operativa (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Breve nota sobre qué registros agrupa este slice..."
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-medium bg-slate-50 dark:bg-slate-800/50 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
-            </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                Ícono Representativo
-              </label>
-              <div className="flex items-center gap-1.5 flex-wrap max-h-20 overflow-y-auto p-1 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
-                {AVAILABLE_ICONS.map((ic) => {
-                  const isSelected = icon === ic;
-                  return (
-                    <button
-                      key={ic}
-                      type="button"
-                      onClick={() => setIcon(ic)}
-                      className={`p-1.5 rounded-lg border transition-all ${
-                        isSelected
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                          : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-100'
-                      }`}
-                      title={ic}
-                    >
-                      <SliceIcon iconName={ic} className="w-3.5 h-3.5" />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Captured Filter Rules Card */}
-          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-                <Filter className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                Criterios y Filtros Capturados
-              </span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                {filterSummary.length} condición(es)
-              </span>
-            </div>
-
-            {filterSummary.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {filterSummary.map((item, idx) => (
-                  <span
-                    key={idx}
-                    className="text-[11px] px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold"
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-slate-500 dark:text-slate-400 italic">
-                Sin filtros aplicados actualmente. Este slice mostrará todos los registros con su orden y columnas asignadas.
-              </p>
-            )}
-          </div>
-
-          {/* Grouping & Default Sorting */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                <Tag className="w-3 h-3 text-blue-500" /> Agrupación Predeterminada
-              </label>
-              <select
-                value={groupByColumn}
-                onChange={(e) => setGroupByColumn(e.target.value)}
-                className="w-full text-xs font-medium px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="none">Sin agrupación</option>
-                {headers.map(h => (
-                  <option key={h} value={h}>{h}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                <ArrowUpDown className="w-3 h-3 text-blue-500" /> Orden Predeterminado
-              </label>
-              <div className="flex items-center gap-2">
-                <select
-                  value={sortColumn}
-                  onChange={(e) => setSortColumn(e.target.value)}
-                  className="flex-1 text-xs font-medium px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="">Predeterminado</option>
-                  {headers.map(h => (
-                    <option key={h} value={h}>{h}</option>
-                  ))}
-                </select>
-                {sortColumn && (
-                  <button
-                    type="button"
-                    onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
-                    className="px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50"
-                  >
-                    {sortDirection === 'asc' ? 'ASC' : 'DESC'}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Visible Columns in Slice (AppSheet Slice Feature) */}
-          <div className="border-t border-slate-200 dark:border-slate-800 pt-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                <Columns className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                Columnas de este Slice
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={useCustomColumns}
-                  onChange={(e) => setUseCustomColumns(e.target.checked)}
-                  className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                  Personalizar columnas
-                </span>
-              </label>
-            </div>
-
-            {useCustomColumns && (
-              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 space-y-2.5 animate-in fade-in duration-150">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-slate-500 dark:text-slate-400 font-medium">
-                    {selectedColumns.length} de {headers.length} columnas visibles
-                  </span>
-                  <div className="flex gap-2 font-bold text-blue-600 dark:text-blue-400">
-                    <button type="button" onClick={handleSelectAllColumns} className="hover:underline">
-                      Todas
-                    </button>
-                    <span>•</span>
-                    <button type="button" onClick={handleClearColumns} className="hover:underline">
-                      Limpiar
-                    </button>
+              {/* Color & Icon Selector */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Color de Distinción
+                  </label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {AVAILABLE_COLORS.map((c) => {
+                      const scheme = SLICE_COLOR_CLASSES[c] || SLICE_COLOR_CLASSES.blue;
+                      const isSelected = color === c;
+                      return (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setColor(c)}
+                          className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all ${
+                            scheme.bg
+                          } ${scheme.border} ${
+                            isSelected ? 'ring-2 ring-blue-500 scale-110 shadow-xs' : 'hover:scale-105'
+                          }`}
+                          title={`Color ${c}`}
+                        >
+                          {isSelected && <Check className={`w-4 h-4 ${scheme.text}`} />}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-36 overflow-y-auto p-1">
-                  {headers.map(col => {
-                    const isChecked = selectedColumns.includes(col);
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Ícono Representativo
+                  </label>
+                  <div className="flex items-center gap-1.5 flex-wrap max-h-24 overflow-y-auto p-1.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                    {AVAILABLE_ICONS.map((ic) => {
+                      const isSelected = icon === ic;
+                      return (
+                        <button
+                          key={ic}
+                          type="button"
+                          onClick={() => setIcon(ic)}
+                          className={`p-1.5 rounded-lg border transition-all ${
+                            isSelected
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                              : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-100'
+                          }`}
+                          title={ic}
+                        >
+                          <SliceIcon iconName={ic} className="w-3.5 h-3.5" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Vista Previa de la Píldora */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-slate-600 dark:text-slate-400 block mb-1">
+                    Vista Previa del Botón en la Barra:
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {(() => {
+                      const scheme = SLICE_COLOR_CLASSES[color] || SLICE_COLOR_CLASSES.blue;
+                      return (
+                        <div className={`text-xs px-3 py-1.5 rounded-xl font-bold border flex items-center gap-1.5 ${scheme.bg} ${scheme.text} ${scheme.border}`}>
+                          <SliceIcon iconName={icon} className="w-3.5 h-3.5" />
+                          <span>{name || 'Mi Slice'}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono font-bold ml-1 ${scheme.badgeBg} ${scheme.badgeText}`}>
+                            12
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={handleSyncWithActiveScreen}
+                  className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs hover:bg-slate-50 cursor-pointer"
+                  title="Capturar y sincronizar filtros, orden y columnas actuales de la pantalla"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Sincronizar con Pantalla</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: CRITERIOS DE FILTRADO (INTERACTIVO) */}
+          {activeTab === 'filters' && (
+            <div className="space-y-4 animate-in fade-in duration-150">
+              {/* Quick Sync Button */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  <span className="text-xs text-blue-800 dark:text-blue-200 font-medium">
+                    Puedes ajustar los criterios manualmente o capturarlos desde la vista activa.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSyncWithActiveScreen}
+                  className="text-xs font-bold px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all flex items-center gap-1 shrink-0 cursor-pointer"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Capturar Vista Actual</span>
+                </button>
+              </div>
+
+              {/* 1. Búsqueda por Texto */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Search className="w-3.5 h-3.5 text-blue-500" />
+                  <span>Término de Búsqueda Fijo (Opcional)</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={filterConfig.searchTerm || ''}
+                    onChange={(e) => setFilterConfig(prev => ({ ...prev, searchTerm: e.target.value || undefined }))}
+                    placeholder="Filtrar siempre por un texto, SKU, nombre o proveedor..."
+                    className="w-full pl-3 pr-8 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-medium bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  {filterConfig.searchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setFilterConfig(prev => ({ ...prev, searchTerm: undefined }))}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 2. Filtros de Radar PM (Para Vencimientos o General) */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Estados de Vencimiento / Radar PM</span>
+                  </label>
+                  {filterConfig.pmRadarFilter && filterConfig.pmRadarFilter.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setFilterConfig(prev => ({ ...prev, pmRadarFilter: undefined }))}
+                      className="text-[10px] text-red-500 hover:underline font-bold"
+                    >
+                      Limpiar
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {PM_STATUS_OPTIONS.map((opt) => {
+                    const isSelected = (filterConfig.pmRadarFilter || []).includes(opt.id);
+                    const scheme = SLICE_COLOR_CLASSES[opt.color] || SLICE_COLOR_CLASSES.blue;
                     return (
-                      <label
-                        key={col}
-                        className={`flex items-center gap-1.5 p-1.5 rounded-lg border text-xs cursor-pointer select-none transition-colors ${
-                          isChecked
-                            ? 'bg-blue-50/70 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 font-medium'
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => handleTogglePmStatus(opt.id)}
+                        className={`text-xs p-2 rounded-xl font-bold border transition-all flex items-center justify-between cursor-pointer ${
+                          isSelected
+                            ? `${scheme.bg} ${scheme.text} ${scheme.border} ring-2 ${scheme.ring}`
                             : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
                         }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => handleToggleColumn(col)}
-                          className="w-3.5 h-3.5 rounded text-blue-600 focus:ring-blue-500 shrink-0"
-                        />
-                        <span className="truncate" title={col}>{col}</span>
-                      </label>
+                        <span className="flex items-center gap-1.5">
+                          <SliceIcon iconName={opt.icon} className="w-3.5 h-3.5" />
+                          <span>{opt.label}</span>
+                        </span>
+                        {isSelected && <Check className="w-3.5 h-3.5" />}
+                      </button>
                     );
                   })}
                 </div>
               </div>
-            )}
-          </div>
+
+              {/* 3. Filtros de Categoría de Incidencia (Para FRC / Events) */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Truck className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Categorías de Incidencia (FRC)</span>
+                  </label>
+                  {filterConfig.eventFilter && filterConfig.eventFilter.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setFilterConfig(prev => ({ ...prev, eventFilter: undefined }))}
+                      className="text-[10px] text-red-500 hover:underline font-bold"
+                    >
+                      Limpiar
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {EVENT_CATEGORY_OPTIONS.map((cat) => {
+                    const isSelected = (filterConfig.eventFilter || []).includes(cat.id);
+                    const scheme = SLICE_COLOR_CLASSES[cat.color] || SLICE_COLOR_CLASSES.blue;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => handleToggleEventCategory(cat.id)}
+                        className={`text-xs p-2 rounded-xl font-bold border transition-all flex items-center justify-between cursor-pointer ${
+                          isSelected
+                            ? `${scheme.bg} ${scheme.text} ${scheme.border} ring-1 ${scheme.ring}`
+                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5 truncate">
+                          <SliceIcon iconName={cat.icon} className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">{cat.label}</span>
+                        </span>
+                        {isSelected && <Check className="w-3.5 h-3.5 shrink-0 ml-1" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 4. Estado de Resolución / Traspaso */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Estado de Traspaso / Regularización</span>
+                  </label>
+                  {filterConfig.eventResolutionFilter && filterConfig.eventResolutionFilter.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setFilterConfig(prev => ({ ...prev, eventResolutionFilter: undefined }))}
+                      className="text-[10px] text-red-500 hover:underline font-bold"
+                    >
+                      Limpiar
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleEventResolution('pending')}
+                    className={`text-xs p-2 rounded-xl font-bold border transition-all flex items-center justify-between cursor-pointer ${
+                      (filterConfig.eventResolutionFilter || []).includes('pending')
+                        ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 ring-1 ring-amber-500'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Traspasos Pendientes (Sin Folio TR)</span>
+                    </span>
+                    {(filterConfig.eventResolutionFilter || []).includes('pending') && <Check className="w-3.5 h-3.5" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleToggleEventResolution('completed')}
+                    className={`text-xs p-2 rounded-xl font-bold border transition-all flex items-center justify-between cursor-pointer ${
+                      (filterConfig.eventResolutionFilter || []).includes('completed')
+                        ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 ring-1 ring-emerald-500'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>Regularizados (Con Folio TR)</span>
+                    </span>
+                    {(filterConfig.eventResolutionFilter || []).includes('completed') && <Check className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* 5. Filtros de Columnas Específicos (si existieran) */}
+              {filterConfig.columnFilters && Object.keys(filterConfig.columnFilters).length > 0 && (
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <Filter className="w-3.5 h-3.5 text-blue-500" />
+                      <span>Filtros Específicos por Columna</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setFilterConfig(prev => ({ ...prev, columnFilters: undefined }))}
+                      className="text-[10px] text-red-500 hover:underline font-bold cursor-pointer"
+                    >
+                      Limpiar Filtros de Columnas
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(filterConfig.columnFilters).map(([col, vals]) => (
+                      <span key={col} className="text-[11px] px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
+                        <strong>{col}:</strong> {Array.isArray(vals) ? vals.join(', ') : String(vals)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: COLUMNAS & ORDEN */}
+          {activeTab === 'columns' && (
+            <div className="space-y-5 animate-in fade-in duration-150">
+              {/* Grouping & Default Sorting */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+                    <Tag className="w-3.5 h-3.5 text-blue-500" /> Agrupación Predeterminada
+                  </label>
+                  <select
+                    value={groupByColumn}
+                    onChange={(e) => setGroupByColumn(e.target.value)}
+                    className="w-full text-xs font-medium px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="none">Sin agrupación</option>
+                    {headers.map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+                    <ArrowUpDown className="w-3.5 h-3.5 text-blue-500" /> Orden Predeterminado
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={sortColumn}
+                      onChange={(e) => setSortColumn(e.target.value)}
+                      className="flex-1 text-xs font-medium px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="">Predeterminado</option>
+                      {headers.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                    {sortColumn && (
+                      <button
+                        type="button"
+                        onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                        className="px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer"
+                      >
+                        {sortDirection === 'asc' ? 'ASC' : 'DESC'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Visible Columns in Slice (AppSheet Slice Feature) */}
+              <div className="border-t border-slate-200 dark:border-slate-800 pt-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    <Columns className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    Columnas Visibles de este Slice
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useCustomColumns}
+                      onChange={(e) => setUseCustomColumns(e.target.checked)}
+                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                      Personalizar columnas
+                    </span>
+                  </label>
+                </div>
+
+                {useCustomColumns && (
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 space-y-2.5 animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <div className="relative flex-1 mr-3">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={columnSearch}
+                          onChange={(e) => setColumnSearch(e.target.value)}
+                          placeholder="Buscar columna..."
+                          className="w-full pl-8 pr-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 font-bold text-blue-600 dark:text-blue-400 shrink-0">
+                        <span>{selectedColumns.length} de {headers.length}</span>
+                        <span>•</span>
+                        <button type="button" onClick={handleSelectAllColumns} className="hover:underline cursor-pointer">
+                          Todas
+                        </button>
+                        <span>•</span>
+                        <button type="button" onClick={handleClearColumns} className="hover:underline cursor-pointer">
+                          Limpiar
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-48 overflow-y-auto p-1">
+                      {filteredHeaders.map(col => {
+                        const isChecked = selectedColumns.includes(col);
+                        return (
+                          <label
+                            key={col}
+                            className={`flex items-center gap-1.5 p-1.5 rounded-lg border text-xs cursor-pointer select-none transition-colors ${
+                              isChecked
+                                ? 'bg-blue-50/70 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 font-medium'
+                                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleToggleColumn(col)}
+                              className="w-3.5 h-3.5 rounded text-blue-600 focus:ring-blue-500 shrink-0"
+                            />
+                            <span className="truncate" title={col}>{col}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex items-center justify-between">
+        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/50 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div>
-            {editingSlice && onDeleteSlice && (
+            {editingSlice && !isBuiltIn && onDeleteSlice && (
               <button
                 type="button"
                 onClick={() => {
@@ -511,7 +908,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             <button
               type="button"
               onClick={onClose}
@@ -519,12 +916,31 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
             >
               Cancelar
             </button>
+
+            {editingSlice && !isBuiltIn && (
+              <button
+                type="button"
+                onClick={(e) => handleSave(e, true)}
+                className="text-xs px-3.5 py-2.5 rounded-xl border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Guardar como una nueva vista sin modificar la existente"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>Duplicar como Nuevo</span>
+              </button>
+            )}
+
             <button
               type="submit"
               className="text-xs px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-200 dark:shadow-none transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Check className="w-4 h-4" />
-              <span>{editingSlice ? 'Actualizar Slice' : 'Guardar Slice'}</span>
+              <span>
+                {isBuiltIn
+                  ? 'Guardar como Vista Personalizada'
+                  : editingSlice
+                  ? 'Actualizar Slice'
+                  : 'Guardar Slice'}
+              </span>
             </button>
           </div>
         </div>
@@ -532,4 +948,3 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
     </div>
   );
 };
-

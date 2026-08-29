@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Layers, Sparkles, Tag, Check, Trash2, Sliders, 
-  Columns, Filter, ArrowUpDown, Info, RefreshCw, Copy, 
+  Columns, Filter, ArrowUpDown, RefreshCw, Copy, 
   Search, AlertTriangle, Flame, Clock, CheckCircle2, 
   Truck, Scale, RotateCcw, ShieldCheck, Bookmark, FileText, Package
 } from 'lucide-react';
@@ -119,63 +119,88 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
 
   const isBuiltIn = Boolean(editingSlice?.isBuiltIn);
 
+  // Track modal open/close transitions to avoid continuous resets on parent re-renders
+  const prevIsOpenRef = useRef(false);
+  const prevEditingIdRef = useRef<string | null | undefined>(undefined);
+
   useEffect(() => {
+    const justOpened = isOpen && !prevIsOpenRef.current;
+    const editingTargetChanged = isOpen && editingSlice?.id !== prevEditingIdRef.current;
+
+    prevIsOpenRef.current = isOpen;
+    prevEditingIdRef.current = editingSlice?.id;
+
     if (!isOpen) return;
 
-    if (editingSlice) {
-      setName(isBuiltIn ? `${editingSlice.name} (Personalizado)` : editingSlice.name);
-      setDescription(editingSlice.description || '');
-      setIcon(editingSlice.icon || 'Layers');
-      setColor(editingSlice.color || 'blue');
-      setFilterConfig(editingSlice.filterConfig ? { ...editingSlice.filterConfig } : {});
-      setGroupByColumn(editingSlice.groupByColumn || 'none');
-      if (editingSlice.sortConfig && editingSlice.sortConfig.column) {
-        setSortColumn(editingSlice.sortConfig.column);
-        setSortDirection(editingSlice.sortConfig.direction === 'desc' ? 'desc' : 'asc');
+    // Only populate form state on initial modal open or when editing a different slice
+    if (justOpened || editingTargetChanged) {
+      if (editingSlice) {
+        setName(isBuiltIn ? `${editingSlice.name} (Personalizado)` : editingSlice.name);
+        setDescription(editingSlice.description || '');
+        setIcon(editingSlice.icon || 'Layers');
+        setColor(editingSlice.color || 'blue');
+        setFilterConfig(editingSlice.filterConfig ? { ...editingSlice.filterConfig } : {});
+        setGroupByColumn(editingSlice.groupByColumn || 'none');
+        if (editingSlice.sortConfig && editingSlice.sortConfig.column) {
+          setSortColumn(editingSlice.sortConfig.column);
+          setSortDirection(editingSlice.sortConfig.direction === 'desc' ? 'desc' : 'asc');
+        } else {
+          setSortColumn('');
+          setSortDirection('asc');
+        }
+        if (editingSlice.visibleColumns && editingSlice.visibleColumns.length > 0) {
+          setUseCustomColumns(true);
+          setSelectedColumns(editingSlice.visibleColumns);
+        } else {
+          setUseCustomColumns(false);
+          setSelectedColumns(currentVisibleHeaders.length > 0 ? currentVisibleHeaders : headers);
+        }
       } else {
-        setSortColumn('');
-        setSortDirection('asc');
-      }
-      if (editingSlice.visibleColumns && editingSlice.visibleColumns.length > 0) {
-        setUseCustomColumns(true);
-        setSelectedColumns(editingSlice.visibleColumns);
-      } else {
+        // Initialize new slice with currently applied view filters
+        const defaultName = getSuggestedSliceName(currentFilters, currentGroupBy, tableKey);
+        setName(defaultName);
+        setDescription('');
+        setIcon('Bookmark');
+        setColor('blue');
+        setFilterConfig({
+          searchTerm: currentFilters.searchTerm || undefined,
+          quickChip: currentFilters.quickChip || undefined,
+          eventFilter: currentFilters.eventFilter?.length ? [...currentFilters.eventFilter] : undefined,
+          pmRadarFilter: currentFilters.pmRadarFilter?.length ? [...currentFilters.pmRadarFilter] : undefined,
+          eventResolutionFilter: currentFilters.eventResolutionFilter?.length ? [...currentFilters.eventResolutionFilter] : undefined,
+          frcBodFilter: currentFilters.frcBodFilter?.length ? [...currentFilters.frcBodFilter] : undefined,
+          columnFilters: currentFilters.columnFilters && Object.keys(currentFilters.columnFilters).length > 0
+            ? { ...currentFilters.columnFilters }
+            : undefined
+        });
+        setGroupByColumn(currentGroupBy || 'none');
+        if (currentSort && currentSort.column) {
+          setSortColumn(currentSort.column);
+          setSortDirection(currentSort.direction === 'desc' ? 'desc' : 'asc');
+        } else {
+          setSortColumn('');
+          setSortDirection('asc');
+        }
         setUseCustomColumns(false);
         setSelectedColumns(currentVisibleHeaders.length > 0 ? currentVisibleHeaders : headers);
       }
-    } else {
-      // Initialize with captured current view criteria & smart suggested name
-      const defaultName = getSuggestedSliceName(currentFilters, currentGroupBy, tableKey);
-      setName(defaultName);
-      setDescription('');
-      setIcon('Bookmark');
-      setColor('blue');
-      setFilterConfig({
-        searchTerm: currentFilters.searchTerm || undefined,
-        quickChip: currentFilters.quickChip || undefined,
-        eventFilter: currentFilters.eventFilter?.length ? [...currentFilters.eventFilter] : undefined,
-        pmRadarFilter: currentFilters.pmRadarFilter?.length ? [...currentFilters.pmRadarFilter] : undefined,
-        eventResolutionFilter: currentFilters.eventResolutionFilter?.length ? [...currentFilters.eventResolutionFilter] : undefined,
-        frcBodFilter: currentFilters.frcBodFilter?.length ? [...currentFilters.frcBodFilter] : undefined,
-        columnFilters: currentFilters.columnFilters && Object.keys(currentFilters.columnFilters).length > 0
-          ? { ...currentFilters.columnFilters }
-          : undefined
-      });
-      setGroupByColumn(currentGroupBy || 'none');
-      if (currentSort && currentSort.column) {
-        setSortColumn(currentSort.column);
-        setSortDirection(currentSort.direction === 'desc' ? 'desc' : 'asc');
-      } else {
-        setSortColumn('');
-        setSortDirection('asc');
-      }
-      setUseCustomColumns(false);
-      setSelectedColumns(currentVisibleHeaders.length > 0 ? currentVisibleHeaders : headers);
+      setColumnSearch('');
+      setActiveTab('general');
+      setErrors({});
     }
-    setColumnSearch('');
-    setActiveTab('general');
-    setErrors({});
-  }, [isOpen, editingSlice, currentFilters, currentSort, currentGroupBy, currentVisibleHeaders, headers, tableKey, isBuiltIn]);
+  }, [isOpen, editingSlice?.id, isBuiltIn]);
+
+  // Close on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -256,7 +281,10 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
   };
 
   const handleSave = (e?: React.SyntheticEvent, forceAsNew = false) => {
-    if (e) e.preventDefault();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     const cleanName = name.trim();
     if (!cleanName) {
       setErrors({ name: 'El nombre del slice es obligatorio' });
@@ -318,10 +346,17 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <form 
-        onSubmit={handleSave}
+    <div 
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div 
         className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[92vh]"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-800/50">
@@ -352,7 +387,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -363,7 +398,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('general')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'general'
                 ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700'
@@ -376,7 +411,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('filters')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 relative ${
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 relative cursor-pointer ${
               activeTab === 'filters'
                 ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700'
@@ -394,7 +429,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('columns')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 relative ${
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 relative cursor-pointer ${
               activeTab === 'columns'
                 ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700'
@@ -432,7 +467,6 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
                     className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-medium bg-slate-50 dark:bg-slate-800/50 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                       errors.name ? 'border-red-500 bg-red-50/20' : 'border-slate-200 dark:border-slate-700'
                     }`}
-                    autoFocus
                   />
                   {errors.name && (
                     <p className="text-xs text-red-500 mt-1.5 font-bold flex items-center gap-1">
@@ -470,7 +504,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
                           key={c}
                           type="button"
                           onClick={() => setColor(c)}
-                          className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all ${
+                          className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
                             scheme.bg
                           } ${scheme.border} ${
                             isSelected ? 'ring-2 ring-blue-500 scale-110 shadow-xs' : 'hover:scale-105'
@@ -496,7 +530,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
                           key={ic}
                           type="button"
                           onClick={() => setIcon(ic)}
-                          className={`p-1.5 rounded-lg border transition-all ${
+                          className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
                             isSelected
                               ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                               : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-100'
@@ -585,7 +619,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setFilterConfig(prev => ({ ...prev, searchTerm: undefined }))}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -604,7 +638,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setFilterConfig(prev => ({ ...prev, pmRadarFilter: undefined }))}
-                      className="text-[10px] text-red-500 hover:underline font-bold"
+                      className="text-[10px] text-red-500 hover:underline font-bold cursor-pointer"
                     >
                       Limpiar
                     </button>
@@ -648,7 +682,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setFilterConfig(prev => ({ ...prev, eventFilter: undefined }))}
-                      className="text-[10px] text-red-500 hover:underline font-bold"
+                      className="text-[10px] text-red-500 hover:underline font-bold cursor-pointer"
                     >
                       Limpiar
                     </button>
@@ -692,7 +726,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setFilterConfig(prev => ({ ...prev, eventResolutionFilter: undefined }))}
-                      className="text-[10px] text-red-500 hover:underline font-bold"
+                      className="text-[10px] text-red-500 hover:underline font-bold cursor-pointer"
                     >
                       Limpiar
                     </button>
@@ -930,7 +964,8 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
             )}
 
             <button
-              type="submit"
+              type="button"
+              onClick={(e) => handleSave(e, false)}
               className="text-xs px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-200 dark:shadow-none transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Check className="w-4 h-4" />
@@ -944,7 +979,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
             </button>
           </div>
         </div>
-      </form>
+      </div>
     </div>
   );
 };

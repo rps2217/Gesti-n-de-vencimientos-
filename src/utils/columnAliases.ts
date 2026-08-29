@@ -26,6 +26,9 @@ export type KnownFieldSemantic =
 
 const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
   id: [
+    /^cu(_|\s)?(vc|calculado)?$/i,
+    /^codigo(_|\s)?unico$/i,
+    /^clave(_|\s)?unica$/i,
     /^id_vc$/i,
     /^id_evento$/i,
     /^id_incidencia$/i,

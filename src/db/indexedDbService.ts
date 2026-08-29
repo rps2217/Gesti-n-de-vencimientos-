@@ -17,6 +17,11 @@ export interface OfflineMutation {
   sheetTitle: string;
   sheetId?: number;
   rowIndex?: number;
+  entityKey?: string;
+  entityKeyCol?: string;
+  keyValue?: string;
+  keyColumn?: string;
+  headers?: string[];
   values?: any;
   createdAt: string;
   status: 'pending' | 'syncing' | 'failed' | 'completed';
@@ -265,6 +270,11 @@ class IndexedDbService {
       sheetTitle: mutation.sheetTitle,
       sheetId: mutation.sheetId,
       rowIndex: mutation.rowIndex,
+      entityKey: mutation.entityKey,
+      entityKeyCol: mutation.entityKeyCol,
+      keyValue: mutation.keyValue,
+      keyColumn: mutation.keyColumn,
+      headers: mutation.headers,
       values: mutation.values,
       createdAt: mutation.createdAt || new Date().toISOString(),
       status: mutation.status || 'pending',

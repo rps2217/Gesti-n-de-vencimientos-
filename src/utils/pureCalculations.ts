@@ -238,14 +238,29 @@ export function getExpiryDateFromYm(item: InventoryItem, headers: string[]): Dat
   const year = item[yCol];
   const month = item[mCol];
   
-  if (year === undefined || year === null || month === undefined || month === null) return null;
+  if (year !== undefined && year !== null && month !== undefined && month !== null) {
+    const y = parseInt(String(year));
+    const m = parseInt(String(month));
+    if (!isNaN(y) && !isNaN(m) && m >= 1 && m <= 12 && y >= 1900 && y <= 2100) {
+      return new Date(y, m, 0); // Last day of month
+    }
+  }
+
+  // Check if item has CU_VC (e.g., 2000210218569202712 -> ends with YYYYMM: 2027 + 12)
+  const idCol = findColumnBySemantic(headers, 'id');
+  const cuVal = idCol && item[idCol] ? String(item[idCol]).trim() : '';
+  if (cuVal && cuVal.length >= 6) {
+    const match = cuVal.match(/(\d{4})(0[1-9]|1[0-2])$/);
+    if (match) {
+      const y = parseInt(match[1]);
+      const m = parseInt(match[2]);
+      if (y >= 1900 && y <= 2100 && m >= 1 && m <= 12) {
+        return new Date(y, m, 0);
+      }
+    }
+  }
   
-  const y = parseInt(String(year));
-  const m = parseInt(String(month));
-  
-  if (isNaN(y) || isNaN(m) || m < 1 || m > 12) return null;
-  
-  return new Date(y, m, 0); 
+  return null; 
 }
 
 export type ItemStatusCode = 'EXPIRED' | 'RETIRE_NOW' | 'UPCOMING' | 'DRAINAGE_PM' | 'NORMAL';

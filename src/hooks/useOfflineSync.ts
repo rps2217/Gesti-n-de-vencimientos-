@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { indexedDbService, OfflineMutation } from '../db/indexedDbService';
-import { appendRow, updateRow, deleteRow } from '../lib/sheets';
+import { appendRow, updateRow, deleteRow, getSheetData } from '../lib/sheets';
+import { matchRowIndexByIdentity } from '../utils/entityIdentityResolver';
 
 export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
   const [offlineQueue, setOfflineQueue] = useState<OfflineMutation[]>([]);
@@ -32,6 +33,11 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
       sheetTitle: string;
       sheetId?: number;
       rowIndex?: number;
+      entityKey?: string;
+      entityKeyCol?: string;
+      keyValue?: string;
+      keyColumn?: string;
+      headers?: string[];
       values?: any;
     }) => {
       const created = await indexedDbService.enqueueMutation(mutation);
@@ -56,6 +62,7 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
     setIsSyncing(true);
     let successCount = 0;
     const errors: string[] = [];
+    const freshSheetsCache = new Map<string, any[][]>();
 
     try {
       for (const mutation of currentQueue) {
@@ -69,10 +76,88 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
 
           if (mutation.type === 'append') {
             await appendRow(mutation.sheetTitle, mutation.values);
-          } else if (mutation.type === 'update' && mutation.rowIndex) {
-            await updateRow(mutation.sheetTitle, mutation.rowIndex, mutation.values);
-          } else if (mutation.type === 'delete' && mutation.rowIndex) {
-            await deleteRow(mutation.sheetId || 0, mutation.rowIndex, mutation.sheetTitle);
+          } else if (mutation.type === 'update') {
+            let targetRowIndex = mutation.rowIndex;
+
+            // Re-resolve rowIndex by entity key if available to prevent corrupting shifted rows
+            if (mutation.keyValue && mutation.headers && mutation.headers.length > 0) {
+              try {
+                let currentRows = freshSheetsCache.get(mutation.sheetTitle);
+                if (!currentRows) {
+                  currentRows = await getSheetData(mutation.sheetTitle, true);
+                  if (currentRows && currentRows.length > 0) {
+                    freshSheetsCache.set(mutation.sheetTitle, currentRows);
+                  }
+                }
+
+                if (currentRows && currentRows.length > 0) {
+                  const resolvedRowIndex = matchRowIndexByIdentity(
+                    {
+                      keyColumn: mutation.keyColumn || mutation.entityKeyCol || null,
+                      keyValue: mutation.keyValue || mutation.entityKey || '',
+                      isSynthetic: false,
+                      rowIndex: mutation.rowIndex || 0
+                    },
+                    currentRows,
+                    mutation.headers
+                  );
+                  if (resolvedRowIndex && resolvedRowIndex > 1) {
+                    targetRowIndex = resolvedRowIndex;
+                  }
+                }
+              } catch (e) {
+                console.warn('[OfflineSync] Could not re-resolve rowIndex by key, fallback to original rowIndex:', e);
+              }
+            }
+
+            if (targetRowIndex && targetRowIndex > 1) {
+              await updateRow(mutation.sheetTitle, targetRowIndex, mutation.values);
+              // Invalidate cached sheet so next mutation fetches updated state
+              freshSheetsCache.delete(mutation.sheetTitle);
+            } else {
+              throw new Error(`Índice de fila inválido para actualización (${targetRowIndex})`);
+            }
+          } else if (mutation.type === 'delete') {
+            let targetRowIndex = mutation.rowIndex;
+
+            // Re-resolve rowIndex by entity key if available
+            if (mutation.keyValue && mutation.headers && mutation.headers.length > 0) {
+              try {
+                let currentRows = freshSheetsCache.get(mutation.sheetTitle);
+                if (!currentRows) {
+                  currentRows = await getSheetData(mutation.sheetTitle, true);
+                  if (currentRows && currentRows.length > 0) {
+                    freshSheetsCache.set(mutation.sheetTitle, currentRows);
+                  }
+                }
+
+                if (currentRows && currentRows.length > 0) {
+                  const resolvedRowIndex = matchRowIndexByIdentity(
+                    {
+                      keyColumn: mutation.keyColumn || mutation.entityKeyCol || null,
+                      keyValue: mutation.keyValue || mutation.entityKey || '',
+                      isSynthetic: false,
+                      rowIndex: mutation.rowIndex || 0
+                    },
+                    currentRows,
+                    mutation.headers
+                  );
+                  if (resolvedRowIndex && resolvedRowIndex > 1) {
+                    targetRowIndex = resolvedRowIndex;
+                  }
+                }
+              } catch (e) {
+                console.warn('[OfflineSync] Could not re-resolve rowIndex for deletion by key:', e);
+              }
+            }
+
+            if (targetRowIndex && targetRowIndex > 1) {
+              await deleteRow(mutation.sheetId || 0, targetRowIndex, mutation.sheetTitle);
+              // Invalidate cached sheet
+              freshSheetsCache.delete(mutation.sheetTitle);
+            } else {
+              throw new Error(`Índice de fila inválido para eliminación (${targetRowIndex})`);
+            }
           }
 
           // Remove from IndexedDB on success

@@ -37,6 +37,7 @@ import {
   getItemResolutionStatus
 } from '../utils/dateCalculations';
 import { findColumnBySemantic } from '../utils/columnAliases';
+import { resolveItemIdentity, matchRowIndexByIdentity } from '../utils/entityIdentityResolver';
 import { findMasterProduct, dereferenceMasterProduct } from '../utils/referenceResolver';
 import { VIRTUAL_COLUMNS } from '../utils/virtualColumns';
 import { useColumnResize } from '../hooks/useColumnResize';
@@ -447,13 +448,14 @@ export const InventoryDashboard: React.FC = () => {
     setActiveSliceId(slice.id);
 
     // Apply slice filters
-    setSearchTerm(slice.filterConfig.searchTerm || '');
-    setActiveQuickChip(slice.filterConfig.quickChip || null);
-    setEventFilter(slice.filterConfig.eventFilter || []);
-    setPmRadarFilter(slice.filterConfig.pmRadarFilter || []);
-    setEventResolutionFilter(slice.filterConfig.eventResolutionFilter || []);
-    setFrcBodFilter(slice.filterConfig.frcBodFilter || []);
-    setColumnFilters(slice.filterConfig.columnFilters || {});
+    const filterConfig = slice.filterConfig || {};
+    setSearchTerm(filterConfig.searchTerm || '');
+    setActiveQuickChip(filterConfig.quickChip || null);
+    setEventFilter(filterConfig.eventFilter || []);
+    setPmRadarFilter(filterConfig.pmRadarFilter || []);
+    setEventResolutionFilter(filterConfig.eventResolutionFilter || []);
+    setFrcBodFilter(filterConfig.frcBodFilter || []);
+    setColumnFilters(filterConfig.columnFilters || {});
 
     // Apply slice grouping if defined
     if (slice.groupByColumn) {
@@ -750,11 +752,22 @@ export const InventoryDashboard: React.FC = () => {
           if (rows.length > 0) {
             const headerRow = rows[0];
             setHeaders(headerRow);
+            const schemaKeys = Object.entries(sheetConfig.schema?.[targetSheetProp.title] || {})
+              .filter(([_, conf]) => Boolean((conf as any)?.isKey))
+              .map(([colName]) => colName);
+
             const parsedItems: InventoryItem[] = rows.slice(1).map((row: string[], index: number) => {
               const item: InventoryItem = { _rowIndex: index + 2 };
               headerRow.forEach((header: string, colIndex: number) => {
                 item[header] = row[colIndex] || '';
               });
+
+              // Resolve robust primary identity
+              const identity = resolveItemIdentity(item, headerRow, targetSheetProp.title, schemaKeys);
+              item._entityKey = identity.keyValue;
+              item._entityKeyCol = identity.keyColumn || undefined;
+              item._isSyntheticKey = identity.isSynthetic;
+
               return item;
             });
             setItems(parsedItems);
@@ -1222,6 +1235,11 @@ export const InventoryDashboard: React.FC = () => {
           type: editingItem ? 'update' : 'append',
           sheetTitle: activeSheet.title,
           rowIndex: editingItem ? editingItem._rowIndex : undefined,
+          entityKey: editingItem?._entityKey,
+          entityKeyCol: editingItem?._entityKeyCol,
+          keyValue: editingItem?._entityKey,
+          keyColumn: editingItem?._entityKeyCol,
+          headers,
           values: rowValues
         });
         alert('Sin conexión con Google Sheets. Los cambios se guardaron localmente en IndexedDB y se sincronizarán en la cola offline.');
@@ -1259,7 +1277,12 @@ export const InventoryDashboard: React.FC = () => {
           type: 'delete',
           sheetId: activeSheet.sheetId,
           sheetTitle: activeSheet.title,
-          rowIndex: item._rowIndex
+          rowIndex: item._rowIndex,
+          entityKey: item._entityKey,
+          entityKeyCol: item._entityKeyCol,
+          keyValue: item._entityKey,
+          keyColumn: item._entityKeyCol,
+          headers
         });
         alert('Sin conexión. La eliminación se registró localmente en la cola offline.');
       }
@@ -1375,6 +1398,11 @@ export const InventoryDashboard: React.FC = () => {
               type: 'update',
               sheetTitle: activeSheet.title,
               rowIndex,
+              entityKey: itemToUpdate._entityKey,
+              entityKeyCol: itemToUpdate._entityKeyCol,
+              keyValue: itemToUpdate._entityKey,
+              keyColumn: itemToUpdate._entityKeyCol,
+              headers: currentHeaders,
               values: rowValues
             });
           }
@@ -1416,6 +1444,7 @@ export const InventoryDashboard: React.FC = () => {
 
       let remainingDelete = count;
       for (const rowIndex of selectedRowIds) {
+        const itemToDelete = originalItems.find(i => i._rowIndex === rowIndex);
         try {
           await deleteRow(activeSheet.sheetId, rowIndex);
         } catch (err) {
@@ -1424,7 +1453,12 @@ export const InventoryDashboard: React.FC = () => {
             type: 'delete',
             sheetId: activeSheet.sheetId,
             sheetTitle: activeSheet.title,
-            rowIndex
+            rowIndex,
+            entityKey: itemToDelete?._entityKey,
+            entityKeyCol: itemToDelete?._entityKeyCol,
+            keyValue: itemToDelete?._entityKey,
+            keyColumn: itemToDelete?._entityKeyCol,
+            headers
           });
         }
         remainingDelete--;

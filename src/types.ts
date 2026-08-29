@@ -107,6 +107,9 @@ export interface EventResolutionStatus {
 
 export interface InventoryItem {
   _rowIndex: number; // Row number in the sheet for update/delete operations
+  _entityKey?: string; // Stable business primary key or composite identity
+  _entityKeyCol?: string; // Column name that holds the primary key
+  _isSyntheticKey?: boolean; // Whether the key was auto-generated or derived from business fields
   [key: string]: any; // Dynamic columns based on the sheet's headers
 }
 

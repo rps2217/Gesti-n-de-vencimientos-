@@ -41,6 +41,37 @@ const AVAILABLE_COLORS: SliceColor[] = [
   'blue', 'rose', 'amber', 'emerald', 'purple', 'indigo', 'slate'
 ];
 
+function getSuggestedSliceName(
+  filters: SliceEditorModalProps['currentFilters'],
+  groupBy?: string,
+  tableKey?: string
+): string {
+  if (filters.searchTerm) return `Búsqueda: ${filters.searchTerm}`;
+  if (filters.quickChip) return `Filtro: ${filters.quickChip}`;
+  if (filters.pmRadarFilter && filters.pmRadarFilter.length > 0) {
+    const map: Record<string, string> = {
+      retire_now: 'Retiro Urgente',
+      drainage: 'Radar PM Drenaje',
+      upcoming: 'Próximos a Vencer',
+      en_regla: 'En Regla'
+    };
+    return `Vista ${filters.pmRadarFilter.map(k => map[k] || k).join(', ')}`;
+  }
+  if (filters.eventFilter && filters.eventFilter.length > 0) {
+    return `Incidencias: ${filters.eventFilter.join(', ')}`;
+  }
+  if (filters.frcBodFilter && filters.frcBodFilter.length > 0) {
+    return `Bodega: ${filters.frcBodFilter.join(', ')}`;
+  }
+  if (filters.eventResolutionFilter && filters.eventResolutionFilter.length > 0) {
+    return filters.eventResolutionFilter.includes('pending') ? 'Traspasos Pendientes' : 'Traspasos Realizados';
+  }
+  if (groupBy && groupBy !== 'none') {
+    return `Agrupado por ${groupBy}`;
+  }
+  return tableKey === 'events' ? 'Mi Vista Incidencias' : 'Mi Vista Personalizada';
+}
+
 export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
   isOpen,
   onClose,
@@ -91,8 +122,9 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
         setSelectedColumns(currentVisibleHeaders.length > 0 ? currentVisibleHeaders : headers);
       }
     } else {
-      // Initialize with captured current view criteria
-      setName('');
+      // Initialize with captured current view criteria & smart suggested name
+      const defaultName = getSuggestedSliceName(currentFilters, currentGroupBy, tableKey);
+      setName(defaultName);
       setDescription('');
       setIcon('Bookmark');
       setColor('blue');
@@ -119,7 +151,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
       setSelectedColumns(currentVisibleHeaders.length > 0 ? currentVisibleHeaders : headers);
     }
     setErrors({});
-  }, [isOpen, editingSlice, currentFilters, currentSort, currentGroupBy, currentVisibleHeaders, headers]);
+  }, [isOpen, editingSlice, currentFilters, currentSort, currentGroupBy, currentVisibleHeaders, headers, tableKey]);
 
   if (!isOpen) return null;
 
@@ -137,29 +169,35 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
     setSelectedColumns([]);
   };
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) {
+  const handleSave = (e?: React.SyntheticEvent) => {
+    if (e) e.preventDefault();
+    const cleanName = name.trim();
+    if (!cleanName) {
       setErrors({ name: 'El nombre del slice es obligatorio' });
       return;
     }
 
     const newSlice: TableSlice = {
-      id: editingSlice ? editingSlice.id : `slice_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-      name: name.trim(),
+      id: editingSlice ? editingSlice.id : `slice_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: cleanName,
       description: description.trim() || undefined,
-      tableKey,
-      icon,
-      color,
+      tableKey: tableKey || 'main',
+      icon: icon || 'Bookmark',
+      color: color || 'blue',
       isBuiltIn: false,
-      filterConfig,
+      filterConfig: filterConfig || {},
       groupByColumn: groupByColumn !== 'none' ? groupByColumn : undefined,
       sortConfig: sortColumn ? { column: sortColumn, direction: sortDirection } : undefined,
       visibleColumns: useCustomColumns && selectedColumns.length > 0 ? selectedColumns : undefined
     };
 
-    onSaveSlice(newSlice);
-    onClose();
+    try {
+      onSaveSlice(newSlice);
+      onClose();
+    } catch (err: any) {
+      console.error('Error saving slice:', err);
+      setErrors({ name: `Error al guardar slice: ${err?.message || 'Error desconocido'}` });
+    }
   };
 
   // Human-readable summary of captured filters
@@ -185,7 +223,10 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+      <form 
+        onSubmit={handleSave}
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-xl w-full overflow-hidden flex flex-col max-h-[90vh]"
+      >
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
           <div className="flex items-center gap-2.5">
@@ -202,6 +243,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
@@ -210,7 +252,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
         </div>
 
         {/* Body */}
-        <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
           {/* Nombre y Descripción */}
           <div className="space-y-3">
             <div>
@@ -226,12 +268,14 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
                 }}
                 placeholder="Ej. Mermas Bodega Central, Lotes Mayo 2026, Reclamos Urgentes..."
                 className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-medium bg-slate-50 dark:bg-slate-800/50 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.name ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'
+                  errors.name ? 'border-red-500 bg-red-50/20' : 'border-slate-200 dark:border-slate-700'
                 }`}
                 autoFocus
               />
               {errors.name && (
-                <p className="text-xs text-red-500 mt-1 font-semibold">{errors.name}</p>
+                <p className="text-xs text-red-500 mt-1.5 font-bold flex items-center gap-1">
+                  <span>⚠️</span> {errors.name}
+                </p>
               )}
             </div>
 
@@ -257,7 +301,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
               </label>
               <div className="flex items-center gap-2 flex-wrap">
                 {AVAILABLE_COLORS.map((c) => {
-                  const scheme = SLICE_COLOR_CLASSES[c];
+                  const scheme = SLICE_COLOR_CLASSES[c] || SLICE_COLOR_CLASSES.blue;
                   const isSelected = color === c;
                   return (
                     <button
@@ -445,7 +489,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
               </div>
             )}
           </div>
-        </form>
+        </div>
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex items-center justify-between">
@@ -459,7 +503,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
                     onClose();
                   }
                 }}
-                className="text-xs px-3 py-2 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 font-bold transition-colors flex items-center gap-1.5 border border-transparent hover:border-red-200"
+                className="text-xs px-3 py-2 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 font-bold transition-colors flex items-center gap-1.5 border border-transparent hover:border-red-200 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Eliminar Slice</span>
@@ -471,21 +515,21 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="text-xs px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="text-xs px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
               Cancelar
             </button>
             <button
-              type="button"
-              onClick={handleSave}
-              className="text-xs px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-200 dark:shadow-none transition-all flex items-center gap-1.5"
+              type="submit"
+              className="text-xs px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-200 dark:shadow-none transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Check className="w-4 h-4" />
               <span>{editingSlice ? 'Actualizar Slice' : 'Guardar Slice'}</span>
             </button>
           </div>
         </div>
-      </div>
+      </form>
     </div>
   );
 };
+

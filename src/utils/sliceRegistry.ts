@@ -182,12 +182,19 @@ export function itemMatchesSlice(
   headers: string[],
   frcBodCol?: string | null
 ): boolean {
-  const { filterConfig, tableKey } = slice;
+  if (!slice || !item) return false;
+  const filterConfig = slice.filterConfig || {};
+  const tableKey = slice.tableKey;
 
-  // View Category enforcement for 'main'
+  // View Category enforcement for 'main' and 'events'
   if (tableKey === 'main') {
     const cat = getEventCategory(item, headers);
     if (cat !== 'VENCIMIENTO' && cat !== 'VENCIMIENTO_CERCANO') {
+      return false;
+    }
+  } else if (tableKey === 'events') {
+    const cat = getEventCategory(item, headers);
+    if (cat === 'VENCIMIENTO' || cat === 'VENCIMIENTO_CERCANO') {
       return false;
     }
   }
@@ -286,8 +293,12 @@ export function computeSliceCounts(
   frcBodCol?: string | null
 ): Record<string, number> {
   const counts: Record<string, number> = {};
+  if (!Array.isArray(slices) || !Array.isArray(items)) return counts;
+
   for (let s = 0; s < slices.length; s++) {
-    counts[slices[s].id] = 0;
+    if (slices[s] && slices[s].id) {
+      counts[slices[s].id] = 0;
+    }
   }
 
   const itemsLen = items.length;
@@ -295,10 +306,11 @@ export function computeSliceCounts(
 
   for (let i = 0; i < itemsLen; i++) {
     const item = items[i];
+    if (!item) continue;
     for (let s = 0; s < slicesLen; s++) {
       const slice = slices[s];
-      if (itemMatchesSlice(item, slice, headers, frcBodCol)) {
-        counts[slice.id]++;
+      if (slice && slice.id && itemMatchesSlice(item, slice, headers, frcBodCol)) {
+        counts[slice.id] = (counts[slice.id] || 0) + 1;
       }
     }
   }

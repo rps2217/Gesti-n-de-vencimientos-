@@ -121,7 +121,18 @@ Resuelve el problema común de las hojas de cálculo con encabezados inconsisten
   - Contadores de filas en tiempo real (`computeSliceCounts`) calculados en una sola pasada de alto rendimiento.
   - Badges cromáticos personalizables con acceso rápido a edición, eliminación y restablecimiento de vista ("Todas las Filas").
 
-### G. Componentes de UI
+### H. Resolución de Identidad de Entidad y Cola de Mutación Robusta (`src/utils/entityIdentityResolver.ts`)
+- **Resolución de Claves Primarias (`resolveItemIdentity`)**:
+  - Supera la fragilidad de depender exclusivamente de `_rowIndex` (que se desincroniza ante ordenamientos, filtros o inserciones externas en Google Sheets).
+  - Jerarquía de identificación optimizada para la operación real:
+    1. Columna configurada como `isKey` en `SheetConfig.schema`.
+    2. Columna directa de código único `CU_VC` (ej. `SKU_VC` + `YYYY` + `MM` = `2000210218569202712`) o ID semántico natural (`ID_VC`, `ID_EVENTO`, `FOLIO`, `ID`).
+    3. Clave compuesta de negocio: `SKU` + `YYYY` + `MM` (o `SKU` + `FECHA_VC` / `LOTE` como respaldo secundario).
+    4. Identificador sintético con prefijo de hoja y fila de respaldo.
+- **Re-resolución Dinámica en Cola Offline (`matchRowIndexByIdentity`)**:
+  - Al vaciar mutaciones (`update` o `delete`) en `useOfflineSync.ts`, el sistema re-localiza dinámicamente el `rowIndex` exacto en los datos frescos de Google Sheets mediante la clave de entidad o coincidencia de `CU_VC` / `SKU`+`YYYY`+`MM`, previniendo sobreescrituras o eliminaciones accidentales de filas contiguas.
+
+### I. Componentes de UI
 - **`App.tsx`**: Administra el estado global de los datos de inventario, pestañas activas (Dashboard vs Schema Editor), modales y conectividad con Google Sheets / datos locales.
 - **`InventoryDashboard.tsx`**: Tabla interactiva con filtros avanzados, búsqueda rápida, tarjetas de resumen KPI y botones de acción rápida.
 - **`ItemDetailDrawer.tsx`**: Drawer lateral que agrupa toda la trazabilidad de un SKU (historial de vencimientos, lotes y eventos relacionados).

@@ -277,43 +277,47 @@ export function detectPolicyActionType(
   if (statusCode === 'NORMAL') return 'SIN_ACCION';
   if (statusCode === 'DRAINAGE_PM') return 'VENTA_DRENAJE';
 
-  // For EXPIRED, RETIRE_NOW, UPCOMING: check if policy indicates supplier exchange (Canje)
+  // Find the exact policy column from headers
   const polCol = findColumnBySemantic(headers, 'politica');
-  let polStr = polCol && item[polCol] ? String(item[polCol]).trim() : '';
+  let polStr = polCol && item[polCol] !== undefined && item[polCol] !== null ? String(item[polCol]).trim() : '';
 
   if (!polStr) {
-    // Check other common field names in item
-    polStr = String(item.POLITICA || item.politica || item.POLITICA_CANJE || item.TIPO_POLITICA || item.CATEGORIA || item.FAMILIA || '').trim();
+    // Check known item fields without confusing with category/family
+    polStr = String(item.POLITICA || item.politica || item.POLITICA_CANJE || item.TIPO_POLITICA || item.REGLA_CANJE || '').trim();
   }
 
   const normalized = polStr.toLowerCase();
 
-  // Explicit Canje patterns
+  // 1. PRIMARY CHECK: Explicitly detect items with NO exchange policy (e.g. "SIN CANJE", "NO CANJE", "MERMA", "DESTRUCCION")
+  // Note: must check "sin canje" before "canje" because "sin canje" contains the substring "canje"!
+  if (
+    !polStr ||
+    normalized.includes('sin canje') || 
+    normalized.includes('no canje') || 
+    normalized.includes('sin politica') ||
+    normalized.includes('sin retorno') ||
+    normalized.includes('merma') || 
+    normalized.includes('destruc') ||
+    normalized.includes('perdida') ||
+    normalized.includes('baja') ||
+    normalized === 'no' ||
+    normalized === 'false' ||
+    normalized === '-' ||
+    normalized === '0'
+  ) {
+    return 'MERMA_DIRECTA';
+  }
+
+  // 2. Explicit Canje / Devolución / Retorno / Plazo contractual (e.g. "30 días", "60", "CANJE 60D")
   if (
     normalized.includes('canje') || 
     normalized.includes('devol') || 
     normalized.includes('retorno') || 
     normalized.includes('proveedor') ||
     normalized.includes('garantia') ||
-    normalized.includes('1x1')
+    normalized.includes('1x1') ||
+    /\b\d{1,3}\s*(d|d[ií]as|dias)?\b/i.test(polStr)
   ) {
-    return 'CANJE_PROVEEDOR';
-  }
-
-  // Explicit Sin Canje / Merma / Destrucción patterns
-  if (
-    normalized.includes('sin canje') || 
-    normalized.includes('no canje') || 
-    normalized.includes('merma') || 
-    normalized.includes('destruc') ||
-    normalized.includes('perdida') ||
-    normalized.includes('baja')
-  ) {
-    return 'MERMA_DIRECTA';
-  }
-
-  // If policy column explicitly exists but specifies a positive number of days (e.g. "60 días", "90d"), it usually denotes a supplier exchange agreement with advance notice
-  if (polStr && /\b\d{2,3}\s*(d|d[ií]as|dias)?\b/i.test(polStr)) {
     return 'CANJE_PROVEEDOR';
   }
 

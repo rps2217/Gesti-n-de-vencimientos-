@@ -159,9 +159,8 @@ export function dereferenceMasterProduct(
   const masterPolicyCol = findColumnBySemantic(masterKeys, 'politica', customAliases);
   if (targetPolicyCol && masterPolicyCol && masterProduct[masterPolicyCol]) {
     result[targetPolicyCol] = masterProduct[masterPolicyCol];
-  } else if (targetPolicyCol && masterSummary.category) {
-    // If master has family/category, it might match the policy name
-    result[targetPolicyCol] = masterSummary.category;
+  } else if (targetPolicyCol && masterProduct.POLITICA) {
+    result[targetPolicyCol] = masterProduct.POLITICA;
   }
 
   // In addition, if target header has exact matching name in masterProduct

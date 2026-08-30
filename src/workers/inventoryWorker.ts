@@ -190,9 +190,10 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
         averia++;
       } else if (cat === 'DEVOLUCION') {
         devolucion++;
-      } else if (cat === 'VENCIMIENTO_CERCANO') {
-        vencimientoCercano++;
       } else {
+        if (cat === 'VENCIMIENTO_CERCANO') {
+          vencimientoCercano++;
+        }
         vencimientos++;
         if (statusRaw.code === 'DRAINAGE_PM') drainagePm++;
         else if (statusRaw.code === 'UPCOMING') upcoming++;

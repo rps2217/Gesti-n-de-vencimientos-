@@ -29,6 +29,7 @@ interface DashboardTopNavProps {
   onOpenTicketConfig?: () => void;
   drainageReportItems: InventoryItem[];
   headers: string[];
+  visibleHeaders?: string[];
   filteredItems: InventoryItem[];
   sheetConfig: SheetConfig;
   products: any[];
@@ -61,6 +62,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
   onOpenTicketConfig,
   drainageReportItems,
   headers,
+  visibleHeaders,
   filteredItems,
   sheetConfig,
   products,
@@ -252,7 +254,29 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
                         }))
                       ];
                       const allData = { products, policies, events: [] };
-                      exportToExcel(`${activeView}_${new Date().toISOString().split('T')[0]}`, headers, filteredItems, 'Inventario', activeVirtual, allData);
+                      const exportHeaders = (visibleHeaders && visibleHeaders.length > 0) ? visibleHeaders : headers;
+                      
+                      const columnLabelsMap: Record<string, string> = {};
+                      VIRTUAL_COLUMNS.forEach(vc => { columnLabelsMap[vc.id] = vc.label; });
+                      (sheetConfig.userVirtualColumns || []).forEach(uvc => { columnLabelsMap[uvc.id] = uvc.label; });
+                      const schemaForSheet = activeSheetTitle ? sheetConfig.schema?.[activeSheetTitle] : undefined;
+                      if (schemaForSheet) {
+                        Object.keys(schemaForSheet).forEach(colId => {
+                          if (schemaForSheet[colId]?.label) {
+                            columnLabelsMap[colId] = schemaForSheet[colId].label;
+                          }
+                        });
+                      }
+
+                      exportToExcel(
+                        `${activeView}_${new Date().toISOString().split('T')[0]}`, 
+                        exportHeaders, 
+                        filteredItems, 
+                        'Inventario', 
+                        activeVirtual, 
+                        allData, 
+                        columnLabelsMap
+                      );
                       setIsActionsMenuOpen(false);
                     }}
                     className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"

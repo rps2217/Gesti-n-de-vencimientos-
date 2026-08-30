@@ -172,9 +172,11 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                       title="Estado Radar PM"
                       options={[
                         { label: 'En Regla', value: 'en_regla', badgeClass: 'text-emerald-600 dark:text-emerald-400' },
-                        { label: 'Drenaje', value: 'drainage', badgeClass: 'text-amber-600 dark:text-amber-400' },
+                        { label: 'Drenaje PM', value: 'drainage', badgeClass: 'text-amber-600 dark:text-amber-400' },
                         { label: 'Próximo a Retiro', value: 'upcoming', badgeClass: 'text-rose-600 dark:text-rose-400' },
-                        { label: 'Retirar YA', value: 'retire_now', badgeClass: 'text-red-600 dark:text-red-400' }
+                        { label: 'Retirar YA / Vencido', value: 'retire_now', badgeClass: 'text-red-600 dark:text-red-400' },
+                        { label: 'Canje Proveedor', value: 'canje_proveedor', badgeClass: 'text-indigo-600 dark:text-indigo-400 font-semibold' },
+                        { label: 'Merma Directa', value: 'merma_directa', badgeClass: 'text-rose-600 dark:text-rose-400 font-semibold' }
                       ]}
                       selectedValues={pmRadarFilter}
                       onToggle={(val, isMulti) => setPmRadarFilter(prev => handleFilterToggle(prev, val, isMulti))}

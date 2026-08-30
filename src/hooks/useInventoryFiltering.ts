@@ -144,6 +144,8 @@ export function useInventoryFiltering({
     let drainagePm = 0;
     let upcoming = 0;
     let retireNow = 0;
+    let canjeProveedorCount = 0;
+    let mermaDirectaCount = 0;
     let pending = 0;
     let completed = 0;
 
@@ -178,14 +180,18 @@ export function useInventoryFiltering({
         averia++;
       } else if (cat === 'DEVOLUCION') {
         devolucion++;
-      } else if (cat === 'VENCIMIENTO_CERCANO') {
-        vencimientoCercano++;
       } else {
+        if (cat === 'VENCIMIENTO_CERCANO') {
+          vencimientoCercano++;
+        }
         vencimientos++;
         const st = getItemStatus(item, headers);
         if (st.code === 'DRAINAGE_PM') drainagePm++;
         else if (st.code === 'UPCOMING') upcoming++;
         else if (st.code === 'RETIRE_NOW' || st.code === 'EXPIRED') retireNow++;
+
+        if (st.actionType === 'CANJE_PROVEEDOR') canjeProveedorCount++;
+        else if (st.actionType === 'MERMA_DIRECTA') mermaDirectaCount++;
       }
 
       const res = getItemResolutionStatus(item, headers);
@@ -216,7 +222,9 @@ export function useInventoryFiltering({
         drainage: drainagePm,
         upcoming,
         retireNow,
-        enRegla: Math.max(0, vencimientos - drainagePm - upcoming - retireNow)
+        enRegla: Math.max(0, vencimientos - drainagePm - upcoming - retireNow),
+        canjeProveedor: canjeProveedorCount,
+        mermaDirecta: mermaDirectaCount
       },
       eventResolutionMetrics: {
         total: len,

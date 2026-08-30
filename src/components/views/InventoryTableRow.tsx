@@ -232,12 +232,26 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
               <span className="shrink-0">{status.icon}</span>
               <span className="truncate font-bold">{status.label}</span>
               {status.actionType === 'CANJE_PROVEEDOR' && (status.code === 'EXPIRED' || status.code === 'RETIRE_NOW' || status.code === 'UPCOMING') && (
-                <span className="ml-1 text-[10px] uppercase font-black tracking-wider px-1.5 py-0.2 rounded bg-indigo-200/60 dark:bg-indigo-900/80 text-indigo-900 dark:text-indigo-200 border border-indigo-300/80 dark:border-indigo-700 shrink-0">
+                <span 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPmRadarFilterClick('canje_proveedor', e.ctrlKey || e.metaKey);
+                  }}
+                  className="ml-1 text-[10px] uppercase font-black tracking-wider px-1.5 py-0.2 rounded bg-indigo-200/60 dark:bg-indigo-900/80 text-indigo-900 dark:text-indigo-200 border border-indigo-300/80 dark:border-indigo-700 shrink-0 hover:bg-indigo-300 dark:hover:bg-indigo-800 transition-colors"
+                  title="Clic para filtrar por Canje Proveedor. Ctrl+Clic: Sumar filtro."
+                >
                   Canje
                 </span>
               )}
               {status.actionType === 'MERMA_DIRECTA' && (status.code === 'EXPIRED' || status.code === 'RETIRE_NOW') && (
-                <span className="ml-1 text-[10px] uppercase font-black tracking-wider px-1.5 py-0.2 rounded bg-rose-200/60 dark:bg-rose-900/80 text-rose-900 dark:text-rose-200 border border-rose-300/80 dark:border-rose-700 shrink-0">
+                <span 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPmRadarFilterClick('merma_directa', e.ctrlKey || e.metaKey);
+                  }}
+                  className="ml-1 text-[10px] uppercase font-black tracking-wider px-1.5 py-0.2 rounded bg-rose-200/60 dark:bg-rose-900/80 text-rose-900 dark:text-rose-200 border border-rose-300/80 dark:border-rose-700 shrink-0 hover:bg-rose-300 dark:hover:bg-rose-800 transition-colors"
+                  title="Clic para filtrar por Merma Directa. Ctrl+Clic: Sumar filtro."
+                >
                   Merma
                 </span>
               )}

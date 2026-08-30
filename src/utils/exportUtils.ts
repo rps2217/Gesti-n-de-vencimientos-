@@ -11,30 +11,54 @@ export async function exportToExcel(
   items: any[], 
   sheetName = 'Inventario',
   virtualColumns?: any[],
-  allData?: any
+  allData?: any,
+  columnLabelsMap?: Record<string, string>
 ) {
   if (!items || !items.length) return;
 
   const XLSX = await import('xlsx');
 
-  // Enhance items with virtual column data
+  // Enhance items with virtual column data (store under both id and label)
   const enhancedItems = items.map(item => {
     const newItem = { ...item };
     if (virtualColumns) {
       virtualColumns.forEach(vc => {
-        newItem[vc.label] = calculateVirtualColumnValue(vc, item, headers, allData);
+        const val = calculateVirtualColumnValue(vc, item, headers, allData);
+        if (vc.id) newItem[vc.id] = val;
+        if (vc.label) newItem[vc.label] = val;
       });
     }
     return newItem;
   });
 
-  const allHeaders = [...headers, ...(virtualColumns?.map(vc => vc.label) || [])];
+  // Build final headers list: keep exact order of passed headers (visibleHeaders),
+  // and append any virtual column only if not already present.
+  const exportHeaders = [...headers];
+  if (virtualColumns && virtualColumns.length > 0) {
+    virtualColumns.forEach(vc => {
+      const isIncluded = exportHeaders.some(h => h === vc.id || h === vc.label);
+      if (!isIncluded) {
+        exportHeaders.push(vc.id || vc.label);
+      }
+    });
+  }
 
-  // Format headers and rows
+  // Display labels for Excel header row (Row 1)
+  const displayHeaderNames = exportHeaders.map(colId => {
+    if (columnLabelsMap && columnLabelsMap[colId]) {
+      return columnLabelsMap[colId];
+    }
+    return colId;
+  });
+
+  // Format headers and rows according to exact visible column order
   const worksheetData = [
-    allHeaders,
-    ...enhancedItems.map(item => allHeaders.map(header => {
-      const val = item[header];
+    displayHeaderNames,
+    ...enhancedItems.map(item => exportHeaders.map(colId => {
+      let val = item[colId];
+      if ((val === undefined || val === null) && columnLabelsMap && columnLabelsMap[colId]) {
+        val = item[columnLabelsMap[colId]];
+      }
       if (val === null || val === undefined) return '';
       if (val instanceof Date) return formatDisplayDate(val);
       return val;
@@ -44,8 +68,8 @@ export async function exportToExcel(
   const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
 
   // Auto-calculate column widths
-  const colWidths = allHeaders.map((header, colIndex) => {
-    let maxLen = header.length;
+  const colWidths = displayHeaderNames.map((headerLabel, colIndex) => {
+    let maxLen = String(headerLabel || '').length;
     for (let rowIndex = 1; rowIndex < worksheetData.length; rowIndex++) {
       const cellVal = String(worksheetData[rowIndex][colIndex] || '');
       if (cellVal.length > maxLen) {
@@ -67,13 +91,17 @@ export async function exportToExcel(
 /**
  * Export array of items to tab-separated TSV clipboard string
  */
-export function copyItemsToClipboardTSV(headers: string[], items: any[]): boolean {
+export function copyItemsToClipboardTSV(headers: string[], items: any[], columnLabelsMap?: Record<string, string>): boolean {
   if (!items || !items.length) return false;
 
-  const headerRow = headers.join('\t');
+  const displayHeaders = headers.map(h => (columnLabelsMap && columnLabelsMap[h]) ? columnLabelsMap[h] : h);
+  const headerRow = displayHeaders.join('\t');
   const dataRows = items.map(item =>
     headers.map(h => {
-      const val = item[h];
+      let val = item[h];
+      if ((val === undefined || val === null) && columnLabelsMap && columnLabelsMap[h]) {
+        val = item[columnLabelsMap[h]];
+      }
       if (val === null || val === undefined) return '';
       return String(val).replace(/\t/g, ' ').replace(/\n/g, ' ');
     }).join('\t')

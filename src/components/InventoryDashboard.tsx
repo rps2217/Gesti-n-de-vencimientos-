@@ -351,8 +351,42 @@ export const InventoryDashboard: React.FC = () => {
     sheetConfig
   });
 
+  const columnLabelsMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    VIRTUAL_COLUMNS.forEach(vc => {
+      map[vc.id] = vc.label;
+    });
+    (sheetConfig.userVirtualColumns || []).forEach(uvc => {
+      map[uvc.id] = uvc.label;
+    });
+    const schemaForSheet = activeSheet?.title ? sheetConfig.schema?.[activeSheet.title] : undefined;
+    if (schemaForSheet) {
+      Object.keys(schemaForSheet).forEach(colId => {
+        if (schemaForSheet[colId]?.label) {
+          map[colId] = schemaForSheet[colId].label;
+        }
+      });
+    }
+    return map;
+  }, [activeSheet?.title, sheetConfig.schema, sheetConfig.userVirtualColumns]);
+
   const [isSummaryView, setIsSummaryView] = useState<boolean>(false);
-  const [isZenMode, setIsZenMode] = useState<boolean>(false);
+  const [isZenMode, setIsZenMode] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('app_zen_mode');
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('app_zen_mode', JSON.stringify(isZenMode));
+    } catch {
+      // ignore quota / security error
+    }
+  }, [isZenMode]);
 
   // Zen Mode Keyboard Shortcut (Escape to exit)
   useEffect(() => {
@@ -1723,6 +1757,7 @@ export const InventoryDashboard: React.FC = () => {
             onOpenTicketConfig={() => setIsTicketConfigOpen(true)}
             drainageReportItems={drainageReportItems}
             headers={headers}
+            visibleHeaders={visibleHeaders}
             filteredItems={filteredItems}
             sheetConfig={sheetConfig}
             products={products}
@@ -2054,7 +2089,8 @@ export const InventoryDashboard: React.FC = () => {
                       ];
                       
                       const allData = { products, policies, events: [] };
-                      exportToExcel(`Seleccion_${new Date().toISOString().split('T')[0]}`, headers, selectedItems, 'Selección', activeVirtual, allData);
+                      const exportHeaders = (visibleHeaders && visibleHeaders.length > 0) ? visibleHeaders : headers;
+                      exportToExcel(`Seleccion_${new Date().toISOString().split('T')[0]}`, exportHeaders, selectedItems, 'Selección', activeVirtual, allData, columnLabelsMap);
                     }}
                     className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
                   >

@@ -507,8 +507,16 @@ export const InventoryDashboard: React.FC = () => {
     currentPage,
   });
 
+  // Effective visible headers: when grouping by a column, hide that column from table body to reduce cognitive clutter
+  const effectiveVisibleHeaders = useMemo(() => {
+    if (groupByColumn && groupByColumn !== 'none') {
+      return visibleHeaders.filter(h => h !== groupByColumn);
+    }
+    return visibleHeaders;
+  }, [visibleHeaders, groupByColumn]);
+
   // Precomputed metadata for visible columns to prevent per-cell regex in 60fps virtualization
-  const { visibleColumnMeta } = usePrecomputedColumns(headers, visibleHeaders, frcBodCol);
+  const { visibleColumnMeta } = usePrecomputedColumns(headers, effectiveVisibleHeaders, frcBodCol);
 
   const hasActiveFilters = 
     searchTerm !== '' || 
@@ -2010,7 +2018,7 @@ export const InventoryDashboard: React.FC = () => {
                 selectedRowIds={selectedRowIds}
                 setSelectedRowIds={setSelectedRowIds}
                 headers={headers}
-                visibleHeaders={visibleHeaders}
+                visibleHeaders={effectiveVisibleHeaders}
                 visibleColumnMeta={visibleColumnMeta}
                 activeView={activeView}
                 tableContainerRef={tableContainerRef}

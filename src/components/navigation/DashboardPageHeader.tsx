@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Sparkles, Columns, ChevronDown, Tag, Sliders, Settings, 
-  RotateCcw, Plus, Layers, Edit2, SlidersHorizontal 
+  RotateCcw, Plus, Layers, Edit2, SlidersHorizontal, Eye, EyeOff, LayoutGrid
 } from 'lucide-react';
 import { SheetProperties, TableSlice } from '../../types';
 
@@ -28,6 +28,8 @@ interface DashboardPageHeaderProps {
   onOpenSliceManager?: () => void;
   activeSlice?: TableSlice | null;
   onEditSlice?: (slice: TableSlice) => void;
+  isSummaryView?: boolean;
+  onToggleSummaryView?: () => void;
 }
 
 export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
@@ -53,6 +55,8 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
   onOpenSliceManager,
   activeSlice,
   onEditSlice,
+  isSummaryView = false,
+  onToggleSummaryView,
 }) => {
   return (
     <div className="bg-slate-50/50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 px-8 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -84,6 +88,38 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
       </div>
 
       <div className="flex flex-wrap items-center gap-2.5">
+        {/* Toggle Summary View Preset */}
+        {activeView !== 'schema' && activeView !== 'analytics' && onToggleSummaryView && (
+          <button
+            onClick={onToggleSummaryView}
+            className={`text-xs px-3.5 py-2.5 rounded-xl font-bold border transition-all flex items-center gap-1.5 shadow-sm ${
+              isSummaryView
+                ? 'bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 ring-2 ring-amber-200 dark:ring-amber-900'
+                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
+            }`}
+            title={isSummaryView ? "Mostrando columnas clave (Resumida). Clic para ver todas." : "Vista Resumida: muestra solo columnas indispensables (SKU, Nombre, Cantidad, Vencimiento, Estado)."}
+          >
+            <LayoutGrid className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            <span>{isSummaryView ? 'Vista Resumida (Activa)' : 'Vista Resumida'}</span>
+          </button>
+        )}
+
+        {/* Toggle KPI Header Collapse */}
+        {activeView !== 'schema' && activeView !== 'analytics' && (
+          <button
+            onClick={() => setAreFiltersVisible(prev => !prev)}
+            className={`text-xs px-3.5 py-2.5 rounded-xl font-bold border transition-all flex items-center gap-1.5 shadow-sm ${
+              areFiltersVisible 
+                ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300' 
+                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+            }`}
+            title={areFiltersVisible ? "Ocultar tarjetas superiores KPI para despejar la pantalla" : "Mostrar tarjetas superiores KPI"}
+          >
+            {areFiltersVisible ? <EyeOff className="w-4 h-4 text-blue-600 dark:text-blue-400" /> : <Eye className="w-4 h-4 text-slate-500" />}
+            <span>{areFiltersVisible ? 'Ocultar KPI' : 'Mostrar KPI'}</span>
+          </button>
+        )}
+
         {/* View Config & Layout Menu */}
         {activeView !== 'schema' && activeView !== 'analytics' && (
           <div className="relative">

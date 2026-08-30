@@ -351,6 +351,26 @@ export const InventoryDashboard: React.FC = () => {
     sheetConfig
   });
 
+  const [isSummaryView, setIsSummaryView] = useState<boolean>(false);
+
+  const handleToggleSummaryView = useCallback(() => {
+    if (!isSummaryView) {
+      const keyCols = headers.filter(h => {
+        const clean = h.toLowerCase();
+        return /sku|código|codigo|descrip|producto|cant|unidades|stock|vencimiento|fecha_vc|pol[ií]tica|estado/i.test(clean);
+      });
+      if (keyCols.length > 0) {
+        setVisibleColumns(keyCols);
+      }
+      setIsSummaryView(true);
+      showToast('Vista Resumida activada: mostrando columnas indispensables', 'info', 'Densidad de Vista');
+    } else {
+      showAllColumns();
+      setIsSummaryView(false);
+      showToast('Vista Completa activada: mostrando todas las columnas', 'info', 'Densidad de Vista');
+    }
+  }, [isSummaryView, headers, setVisibleColumns, showAllColumns, showToast]);
+
   const searchableHeaders = useMemo(() => {
     if (!activeSheet) return headers;
     const currentSchema = sheetConfig.schema?.[activeSheet.title];
@@ -1682,6 +1702,8 @@ export const InventoryDashboard: React.FC = () => {
             setEditingSliceModalItem(slice);
             setIsSliceModalOpen(true);
           }}
+          isSummaryView={isSummaryView}
+          onToggleSummaryView={handleToggleSummaryView}
         />
 
         {/* SLICES & CUSTOM VIEWS BAR (AppSheet Pattern) */}

@@ -59,6 +59,7 @@ interface InventoryTableProps {
   paddingTop: number;
   paddingBottom?: number;
   groupByColumn?: string;
+  onSelectGroupRows?: (rowIndexes: number[], selected: boolean) => void;
   toggleGroupCollapse?: (groupKey: string) => void;
   measureElementRef?: (node: HTMLElement | null) => void;
   sortConfig: SortConfig;
@@ -117,6 +118,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   paddingTop,
   paddingBottom = 0,
   groupByColumn,
+  onSelectGroupRows,
   toggleGroupCollapse,
   measureElementRef,
   sortConfig,
@@ -386,6 +388,14 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                 // Render group header
                 if (rowData.type === 'header') {
                   const isCollapsed = rowData.isCollapsed;
+                  const groupItems: InventoryItem[] = rowData.items || [];
+                  const groupRowIndexes: number[] = groupItems
+                    .map((it) => it._rowIndex)
+                    .filter((id): id is number => typeof id === 'number');
+                  
+                  const isAllGroupSelected = groupRowIndexes.length > 0 && groupRowIndexes.every(id => selectedRowIds.includes(id));
+                  const isSomeGroupSelected = groupRowIndexes.some(id => selectedRowIds.includes(id)) && !isAllGroupSelected;
+
                   return (
                     <tr
                       key={`group-hdr-${rowData.groupKey}-${idx}`}
@@ -400,10 +410,48 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                         className="px-4 py-2.5"
                       >
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2.5">
                             <div className="w-5 h-5 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 flex items-center justify-center">
                               <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
                             </div>
+
+                            {/* Group Selection Control */}
+                            {groupRowIndexes.length > 0 && (
+                              <div 
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/80 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-600 hover:border-blue-500 transition-colors shadow-xs"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isAllGroupSelected}
+                                  ref={(el) => {
+                                    if (el) el.indeterminate = isSomeGroupSelected;
+                                  }}
+                                  onChange={(e) => {
+                                    if (onSelectGroupRows) {
+                                      onSelectGroupRows(groupRowIndexes, e.target.checked);
+                                    } else {
+                                      if (e.target.checked) {
+                                        const newSelected = Array.from(new Set([...selectedRowIds, ...groupRowIndexes]));
+                                        setSelectedRowIds(newSelected);
+                                      } else {
+                                        setSelectedRowIds(selectedRowIds.filter(id => !groupRowIndexes.includes(id)));
+                                      }
+                                    }
+                                  }}
+                                  className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                  title={isAllGroupSelected ? 'Deseleccionar todos los registros de este grupo' : 'Seleccionar todos los registros de este grupo'}
+                                />
+                                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                                  {isAllGroupSelected 
+                                    ? 'Grupo seleccionado' 
+                                    : isSomeGroupSelected 
+                                    ? `${groupRowIndexes.filter(id => selectedRowIds.includes(id)).length}/${groupRowIndexes.length} selecc.` 
+                                    : 'Seleccionar grupo'}
+                                </span>
+                              </div>
+                            )}
+
                             <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
                               {groupByColumn}:
                             </span>

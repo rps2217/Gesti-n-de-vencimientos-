@@ -1505,6 +1505,18 @@ export const InventoryDashboard: React.FC = () => {
     setSelectedRowIds(prev => selected ? [...prev, rowIndex] : prev.filter(id => id !== rowIndex));
   }, []);
 
+  const handleSelectGroupRows = useCallback((rowIndexes: number[], selected: boolean) => {
+    setSelectedRowIds(prev => {
+      const set = new Set(prev);
+      if (selected) {
+        rowIndexes.forEach(id => set.add(id));
+      } else {
+        rowIndexes.forEach(id => set.delete(id));
+      }
+      return Array.from(set);
+    });
+  }, []);
+
   const handleRowClick = useCallback((item: InventoryItem) => {
     setSelectedProduct(item);
   }, []);
@@ -2051,6 +2063,7 @@ export const InventoryDashboard: React.FC = () => {
                 paddingTop={paddingTop}
                 paddingBottom={paddingBottom}
                 groupByColumn={groupByColumn}
+                onSelectGroupRows={handleSelectGroupRows}
                 toggleGroupCollapse={toggleGroupCollapse}
                 measureElementRef={rowVirtualizer.measureElement}
                 sortConfig={sortConfig}

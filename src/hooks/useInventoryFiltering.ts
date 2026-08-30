@@ -8,7 +8,7 @@ import {
 import { findColumnBySemantic } from '../utils/columnAliases';
 import { parseAnyDate } from '../utils/pureCalculations';
 import { VIRTUAL_COLUMNS } from '../utils/virtualColumns';
-import { sortInventoryItems } from '../utils/sortUtils';
+import { sortInventoryItems, compareItemValues } from '../utils/sortUtils';
 import { useInventoryWorker } from './useInventoryWorker';
 
 export interface DisplayRowItem {
@@ -23,6 +23,7 @@ export interface DisplayRowHeader {
   groupKey: string;
   count: number;
   isCollapsed: boolean;
+  items: InventoryItem[];
 }
 
 export type DisplayRow = DisplayRowItem | DisplayRowHeader;
@@ -476,9 +477,8 @@ export function useInventoryFiltering({
       }
       map.get(val)!.push(item);
     }
-    const dirMult = groupByDirection === 'desc' ? -1 : 1;
     return Array.from(map.entries()).sort((a, b) => {
-      return dirMult * a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: 'base' });
+      return compareItemValues(a[0], b[0], groupByDirection);
     });
   }, [filteredItems, groupByColumn, groupByDirection]);
 
@@ -501,7 +501,8 @@ export function useInventoryFiltering({
         type: 'header',
         groupKey,
         count: groupItemList.length,
-        isCollapsed
+        isCollapsed,
+        items: groupItemList
       });
 
       if (!isCollapsed) {

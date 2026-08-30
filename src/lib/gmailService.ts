@@ -294,7 +294,7 @@ export function generateItemsHtmlTable(
         if (header === '_virtual_estado_resolucion') {
           const res = getItemResolutionStatus(item, allSearchKeys);
           const badge = res.isResolved
-            ? `<span style="background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; display: inline-block;">Realizado</span>`
+            ? `<span style="background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; display: inline-block;">Realizado</span>`
             : `<span style="background-color: #fffbeb; color: #b45309; border: 1px solid #fde68a; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; display: inline-block;">Pendiente</span>`;
           return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center; white-space: nowrap;">${badge}</td>`;
         }
@@ -400,16 +400,16 @@ export function generateItemsHtmlTable(
 
       // Style cell based on type
       if (isTraspasoCol && displayVal !== '-') {
-        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center;"><span style="background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 6px; font-weight: bold; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 12px; display: inline-block;">${displayVal}</span></td>`;
+        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center;"><span style="background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; padding: 3px 8px; border-radius: 6px; font-weight: bold; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 12px; display: inline-block;">${displayVal}</span></td>`;
       }
       if (isSkuCol) {
         return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-weight: bold; color: #0f172a; white-space: nowrap;">${displayVal}</td>`;
       }
       if (isDescCol) {
-        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-weight: 600; color: #1e293b;">${displayVal}</td>`;
+        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-weight: 600; color: #0f172a;">${displayVal}</td>`;
       }
       if (isLoteCol) {
-        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-family: monospace; color: #475569;">${displayVal}</td>`;
+        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-family: monospace; color: #0f172a;">${displayVal}</td>`;
       }
       if (isDateCol) {
         const isVc = /venc|vc|caduc/i.test(header);
@@ -417,10 +417,10 @@ export function generateItemsHtmlTable(
         return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; color: ${color}; font-weight: 600; white-space: nowrap;">${displayVal}</td>`;
       }
       if (isCantCol) {
-        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center; font-weight: bold; color: #0284c7; white-space: nowrap;">${displayVal}</td>`;
+        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center; font-weight: bold; color: #0f172a; white-space: nowrap;">${displayVal}</td>`;
       }
       if (isPriceCol) {
-        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: right; font-weight: 600; color: #16a34a; white-space: nowrap;">${displayVal.startsWith('$') ? displayVal : `$${displayVal}`}</td>`;
+        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: right; font-weight: 600; color: #0f172a; white-space: nowrap;">${displayVal.startsWith('$') ? displayVal : `$${displayVal}`}</td>`;
       }
       if (isEventCol) {
         return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-size: 12px; font-weight: 600; color: #334155;">${displayVal}</td>`;

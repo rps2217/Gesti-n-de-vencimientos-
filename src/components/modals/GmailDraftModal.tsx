@@ -134,12 +134,12 @@ export const GmailDraftModal: React.FC<GmailDraftModalProps> = ({
   const safeFooter = escapeHtml(footerText);
 
   const fullHtmlBody = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; color: #1e293b; max-width: 800px; margin: 0 auto; line-height: 1.6;">
-      <p style="white-space: pre-line; margin-bottom: 16px;">${safeIntro}</p>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; color: #0f172a; max-width: 800px; margin: 0 auto; line-height: 1.6;">
+      <p style="white-space: pre-line; margin-bottom: 16px; color: #0f172a; font-size: 14px; line-height: 1.6;">${safeIntro}</p>
       ${tableHtml}
-      <p style="white-space: pre-line; margin-top: 20px;">${safeFooter}</p>
-      <hr style="border: none; border-top: 1px solid #e2e8f0; margin-top: 30px; margin-bottom: 12px;" />
-      <p style="font-size: 11px; color: #94a3b8; font-style: italic;">Generado automáticamente desde el Gestor de Vencimientos e Incidencias.</p>
+      <p style="white-space: pre-line; margin-top: 20px; color: #0f172a; font-size: 14px; line-height: 1.6;">${safeFooter}</p>
+      <hr style="border: none; border-top: 1px solid #cbd5e1; margin-top: 30px; margin-bottom: 12px;" />
+      <p style="font-size: 11px; color: #64748b; font-style: italic;">Generado automáticamente desde el Gestor de Vencimientos e Incidencias.</p>
     </div>
   `;
 
@@ -537,10 +537,14 @@ export const GmailDraftModal: React.FC<GmailDraftModalProps> = ({
                 </div>
               </div>
 
-              {/* Rendered HTML Container */}
-              <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-inner max-h-[380px] overflow-y-auto">
+              {/* Rendered HTML Container (Email Paper Canvas Preview) */}
+              <div className="bg-white text-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl p-6 sm:p-8 shadow-md max-h-[420px] overflow-y-auto">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-3 pb-2 border-b border-slate-200 flex items-center justify-between">
+                  <span>Borrador de Correo (Vista Previa)</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Formato Gmail / Outlook</span>
+                </div>
                 <div 
-                  className="prose dark:prose-invert max-w-none text-slate-800 dark:text-slate-200"
+                  className="prose max-w-none text-slate-900 leading-relaxed font-sans"
                   dangerouslySetInnerHTML={{ __html: fullHtmlBody }}
                 />
               </div>

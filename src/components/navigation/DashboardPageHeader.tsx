@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Sparkles, Columns, ChevronDown, Tag, Sliders, Settings, 
-  RotateCcw, Plus, Layers, Edit2, SlidersHorizontal, Eye, EyeOff, LayoutGrid
+  RotateCcw, Plus, Layers, Edit2, SlidersHorizontal, Eye, EyeOff, LayoutGrid, Maximize2
 } from 'lucide-react';
 import { SheetProperties, TableSlice } from '../../types';
 
@@ -30,6 +30,8 @@ interface DashboardPageHeaderProps {
   onEditSlice?: (slice: TableSlice) => void;
   isSummaryView?: boolean;
   onToggleSummaryView?: () => void;
+  isZenMode?: boolean;
+  onToggleZenMode?: () => void;
 }
 
 export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
@@ -57,6 +59,8 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
   onEditSlice,
   isSummaryView = false,
   onToggleSummaryView,
+  isZenMode = false,
+  onToggleZenMode,
 }) => {
   return (
     <div className="bg-slate-50/50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 px-8 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -88,6 +92,22 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
       </div>
 
       <div className="flex flex-wrap items-center gap-2.5">
+        {/* Toggle Zen Focus Mode */}
+        {activeView !== 'schema' && activeView !== 'analytics' && onToggleZenMode && (
+          <button
+            onClick={onToggleZenMode}
+            className={`text-xs px-3.5 py-2.5 rounded-xl font-bold border transition-all flex items-center gap-1.5 shadow-sm ${
+              isZenMode
+                ? 'bg-purple-600 text-white border-purple-600 ring-2 ring-purple-300 dark:ring-purple-900'
+                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40'
+            }`}
+            title="Modo Zen: Oculta barras superiores y paneles periféricos para maximizar el área de trabajo al 100% (Presiona Esc para salir)"
+          >
+            <Maximize2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            <span>Modo Zen</span>
+          </button>
+        )}
+
         {/* Toggle Summary View Preset */}
         {activeView !== 'schema' && activeView !== 'analytics' && onToggleSummaryView && (
           <button

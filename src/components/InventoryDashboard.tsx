@@ -23,7 +23,7 @@ import {
   Plus, Edit2, Trash2, RefreshCw, Loader2, Database, AlertCircle, Package, 
   FileSpreadsheet, Printer, Settings, FileText, Search, X, Truck, RotateCcw, 
   PackageX, Sparkles, Clock, Clock3, Flame, AlertTriangle, CheckCircle2, FilterX, 
-  Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown, Menu, Scan, GripVertical, Tag, Mail, MessageSquare, ChevronDown, Check, MoreVertical, Building2
+  Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown, Menu, Scan, GripVertical, Tag, Mail, MessageSquare, ChevronDown, Check, MoreVertical, Building2, Maximize2
 } from 'lucide-react';
 
 // Utilities & Hooks
@@ -352,6 +352,19 @@ export const InventoryDashboard: React.FC = () => {
   });
 
   const [isSummaryView, setIsSummaryView] = useState<boolean>(false);
+  const [isZenMode, setIsZenMode] = useState<boolean>(false);
+
+  // Zen Mode Keyboard Shortcut (Escape to exit)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isZenMode) {
+        setIsZenMode(false);
+        showToast('Modo Zen desactivado', 'info', 'Enfoque');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isZenMode, showToast]);
 
   const handleToggleSummaryView = useCallback(() => {
     if (!isSummaryView) {
@@ -1597,20 +1610,22 @@ export const InventoryDashboard: React.FC = () => {
     <div className="flex h-full overflow-hidden bg-[#F8FAFC] dark:bg-slate-950 print:hidden">
       
       {/* DESKTOP SIDEBAR NAVIGATION */}
-      <div className="hidden lg:flex">
-        <Sidebar
-          isSidebarCollapsed={isSidebarCollapsed}
-          setIsSidebarCollapsed={setIsSidebarCollapsed}
-          activeView={activeView}
-          setActiveView={setActiveView}
-          setSelectedProduct={setSelectedProduct}
-          otherSheets={otherSheets}
-          onOpenConfig={() => setIsConfigOpen(true)}
-        />
-      </div>
+      {!isZenMode && (
+        <div className="hidden lg:flex">
+          <Sidebar
+            isSidebarCollapsed={isSidebarCollapsed}
+            setIsSidebarCollapsed={setIsSidebarCollapsed}
+            activeView={activeView}
+            setActiveView={setActiveView}
+            setSelectedProduct={setSelectedProduct}
+            otherSheets={otherSheets}
+            onOpenConfig={() => setIsConfigOpen(true)}
+          />
+        </div>
+      )}
 
       {/* MOBILE SIDEBAR DRAWER */}
-      {isMobileMenuOpen && (
+      {isMobileMenuOpen && !isZenMode && (
         <div className="fixed inset-0 z-50 lg:hidden flex">
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
           <div className="relative w-72 bg-white dark:bg-slate-900 h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-left duration-200">
@@ -1638,76 +1653,134 @@ export const InventoryDashboard: React.FC = () => {
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
         
+        {/* FLOATING ZEN FOCUS OVERLAY CONTROLS */}
+        {isZenMode && (
+          <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-slate-900/95 dark:bg-slate-900/95 text-white backdrop-blur-md px-5 py-2.5 rounded-2xl shadow-2xl border border-slate-700/80 text-xs font-bold animate-in fade-in slide-in-from-top duration-200 max-w-3xl w-[92%] sm:w-auto justify-between sm:justify-start">
+            <div className="flex items-center gap-2 shrink-0">
+              <Maximize2 className="w-4 h-4 text-purple-400 animate-pulse shrink-0" />
+              <span className="hidden sm:inline">Modo Zen</span>
+              <span className="text-[10px] text-slate-400 font-mono hidden lg:inline">(Esc para salir)</span>
+            </div>
+            
+            {/* Extended search input in Zen Mode */}
+            <div className="relative flex-1 sm:w-72 md:w-96 lg:w-[420px]">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar SKU, producto, lote, proveedor..."
+                className="w-full pl-9 pr-8 py-1.5 text-xs rounded-xl bg-slate-800/90 text-white placeholder:text-slate-400 border border-slate-700 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-all shadow-inner"
+                autoFocus
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                  title="Limpiar búsqueda"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsZenMode(false);
+                showToast('Modo Zen desactivado', 'info', 'Enfoque');
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm shrink-0"
+              title="Salir del Modo Zen y restaurar todas las barras periféricas"
+            >
+              <span>Salir</span>
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* MACRO SEARCH NAV (Always top, sticky) */}
-        <DashboardTopNav
-          isMobileMenuOpen={isMobileMenuOpen}
-          setIsMobileMenuOpen={setIsMobileMenuOpen}
-          activeView={activeView}
-          activeSheetTitle={activeSheet?.title}
-          searchableHeaders={searchableHeaders}
-          searchTerm={searchTerm}
-          setSearchTerm={setSearchTerm}
-          hasActiveFilters={hasActiveFilters}
-          clearAllFilters={clearAllFilters}
-          setIsScannerOpen={setIsScannerOpen}
-          isActionsMenuOpen={isActionsMenuOpen}
-          setIsActionsMenuOpen={setIsActionsMenuOpen}
-          setIsGmailModalOpen={setIsGmailModalOpen}
-          setIsWhatsAppModalOpen={setIsWhatsAppModalOpen}
-          setIsPmReportOpen={setIsPmReportOpen}
-          onOpenBulkActionsConfig={() => setIsBulkActionsConfigOpen(true)}
-          onOpenTicketConfig={() => setIsTicketConfigOpen(true)}
-          drainageReportItems={drainageReportItems}
-          headers={headers}
-          filteredItems={filteredItems}
-          sheetConfig={sheetConfig}
-          products={products}
-          policies={policies}
-          handlePrintTicket={handlePrintTicket}
-          isOffline={isOffline}
-          lastCachedAt={lastCachedAt}
-          offlineQueue={offlineQueue}
-          handleSyncOfflineQueue={handleSyncOfflineQueue}
-          fetchData={fetchData}
-          loading={loading}
-        />
+        {!isZenMode && (
+          <DashboardTopNav
+            isMobileMenuOpen={isMobileMenuOpen}
+            setIsMobileMenuOpen={setIsMobileMenuOpen}
+            activeView={activeView}
+            activeSheetTitle={activeSheet?.title}
+            searchableHeaders={searchableHeaders}
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            hasActiveFilters={hasActiveFilters}
+            clearAllFilters={clearAllFilters}
+            setIsScannerOpen={setIsScannerOpen}
+            isActionsMenuOpen={isActionsMenuOpen}
+            setIsActionsMenuOpen={setIsActionsMenuOpen}
+            setIsGmailModalOpen={setIsGmailModalOpen}
+            setIsWhatsAppModalOpen={setIsWhatsAppModalOpen}
+            setIsPmReportOpen={setIsPmReportOpen}
+            onOpenBulkActionsConfig={() => setIsBulkActionsConfigOpen(true)}
+            onOpenTicketConfig={() => setIsTicketConfigOpen(true)}
+            drainageReportItems={drainageReportItems}
+            headers={headers}
+            filteredItems={filteredItems}
+            sheetConfig={sheetConfig}
+            products={products}
+            policies={policies}
+            handlePrintTicket={handlePrintTicket}
+            isOffline={isOffline}
+            lastCachedAt={lastCachedAt}
+            offlineQueue={offlineQueue}
+            handleSyncOfflineQueue={handleSyncOfflineQueue}
+            fetchData={fetchData}
+            loading={loading}
+          />
+        )}
 
         {/* CONTEXTUAL PAGE HEADER */}
-        <DashboardPageHeader
-          activeView={activeView}
-          isRelationalActive={isRelationalActive}
-          isViewMenuOpen={isViewMenuOpen}
-          setIsViewMenuOpen={setIsViewMenuOpen}
-          groupByColumn={groupByColumn}
-          setGroupByColumn={setGroupByColumn}
-          visibleHeaders={visibleHeaders}
-          setIsColumnManagerOpen={setIsColumnManagerOpen}
-          areFiltersVisible={areFiltersVisible}
-          setAreFiltersVisible={setAreFiltersVisible}
-          setIsTicketConfigOpen={setIsTicketConfigOpen}
-          hasCustomColWidths={hasCustomColWidths}
-          handleResetColWidths={handleResetColWidths}
-          setIsBulkImportOpen={setIsBulkImportOpen}
-          setIsScriptModalOpen={setIsScriptModalOpen}
-          activeSheet={activeSheet}
-          isModalOpen={isModalOpen}
-          handleOpenModal={handleOpenModal}
-          onOpenCreateSlice={() => {
-            setEditingSliceModalItem(null);
-            setIsSliceModalOpen(true);
-          }}
-          onOpenSliceManager={() => setIsSliceManagerOpen(true)}
-          activeSlice={activeSlice}
-          onEditSlice={(slice) => {
-            setEditingSliceModalItem(slice);
-            setIsSliceModalOpen(true);
-          }}
-          isSummaryView={isSummaryView}
-          onToggleSummaryView={handleToggleSummaryView}
-        />
+        {!isZenMode && (
+          <DashboardPageHeader
+            activeView={activeView}
+            isRelationalActive={isRelationalActive}
+            isViewMenuOpen={isViewMenuOpen}
+            setIsViewMenuOpen={setIsViewMenuOpen}
+            groupByColumn={groupByColumn}
+            setGroupByColumn={setGroupByColumn}
+            visibleHeaders={visibleHeaders}
+            setIsColumnManagerOpen={setIsColumnManagerOpen}
+            areFiltersVisible={areFiltersVisible}
+            setAreFiltersVisible={setAreFiltersVisible}
+            setIsTicketConfigOpen={setIsTicketConfigOpen}
+            hasCustomColWidths={hasCustomColWidths}
+            handleResetColWidths={handleResetColWidths}
+            setIsBulkImportOpen={setIsBulkImportOpen}
+            setIsScriptModalOpen={setIsScriptModalOpen}
+            activeSheet={activeSheet}
+            isModalOpen={isModalOpen}
+            handleOpenModal={handleOpenModal}
+            onOpenCreateSlice={() => {
+              setEditingSliceModalItem(null);
+              setIsSliceModalOpen(true);
+            }}
+            onOpenSliceManager={() => setIsSliceManagerOpen(true)}
+            activeSlice={activeSlice}
+            onEditSlice={(slice) => {
+              setEditingSliceModalItem(slice);
+              setIsSliceModalOpen(true);
+            }}
+            isSummaryView={isSummaryView}
+            onToggleSummaryView={handleToggleSummaryView}
+            isZenMode={isZenMode}
+            onToggleZenMode={() => {
+              setIsZenMode(prev => {
+                const next = !prev;
+                showToast(next ? 'Modo Zen activado (Presiona Esc para salir)' : 'Modo Zen desactivado', 'info', 'Enfoque');
+                return next;
+              });
+            }}
+          />
+        )}
 
         {/* SLICES & CUSTOM VIEWS BAR (AppSheet Pattern) */}
-        {activeView !== 'schema' && activeView !== 'analytics' && activeSheet && (
+        {!isZenMode && activeView !== 'schema' && activeView !== 'analytics' && activeSheet && (
           <SliceSelectorBar
             slices={visibleTableSlices}
             activeSliceId={activeSliceId}
@@ -1726,15 +1799,16 @@ export const InventoryDashboard: React.FC = () => {
         )}
 
         {/* FILTERS & RADAR PANELS (Collapsible) */}
-        <DashboardFilterPanels
-          areFiltersVisible={areFiltersVisible}
-          quickChips={quickChips}
-          activeQuickChip={activeQuickChip}
-          setActiveQuickChip={setActiveQuickChip}
-          activeView={activeView}
-          activeSheet={activeSheet}
-          items={items}
-          eventResolutionFilter={eventResolutionFilter}
+        {!isZenMode && (
+          <DashboardFilterPanels
+            areFiltersVisible={areFiltersVisible}
+            quickChips={quickChips}
+            activeQuickChip={activeQuickChip}
+            setActiveQuickChip={setActiveQuickChip}
+            activeView={activeView}
+            activeSheet={activeSheet}
+            items={items}
+            eventResolutionFilter={eventResolutionFilter}
           setEventResolutionFilter={setEventResolutionFilter}
           handleFilterToggle={handleFilterToggle}
           eventResolutionMetrics={eventResolutionMetrics}
@@ -1749,6 +1823,7 @@ export const InventoryDashboard: React.FC = () => {
           setPmRadarFilter={setPmRadarFilter}
           pmMetrics={pmMetrics}
         />
+        )}
 
         {/* Content Body */}
         <div className="flex-1 overflow-auto p-6">

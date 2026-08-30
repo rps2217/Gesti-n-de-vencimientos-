@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Layers, AlertTriangle, Clock, Truck, Scale, Flame, 
   CheckCircle2, RotateCcw, Bookmark, Sparkles, Package, 
   FileText, Tag, Filter, ShieldCheck, 
-  Plus, X, SlidersHorizontal, EyeOff 
+  Plus, X, SlidersHorizontal, EyeOff, ChevronDown, ChevronUp 
 } from 'lucide-react';
 import { TableSlice } from '../../types';
 import { SLICE_COLOR_CLASSES } from '../../utils/sliceRegistry';
@@ -19,6 +19,7 @@ interface SliceSelectorBarProps {
   onOpenSliceManager?: () => void;
   activeSlice: TableSlice | null;
   hiddenSlicesCount?: number;
+  isCollapsedDefault?: boolean;
 }
 
 export const SliceIcon: React.FC<{ iconName?: string; className?: string }> = ({ iconName, className = 'w-3.5 h-3.5' }) => {
@@ -67,9 +68,78 @@ export const SliceSelectorBar: React.FC<SliceSelectorBarProps> = ({
   onOpenCreateSlice,
   onOpenSliceManager,
   activeSlice,
-  hiddenSlicesCount = 0
+  hiddenSlicesCount = 0,
+  isCollapsedDefault = true
 }) => {
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('appsheet_slices_collapsed');
+      return saved !== null ? saved === 'true' : isCollapsedDefault;
+    } catch {
+      return isCollapsedDefault;
+    }
+  });
+
+  const toggleCollapse = () => {
+    setIsCollapsed(prev => {
+      const next = !prev;
+      try { localStorage.setItem('appsheet_slices_collapsed', String(next)); } catch {}
+      return next;
+    });
+  };
+
   const isAllRowsActive = activeSliceId === null;
+
+  if (isCollapsed) {
+    return (
+      <div className="bg-slate-50/80 dark:bg-slate-900 border-b border-slate-200/90 dark:border-slate-800 px-6 sm:px-8 py-1.5 shrink-0 flex items-center justify-between gap-3 text-xs transition-all">
+        <div className="flex items-center gap-2 overflow-x-auto py-0.5">
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            className="flex items-center gap-1.5 font-bold text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors"
+            title="Desplegar barra completa de Vistas / Slices"
+          >
+            <Layers className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span className="font-bold">Slices ({slices.length})</span>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+          </button>
+
+          <span className="text-slate-300 dark:text-slate-700">|</span>
+
+          {activeSlice ? (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/80 border border-blue-300 dark:border-blue-800 text-blue-900 dark:text-blue-200 font-bold text-[11px]">
+              <SliceIcon iconName={activeSlice.icon} className="w-3 h-3 text-blue-600" />
+              <span>{activeSlice.name}</span>
+              <span className="font-mono text-[10px] opacity-80">({sliceCounts[activeSlice.id] ?? 0})</span>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onSelectSlice(null); }}
+                className="ml-0.5 p-0.5 rounded hover:bg-blue-200 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 cursor-pointer"
+                title="Quitar filtro de slice"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
+            <span className="text-slate-500 dark:text-slate-400 text-[11px] font-medium italic">
+              Todas las filas ({totalItemsCount})
+            </span>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={toggleCollapse}
+          className="text-[11px] px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
+          title="Desplegar catálogo de Slices"
+        >
+          <span>Expandir Slices</span>
+          <ChevronDown className="w-3 h-3 text-slate-500" />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white dark:bg-slate-900 border-b border-slate-200/90 dark:border-slate-800 px-6 sm:px-8 py-2.5 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
@@ -205,6 +275,17 @@ export const SliceSelectorBar: React.FC<SliceSelectorBarProps> = ({
               <span>Nuevo Slice</span>
             </>
           )}
+        </button>
+
+        {/* Collapse Slices Bar Button */}
+        <button
+          type="button"
+          onClick={toggleCollapse}
+          className="text-xs px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-bold transition-all flex items-center gap-1 cursor-pointer"
+          title="Ocultar/Minimizar barra de Slices para despejar la pantalla"
+        >
+          <ChevronUp className="w-3.5 h-3.5" />
+          <span className="hidden lg:inline">Ocultar Slices</span>
         </button>
       </div>
     </div>

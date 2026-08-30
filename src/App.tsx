@@ -1,25 +1,53 @@
-import React, { useState, useEffect } from 'react';
-import { Package, Link as LinkIcon, Settings2, CheckCircle2, Moon, Sun } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Package, Link as LinkIcon, Settings2, CheckCircle2, Moon, Sun, Contrast, Check } from 'lucide-react';
 import InventoryDashboard from './components/InventoryDashboard';
 import { ToastProvider } from './components/common/ToastContainer';
+
+export type ThemeMode = 'light' | 'dark-slate' | 'dark-gray';
 
 export default function App() {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [setupUrl, setSetupUrl] = useState('');
   const [setupError, setSetupError] = useState('');
   const [isChangingUrl, setIsChangingUrl] = useState(false);
-  const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem('app_dark_mode') === 'true';
+  const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
+  const themeMenuRef = useRef<HTMLDivElement>(null);
+
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    const savedVariant = localStorage.getItem('app_theme_variant');
+    const isDark = localStorage.getItem('app_dark_mode') === 'true';
+    if (!isDark) return 'light';
+    return savedVariant === 'gray' ? 'dark-gray' : 'dark-slate';
   });
 
   useEffect(() => {
-    localStorage.setItem('app_dark_mode', String(darkMode));
-    if (darkMode) {
+    if (themeMode === 'light') {
+      localStorage.setItem('app_dark_mode', 'false');
+      document.documentElement.classList.remove('dark', 'theme-gray');
+    } else if (themeMode === 'dark-slate') {
+      localStorage.setItem('app_dark_mode', 'true');
+      localStorage.setItem('app_theme_variant', 'slate');
       document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.remove('theme-gray');
+    } else if (themeMode === 'dark-gray') {
+      localStorage.setItem('app_dark_mode', 'true');
+      localStorage.setItem('app_theme_variant', 'gray');
+      document.documentElement.classList.add('dark', 'theme-gray');
     }
-  }, [darkMode]);
+  }, [themeMode]);
+
+  // Close theme dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (themeMenuRef.current && !themeMenuRef.current.contains(e.target as Node)) {
+        setIsThemeMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const darkMode = themeMode !== 'light';
 
   const handleSetupSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,14 +139,91 @@ export default function App() {
               <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Modo Desarrollo (Sin PIN)</span>
             </div>
           </div>
+
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-sm"
-              title={darkMode ? "Cambiar a Modo Claro" : "Cambiar a Modo Oscuro"}
-            >
-              {darkMode ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-slate-600" />}
-            </button>
+            {/* Theme Selector Dropdown */}
+            <div className="relative" ref={themeMenuRef}>
+              <button
+                onClick={() => setIsThemeMenuOpen(!isThemeMenuOpen)}
+                className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-sm flex items-center gap-2 text-xs font-semibold"
+                title="Cambiar Tema Visual"
+              >
+                {themeMode === 'light' && <Sun className="h-4 w-4 text-amber-500" />}
+                {themeMode === 'dark-slate' && <Moon className="h-4 w-4 text-blue-400" />}
+                {themeMode === 'dark-gray' && <Contrast className="h-4 w-4 text-zinc-300" />}
+                <span className="hidden sm:inline">
+                  {themeMode === 'light' && 'Modo Claro'}
+                  {themeMode === 'dark-slate' && 'Modo Azul'}
+                  {themeMode === 'dark-gray' && 'Modo Gris'}
+                </span>
+              </button>
+
+              {isThemeMenuOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-2 z-50 text-xs animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                    Tema Visual
+                  </div>
+                  
+                  {/* Light Option */}
+                  <button
+                    onClick={() => {
+                      setThemeMode('light');
+                      setIsThemeMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors ${
+                      themeMode === 'light'
+                        ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold'
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sun className="w-4 h-4 text-amber-500" />
+                      <span>Modo Claro</span>
+                    </div>
+                    {themeMode === 'light' && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
+                  </button>
+
+                  {/* Dark Slate Option */}
+                  <button
+                    onClick={() => {
+                      setThemeMode('dark-slate');
+                      setIsThemeMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors ${
+                      themeMode === 'dark-slate'
+                        ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold'
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Moon className="w-4 h-4 text-blue-400" />
+                      <span>Modo Azul</span>
+                    </div>
+                    {themeMode === 'dark-slate' && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
+                  </button>
+
+                  {/* Dark Gray Option */}
+                  <button
+                    onClick={() => {
+                      setThemeMode('dark-gray');
+                      setIsThemeMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors ${
+                      themeMode === 'dark-gray'
+                        ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold'
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Contrast className="w-4 h-4 text-zinc-300" />
+                      <span>Modo Gris</span>
+                    </div>
+                    {themeMode === 'dark-gray' && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               onClick={() => setIsChangingUrl(true)}
               className="inline-flex items-center gap-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3.5 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors shadow-sm"
@@ -136,4 +241,5 @@ export default function App() {
     </ToastProvider>
   );
 }
+
 

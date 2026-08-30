@@ -1770,11 +1770,9 @@ export const InventoryDashboard: React.FC = () => {
             onToggleSummaryView={handleToggleSummaryView}
             isZenMode={isZenMode}
             onToggleZenMode={() => {
-              setIsZenMode(prev => {
-                const next = !prev;
-                showToast(next ? 'Modo Zen activado (Presiona Esc para salir)' : 'Modo Zen desactivado', 'info', 'Enfoque');
-                return next;
-              });
+              const next = !isZenMode;
+              setIsZenMode(next);
+              showToast(next ? 'Modo Zen activado (Presiona Esc para salir)' : 'Modo Zen desactivado', 'info', 'Enfoque');
             }}
           />
         )}

@@ -134,6 +134,18 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
     const len = items.length;
     cachedNormalizedItems = new Array(len);
 
+    const allColKeys = new Set<string>(headers);
+    if (len > 0 && items[0]) {
+      Object.keys(items[0]).forEach((k) => {
+        if (!k.startsWith('_')) allColKeys.add(k);
+      });
+    }
+
+    const allColKeysArray = Array.from(allColKeys);
+    allColKeysArray.forEach((h) => {
+      columnUniqueSets[h] = new Set<string>();
+    });
+
     for (let i = 0; i < len; i++) {
       const item = items[i];
 
@@ -149,8 +161,8 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
       }
 
       // Column values for dropdowns
-      for (let j = 0; j < headers.length; j++) {
-        const h = headers[j];
+      for (let j = 0; j < allColKeysArray.length; j++) {
+        const h = allColKeysArray[j];
         const val = item[h];
         if (val !== undefined && val !== null && String(val).trim() !== '') {
           columnUniqueSets[h].add(String(val).trim());
@@ -361,7 +373,15 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
         let matchCols = true;
         for (let j = 0; j < activeColFilterEntries.length; j++) {
           const [colName, valSet] = activeColFilterEntries[j];
-          const rawVal = item.original[colName];
+          let rawVal = item.original[colName];
+          if (rawVal === undefined) {
+            const matchedKey = Object.keys(item.original).find(
+              (k) => k.toLowerCase().trim() === colName.toLowerCase().trim()
+            );
+            if (matchedKey) {
+              rawVal = item.original[matchedKey];
+            }
+          }
           const valStr =
             rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== ''
               ? String(rawVal).trim()

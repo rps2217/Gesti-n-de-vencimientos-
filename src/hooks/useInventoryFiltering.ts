@@ -98,9 +98,21 @@ export function useInventoryFiltering({
     });
   }, []);
 
+  // Virtual columns augmentation
+  const augmentedItems = useMemo(() => {
+    return items.map(item => {
+      const virtualData: Record<string, any> = {};
+      const activeVCs = sheetConfig.activeVirtualColumns || [];
+      VIRTUAL_COLUMNS.filter(col => activeVCs.includes(col.id)).forEach(col => {
+        virtualData[col.id] = col.calculate(item, headers, { products, policies });
+      });
+      return { ...item, ...virtualData };
+    });
+  }, [items, headers, sheetConfig.activeVirtualColumns, products, policies]);
+
   // Web Worker for non-blocking background calculations
   const { metrics, matchingIndices, isProcessing, isWorkerReady } = useInventoryWorker({
-    items,
+    items: augmentedItems,
     headers,
     frcBodCol,
     searchableHeaders,
@@ -216,18 +228,6 @@ export function useInventoryFiltering({
       columnOptionsMap: {}
     };
   }, [items, headers, frcBodCol, metrics]);
-
-  // Virtual columns augmentation
-  const augmentedItems = useMemo(() => {
-    return items.map(item => {
-      const virtualData: Record<string, any> = {};
-      const activeVCs = sheetConfig.activeVirtualColumns || [];
-      VIRTUAL_COLUMNS.filter(col => activeVCs.includes(col.id)).forEach(col => {
-        virtualData[col.id] = col.calculate(item, headers, { products, policies });
-      });
-      return { ...item, ...virtualData };
-    });
-  }, [items, headers, sheetConfig.activeVirtualColumns, products, policies]);
 
   // Options map for column dropdown filter menus
   const columnOptionsMap = useMemo(() => {
@@ -392,7 +392,15 @@ export function useInventoryFiltering({
           let matchCols = true;
           for (let j = 0; j < activeColFilterEntries.length; j++) {
             const [colName, valSet] = activeColFilterEntries[j];
-            const val = item[colName];
+            let val = item[colName];
+            if (val === undefined) {
+              const matchedKey = Object.keys(item).find(
+                (k) => k.toLowerCase().trim() === colName.toLowerCase().trim()
+              );
+              if (matchedKey) {
+                val = item[matchedKey];
+              }
+            }
             const valStr = val !== undefined && val !== null && String(val).trim() !== '' ? String(val).trim() : '(Vacío)';
             if (!valSet.has(valStr)) {
               matchCols = false;

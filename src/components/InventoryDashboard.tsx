@@ -507,6 +507,65 @@ export const InventoryDashboard: React.FC = () => {
     currentPage,
   });
 
+  // Contextual persistent grouping handlers per table
+  const handleSetGroupByColumn = useCallback((col: string) => {
+    setGroupByColumn(col);
+    const prevSetting = sheetConfig.tableGroupings?.[activeSheetKey] || {};
+    const updatedGroupings = {
+      ...(sheetConfig.tableGroupings || {}),
+      [activeSheetKey]: {
+        ...prevSetting,
+        groupByColumn: col,
+      }
+    };
+    saveConfig({
+      ...sheetConfig,
+      tableGroupings: updatedGroupings
+    });
+  }, [activeSheetKey, sheetConfig, saveConfig, setGroupByColumn]);
+
+  const handleSetGroupByDirection = useCallback((dir: 'asc' | 'desc') => {
+    setGroupByDirection(dir);
+    const prevSetting = sheetConfig.tableGroupings?.[activeSheetKey] || {};
+    const updatedGroupings = {
+      ...(sheetConfig.tableGroupings || {}),
+      [activeSheetKey]: {
+        ...prevSetting,
+        groupByDirection: dir,
+      }
+    };
+    saveConfig({
+      ...sheetConfig,
+      tableGroupings: updatedGroupings
+    });
+  }, [activeSheetKey, sheetConfig, saveConfig, setGroupByDirection]);
+
+  const handleToggleGroupByDirection = useCallback(() => {
+    const nextDir = groupByDirection === 'asc' ? 'desc' : 'asc';
+    handleSetGroupByDirection(nextDir);
+  }, [groupByDirection, handleSetGroupByDirection]);
+
+  // Load contextual table grouping whenever activeSheetKey changes or on mount
+  useEffect(() => {
+    const saved = sheetConfig.tableGroupings?.[activeSheetKey];
+    if (saved && saved.groupByColumn) {
+      const col = saved.groupByColumn;
+      const dir = saved.groupByDirection || 'asc';
+      const isVirtual = VIRTUAL_COLUMNS.some(v => v.label === col || v.id === col);
+      const isHeader = headers.includes(col);
+      if (col === 'none' || isHeader || isVirtual) {
+        setGroupByColumn(col);
+        setGroupByDirection(dir);
+      } else {
+        setGroupByColumn('none');
+        setGroupByDirection('asc');
+      }
+    } else {
+      setGroupByColumn('none');
+      setGroupByDirection('asc');
+    }
+  }, [activeSheetKey, headers, setGroupByColumn, setGroupByDirection]);
+
   // Effective visible headers: when grouping by a column, hide that column from table body to reduce cognitive clutter
   const effectiveVisibleHeaders = useMemo(() => {
     if (groupByColumn && groupByColumn !== 'none') {
@@ -602,11 +661,11 @@ export const InventoryDashboard: React.FC = () => {
 
     // Apply slice grouping if defined
     if (slice.groupByColumn) {
-      setGroupByColumn(slice.groupByColumn);
-      setGroupByDirection(slice.groupByDirection || 'asc');
+      handleSetGroupByColumn(slice.groupByColumn);
+      handleSetGroupByDirection(slice.groupByDirection || 'asc');
     } else {
-      setGroupByColumn('none');
-      setGroupByDirection('asc');
+      handleSetGroupByColumn('none');
+      handleSetGroupByDirection('asc');
     }
 
     // Apply slice sorting if defined
@@ -620,7 +679,7 @@ export const InventoryDashboard: React.FC = () => {
     } else {
       showAllColumns();
     }
-  }, [clearAllFilters, showAllColumns, setVisibleColumns, setSortConfig, setGroupByColumn, setGroupByDirection, setEventFilter, setPmRadarFilter, setEventResolutionFilter, setFrcBodFilter, setColumnFilters, setDynamicMonthFilter, setDynamicMonthRange]);
+  }, [clearAllFilters, showAllColumns, setVisibleColumns, setSortConfig, handleSetGroupByColumn, handleSetGroupByDirection, setEventFilter, setPmRadarFilter, setEventResolutionFilter, setFrcBodFilter, setColumnFilters, setDynamicMonthFilter, setDynamicMonthRange]);
 
   const handleSaveSlice = useCallback((slice: TableSlice) => {
     setCustomSlices(prev => {
@@ -1881,9 +1940,9 @@ export const InventoryDashboard: React.FC = () => {
               isViewMenuOpen={isViewMenuOpen}
               setIsViewMenuOpen={setIsViewMenuOpen}
               groupByColumn={groupByColumn}
-              setGroupByColumn={setGroupByColumn}
+              setGroupByColumn={handleSetGroupByColumn}
               groupByDirection={groupByDirection}
-              onToggleGroupByDirection={toggleGroupByDirection}
+              onToggleGroupByDirection={handleToggleGroupByDirection}
               visibleHeaders={visibleHeaders}
               setIsColumnManagerOpen={setIsColumnManagerOpen}
               areFiltersVisible={areFiltersVisible}

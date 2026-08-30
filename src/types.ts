@@ -32,6 +32,11 @@ export interface TableBulkActionSetting {
   disabled?: string[];
 }
 
+export interface TableGroupingSetting {
+  groupByColumn?: string;
+  groupByDirection?: 'asc' | 'desc';
+}
+
 export interface SheetConfig {
   main?: string;
   events?: string;
@@ -42,6 +47,7 @@ export interface SheetConfig {
   userVirtualColumns?: UserVirtualColumn[];
   customAliases?: Record<string, string[]>;
   tableBulkActions?: Record<string, TableBulkActionSetting>;
+  tableGroupings?: Record<string, TableGroupingSetting>;
   slices?: TableSlice[];
   hiddenSliceIds?: string[];
   ticketPrintConfig?: GlobalTicketConfig;

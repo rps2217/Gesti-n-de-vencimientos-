@@ -10,7 +10,8 @@ import {
   getEventCategory, 
   getItemResolutionStatus,
   formatDisplayDate, 
-  formatLocaleNumber 
+  formatLocaleNumber,
+  parseAnyDate
 } from '../../utils/dateCalculations';
 import { findColumnBySemantic } from '../../utils/columnAliases';
 import { findMasterProduct, getMasterProductSummary } from '../../utils/referenceResolver';
@@ -100,7 +101,21 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
     return itSku && String(itSku).trim() === String(sku).trim();
   });
 
-  const expirations = relatedRecords.filter(r => getEventCategory(r, Object.keys(r)) === 'VENCIMIENTO');
+  const expirations = relatedRecords
+    .filter(r => getEventCategory(r, Object.keys(r)) === 'VENCIMIENTO')
+    .sort((a, b) => {
+      const aKeys = Object.keys(a);
+      const bKeys = Object.keys(b);
+      const aVcCol = findColumnBySemantic(aKeys, 'fecha_vc', customAliases);
+      const bVcCol = findColumnBySemantic(bKeys, 'fecha_vc', customAliases);
+      const dA = aVcCol && a[aVcCol] ? parseAnyDate(a[aVcCol]) : null;
+      const dB = bVcCol && b[bVcCol] ? parseAnyDate(b[bVcCol]) : null;
+      if (!dA && !dB) return 0;
+      if (!dA) return 1;
+      if (!dB) return -1;
+      return dA.getTime() - dB.getTime();
+    });
+
   const incidents = relatedRecords.filter(r => getEventCategory(r, Object.keys(r)) !== 'VENCIMIENTO');
 
   return (

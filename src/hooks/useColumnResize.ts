@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { InventoryItem } from '../types';
 
 export interface UseColumnResizeProps {
@@ -40,14 +40,14 @@ export function useColumnResize({ activeSheetKey, items }: UseColumnResizeProps)
   };
 
   // Get active width for a column in the current sheet
-  const getColWidth = (colId: string, headerName?: string, type?: string): number => {
+  const getColWidth = useCallback((colId: string, headerName?: string, type?: string): number => {
     if (resizingCol && resizingCol.sheetKey === activeSheetKey && resizingCol.colId === colId) {
       return resizingCol.currentWidth;
     }
     const custom = colWidths[activeSheetKey]?.[colId];
     if (typeof custom === 'number' && custom > 0) return custom;
     return getDefaultColWidth(colId, headerName, type);
-  };
+  }, [resizingCol, activeSheetKey, colWidths]);
 
   // Start Resizing Column
   const handleStartResize = (colId: string, initialWidth: number, e: React.MouseEvent) => {

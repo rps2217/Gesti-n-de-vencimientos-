@@ -189,7 +189,7 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
 
       {/* 💻 DESKTOP TABLE VIEW */}
       {/* Selection Checkbox */}
-      <td className="hidden md:table-cell p-4 text-center" onClick={(e) => e.stopPropagation()}>
+      <td className="hidden md:table-cell p-4 text-center" style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-center">
           <input
             type="checkbox"
@@ -203,8 +203,8 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
 
       {/* Row Index */}
       <td 
-        style={{ '--col-width': `${getColWidth('_row', '#')}px` } as React.CSSProperties}
-        className="hidden md:table-cell p-4 text-center font-mono text-xs text-slate-400 dark:text-slate-500 truncate w-[var(--col-width)]"
+        style={{ width: `${getColWidth('_row', '#')}px`, minWidth: `${getColWidth('_row', '#')}px`, maxWidth: `${getColWidth('_row', '#')}px` }}
+        className="hidden md:table-cell p-4 text-center font-mono text-xs text-slate-400 dark:text-slate-500 truncate"
       >
         {item._rowIndex}
       </td>
@@ -212,8 +212,8 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
       {/* Expiration Status Badge (Main view) - Unified Single Badge */}
       {activeView === 'main' && (
         <td 
-          style={{ '--col-width': `${getColWidth('_status', 'Estado / Radar PM')}px` } as React.CSSProperties}
-          className="hidden md:table-cell p-3 truncate w-[var(--col-width)]"
+          style={{ width: `${getColWidth('_status', 'Estado / Radar PM')}px`, minWidth: `${getColWidth('_status', 'Estado / Radar PM')}px`, maxWidth: `${getColWidth('_status', 'Estado / Radar PM')}px` }}
+          className="hidden md:table-cell p-3 truncate"
         >
           {eventCategory === 'VENCIMIENTO' || eventCategory === 'VENCIMIENTO_CERCANO' ? (
             <button 
@@ -251,8 +251,8 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
       {/* Incident Resolution Status Badge (Events view) */}
       {activeView === 'events' && (
         <td 
-          style={{ '--col-width': `${getColWidth('_res_status', 'Estado Gestión')}px` } as React.CSSProperties}
-          className="hidden md:table-cell p-4 truncate w-[var(--col-width)]"
+          style={{ width: `${getColWidth('_res_status', 'Estado Gestión')}px`, minWidth: `${getColWidth('_res_status', 'Estado Gestión')}px`, maxWidth: `${getColWidth('_res_status', 'Estado Gestión')}px` }}
+          className="hidden md:table-cell p-4 truncate"
         >
           {eventResStatus?.isResolved ? (
             <button
@@ -291,8 +291,8 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
         return (
           <td 
             key={header} 
-            style={{ '--col-width': `${colWidth}px`, maxWidth: '100%' } as React.CSSProperties}
-            className="hidden md:table-cell p-4 truncate text-slate-800 dark:text-slate-200 w-[var(--col-width)]"
+            style={{ width: `${colWidth}px`, minWidth: `${colWidth}px`, maxWidth: `${colWidth}px` }}
+            className="hidden md:table-cell p-4 truncate text-slate-800 dark:text-slate-200"
           >
             <div className="w-full flex justify-start overflow-hidden">
               {isProductsView && isSku ? (
@@ -381,7 +381,8 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
 
       {/* Row Actions */}
       <td 
-        className="hidden md:table-cell p-4 text-right sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 transition-colors shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)] w-28 min-w-[110px]" 
+        className="hidden md:table-cell p-4 text-right sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 transition-colors shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)]" 
+        style={{ width: '110px', minWidth: '110px', maxWidth: '110px' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-end gap-1">

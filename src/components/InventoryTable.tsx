@@ -125,10 +125,10 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   return (
     <div className="bg-slate-50 md:bg-white md:dark:bg-slate-900 rounded-2xl md:shadow-sm md:border md:border-slate-200 md:dark:border-slate-800 overflow-hidden flex flex-col h-full">
       <div className="flex-1 overflow-auto relative p-2 md:p-0" ref={tableContainerRef}>
-        <table className="text-left border-collapse block md:table w-full md:w-[max-content]" style={{ minWidth: '100%' }}>
+        <table className="text-left border-collapse block md:table w-full md:w-[max-content] md:table-fixed" style={{ minWidth: '100%', tableLayout: 'fixed' }}>
           <thead className="hidden md:table-header-group bg-slate-100 dark:bg-slate-700/90 sticky top-0 border-b border-slate-200 dark:border-slate-600/80 text-xs font-bold text-slate-700 dark:text-slate-100 uppercase tracking-wider select-none z-10 shadow-sm">
             <tr>
-              <th className="p-4 text-center bg-slate-100 dark:bg-slate-700/90 border-b border-slate-200 dark:border-slate-600/80" style={{ width: '48px', minWidth: '48px' }}>
+              <th className="p-4 text-center bg-slate-100 dark:bg-slate-700/90 border-b border-slate-200 dark:border-slate-600/80" style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }}>
                 <div className="flex items-center justify-center">
                   <input
                     type="checkbox"
@@ -146,7 +146,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                 </div>
               </th>
               <th 
-                style={{ width: `${getColWidth('_row', '#')}px`, minWidth: '50px' }} 
+                style={{ width: `${getColWidth('_row', '#')}px`, minWidth: `${getColWidth('_row', '#')}px`, maxWidth: `${getColWidth('_row', '#')}px` }} 
                 className="p-4 text-center text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-700/90 border-b border-slate-200 dark:border-slate-600/80 relative group font-bold"
               >
                 <span>#</span>
@@ -163,7 +163,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
 
               {activeView === 'main' && (
                 <th 
-                  style={{ width: `${getColWidth('_status', 'Estado / Radar PM')}px`, minWidth: '130px' }} 
+                  style={{ width: `${getColWidth('_status', 'Estado / Radar PM')}px`, minWidth: `${getColWidth('_status', 'Estado / Radar PM')}px`, maxWidth: `${getColWidth('_status', 'Estado / Radar PM')}px` }} 
                   className="p-3 bg-slate-100 dark:bg-slate-700/90 text-slate-700 dark:text-slate-100 border-b border-slate-200 dark:border-slate-600/80 relative group font-bold"
                 >
                   <div className="flex items-center justify-between gap-1 w-full min-w-0 pr-1">
@@ -195,7 +195,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
 
               {activeView === 'events' && (
                 <th 
-                  style={{ width: `${getColWidth('_res_status', 'Estado Gestión')}px`, minWidth: '125px' }} 
+                  style={{ width: `${getColWidth('_res_status', 'Estado Gestión')}px`, minWidth: `${getColWidth('_res_status', 'Estado Gestión')}px`, maxWidth: `${getColWidth('_res_status', 'Estado Gestión')}px` }} 
                   className="p-4 bg-slate-100 dark:bg-slate-700/90 text-slate-700 dark:text-slate-100 border-b border-slate-200 dark:border-slate-600/80 relative group font-bold"
                 >
                   <div className="truncate pr-2">Estado Gestión</div>
@@ -227,7 +227,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                 return (
                   <th 
                     key={header} 
-                    style={{ width: `${width}px`, minWidth: '85px' }}
+                    style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
                     className={`p-3 bg-slate-100 dark:bg-slate-700/90 text-slate-700 dark:text-slate-100 border-b border-slate-200 dark:border-slate-600/80 relative group transition-all cursor-grab active:cursor-grabbing hover:bg-slate-200/90 dark:hover:bg-slate-600/90 dark:hover:text-white select-none ${
                       isDraggingThis ? 'opacity-40 scale-[0.98]' : ''
                     } ${
@@ -360,7 +360,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
               })}
 
               {/* Fixed Actions Column Header */}
-              <th className="p-4 text-right bg-slate-100 dark:bg-slate-700/90 text-slate-700 dark:text-slate-100 border-b border-slate-200 dark:border-slate-600/80 sticky right-0 z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)] w-24 min-w-[96px] font-bold">
+              <th className="p-4 text-right bg-slate-100 dark:bg-slate-700/90 text-slate-700 dark:text-slate-100 border-b border-slate-200 dark:border-slate-600/80 sticky right-0 z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)] font-bold" style={{ width: '110px', minWidth: '110px', maxWidth: '110px' }}>
                 Acciones
               </th>
             </tr>

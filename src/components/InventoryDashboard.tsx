@@ -470,6 +470,9 @@ export const InventoryDashboard: React.FC = () => {
     setDynamicMonthRange,
     groupByColumn,
     setGroupByColumn,
+    groupByDirection,
+    setGroupByDirection,
+    toggleGroupByDirection,
     sortConfig,
     setSortConfig,
     handleToggleSort,
@@ -592,6 +595,10 @@ export const InventoryDashboard: React.FC = () => {
     // Apply slice grouping if defined
     if (slice.groupByColumn) {
       setGroupByColumn(slice.groupByColumn);
+      setGroupByDirection(slice.groupByDirection || 'asc');
+    } else {
+      setGroupByColumn('none');
+      setGroupByDirection('asc');
     }
 
     // Apply slice sorting if defined
@@ -605,7 +612,7 @@ export const InventoryDashboard: React.FC = () => {
     } else {
       showAllColumns();
     }
-  }, [clearAllFilters, showAllColumns, setVisibleColumns, setSortConfig, setGroupByColumn, setEventFilter, setPmRadarFilter, setEventResolutionFilter, setFrcBodFilter, setColumnFilters, setDynamicMonthFilter, setDynamicMonthRange]);
+  }, [clearAllFilters, showAllColumns, setVisibleColumns, setSortConfig, setGroupByColumn, setGroupByDirection, setEventFilter, setPmRadarFilter, setEventResolutionFilter, setFrcBodFilter, setColumnFilters, setDynamicMonthFilter, setDynamicMonthRange]);
 
   const handleSaveSlice = useCallback((slice: TableSlice) => {
     setCustomSlices(prev => {
@@ -1855,6 +1862,8 @@ export const InventoryDashboard: React.FC = () => {
               setIsViewMenuOpen={setIsViewMenuOpen}
               groupByColumn={groupByColumn}
               setGroupByColumn={setGroupByColumn}
+              groupByDirection={groupByDirection}
+              onToggleGroupByDirection={toggleGroupByDirection}
               visibleHeaders={visibleHeaders}
               setIsColumnManagerOpen={setIsColumnManagerOpen}
               areFiltersVisible={areFiltersVisible}
@@ -2056,9 +2065,16 @@ export const InventoryDashboard: React.FC = () => {
                   </span>
                   {groupByColumn !== 'none' && groupedItems && (
                     <div className="flex items-center gap-2 border-l border-slate-300 dark:border-slate-600 pl-3">
-                      <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                      <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1">
                         Agrupado en {groupedItems.length} grupos ({groupByColumn})
                       </span>
+                      <button
+                        onClick={toggleGroupByDirection}
+                        className="text-[10px] bg-blue-100 dark:bg-blue-900/60 hover:bg-blue-200 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 font-extrabold px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                        title={`Orden de grupos: ${groupByDirection === 'desc' ? 'Descendente (Z-A)' : 'Ascendente (A-Z)'}. Clic para cambiar.`}
+                      >
+                        {groupByDirection === 'desc' ? 'Orden Z-A' : 'Orden A-Z'}
+                      </button>
                       <button
                         onClick={expandAllGroups}
                         className="text-[10px] text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 font-bold underline cursor-pointer"
@@ -2483,6 +2499,7 @@ export const InventoryDashboard: React.FC = () => {
         }}
         currentSort={sortConfig}
         currentGroupBy={groupByColumn}
+        currentGroupByDirection={groupByDirection}
         currentVisibleHeaders={visibleHeaders}
         editingSlice={editingSliceModalItem}
         onSaveSlice={handleSaveSlice}

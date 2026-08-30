@@ -78,7 +78,12 @@ export function useInventoryFiltering({
   const [dynamicMonthFilter, setDynamicMonthFilter] = useState<number[]>([]);
   const [dynamicMonthRange, setDynamicMonthRange] = useState<DynamicMonthRange | null>(null);
   const [groupByColumn, setGroupByColumn] = useState<string>('none');
+  const [groupByDirection, setGroupByDirection] = useState<'asc' | 'desc'>('asc');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
+  const toggleGroupByDirection = useCallback(() => {
+    setGroupByDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+  }, []);
 
   // Reset collapsed groups when group by column changes
   useEffect(() => {
@@ -471,8 +476,11 @@ export function useInventoryFiltering({
       }
       map.get(val)!.push(item);
     }
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: 'base' }));
-  }, [filteredItems, groupByColumn]);
+    const dirMult = groupByDirection === 'desc' ? -1 : 1;
+    return Array.from(map.entries()).sort((a, b) => {
+      return dirMult * a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [filteredItems, groupByColumn, groupByDirection]);
 
   // Virtualization display row structure
   const displayRows = useMemo<DisplayRow[]>(() => {
@@ -571,6 +579,9 @@ export function useInventoryFiltering({
     setDynamicMonthRange,
     groupByColumn,
     setGroupByColumn,
+    groupByDirection,
+    setGroupByDirection,
+    toggleGroupByDirection,
     collapsedGroups,
     toggleGroupCollapse,
     expandAllGroups,

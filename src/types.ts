@@ -175,5 +175,6 @@ export interface TableSlice {
   filterConfig: SliceFilterConfig;
   sortConfig?: SortConfig;
   groupByColumn?: string;
+  groupByDirection?: 'asc' | 'desc';
   visibleColumns?: string[];
 }

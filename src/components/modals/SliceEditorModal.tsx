@@ -3,7 +3,8 @@ import {
   X, Layers, Sparkles, Tag, Check, Trash2, Sliders, 
   Columns, Filter, ArrowUpDown, RefreshCw, Copy, 
   Search, AlertTriangle, Flame, Clock, CheckCircle2, 
-  Truck, Scale, RotateCcw, ShieldCheck, Bookmark, FileText, Package
+  Truck, Scale, RotateCcw, ShieldCheck, Bookmark, FileText, Package,
+  ArrowUpAZ, ArrowDownZA
 } from 'lucide-react';
 import { 
   TableSlice, SliceFilterConfig, SliceColor, SortConfig, DynamicMonthRange 
@@ -29,6 +30,7 @@ interface SliceEditorModalProps {
   };
   currentSort?: SortConfig;
   currentGroupBy?: string;
+  currentGroupByDirection?: 'asc' | 'desc';
   currentVisibleHeaders?: string[];
   editingSlice?: TableSlice | null;
   onSaveSlice: (slice: TableSlice) => void;
@@ -123,6 +125,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
   currentFilters,
   currentSort,
   currentGroupBy,
+  currentGroupByDirection,
   currentVisibleHeaders = [],
   editingSlice,
   onSaveSlice,
@@ -134,6 +137,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
   const [color, setColor] = useState<SliceColor>('blue');
   const [filterConfig, setFilterConfig] = useState<SliceFilterConfig>({});
   const [groupByColumn, setGroupByColumn] = useState<string>('none');
+  const [groupByDirection, setGroupByDirection] = useState<'asc' | 'desc'>('asc');
   const [sortColumn, setSortColumn] = useState<string>('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [useCustomColumns, setUseCustomColumns] = useState(false);
@@ -166,6 +170,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
         setColor(editingSlice.color || 'blue');
         setFilterConfig(editingSlice.filterConfig ? { ...editingSlice.filterConfig } : {});
         setGroupByColumn(editingSlice.groupByColumn || 'none');
+        setGroupByDirection(editingSlice.groupByDirection || 'asc');
         if (editingSlice.sortConfig && editingSlice.sortConfig.column) {
           setSortColumn(editingSlice.sortConfig.column);
           setSortDirection(editingSlice.sortConfig.direction === 'desc' ? 'desc' : 'asc');
@@ -201,6 +206,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
             : undefined
         });
         setGroupByColumn(currentGroupBy || 'none');
+        setGroupByDirection(currentGroupByDirection || 'asc');
         if (currentSort && currentSort.column) {
           setSortColumn(currentSort.column);
           setSortDirection(currentSort.direction === 'desc' ? 'desc' : 'asc');
@@ -353,6 +359,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
       isBuiltIn: false,
       filterConfig: filterConfig || {},
       groupByColumn: groupByColumn !== 'none' ? groupByColumn : undefined,
+      groupByDirection: groupByColumn !== 'none' ? groupByDirection : undefined,
       sortConfig: sortColumn ? { column: sortColumn, direction: sortDirection } : undefined,
       visibleColumns: useCustomColumns && selectedColumns.length > 0 ? selectedColumns : undefined
     };
@@ -986,16 +993,33 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
                     <Tag className="w-3.5 h-3.5 text-blue-500" /> Agrupación Predeterminada
                   </label>
-                  <select
-                    value={groupByColumn}
-                    onChange={(e) => setGroupByColumn(e.target.value)}
-                    className="w-full text-xs font-medium px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="none">Sin agrupación</option>
-                    {headers.map(h => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={groupByColumn}
+                      onChange={(e) => setGroupByColumn(e.target.value)}
+                      className="flex-1 text-xs font-medium px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="none">Sin agrupación</option>
+                      {headers.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                    {groupByColumn !== 'none' && (
+                      <button
+                        type="button"
+                        onClick={() => setGroupByDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                        className="px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer flex items-center gap-1.5 shrink-0 transition-colors"
+                        title="Cambiar orden de los grupos (Ascendente A-Z / Descendente Z-A)"
+                      >
+                        {groupByDirection === 'asc' ? (
+                          <ArrowUpAZ className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        ) : (
+                          <ArrowDownZA className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        )}
+                        <span>{groupByDirection === 'asc' ? 'A-Z' : 'Z-A'}</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div>

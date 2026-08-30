@@ -133,8 +133,8 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
                   (code === 'DRAINAGE_PM') ? 'drainage' : 'en_regla';
                 onPmRadarFilterClick(targetFilter, e.ctrlKey || e.metaKey);
               }}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border truncate cursor-pointer hover:opacity-80 transition-opacity ${status.color}`}
-              title="Clic normal: Solo este estado. Ctrl+Clic: Sumar estado."
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border truncate cursor-pointer hover:opacity-90 transition-all ${status.color}`}
+              title="Clic normal: Filtrar este estado. Ctrl+Clic: Sumar filtro."
             >
               <span className="shrink-0">{status.icon}</span>
               <span className="truncate">{status.label}</span>

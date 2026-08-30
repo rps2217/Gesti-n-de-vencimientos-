@@ -86,6 +86,10 @@ import { WhatsAppModal } from './modals/WhatsAppModal';
 import { UniversalImportModal } from './modals/UniversalImportModal';
 import { BulkActionsConfigModal } from './modals/BulkActionsConfigModal';
 import { buildBulkActionContext, isActionEnabledForTable } from '../utils/bulkActionsRegistry';
+import { 
+  loadTicketConfigFromStorage, 
+  saveTicketConfigToStorage 
+} from '../utils/ticketUtils';
 import { GlobalTicketConfig, ViewTicketConfig, TableSlice } from '../types';
 import { SkeletonLoader } from './common/SkeletonLoader';
 import { useToast } from './common/ToastContainer';
@@ -203,7 +207,9 @@ export const InventoryDashboard: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
-  const [globalTicketConfig, setGlobalTicketConfig] = useState<GlobalTicketConfig>({});
+  const [globalTicketConfig, setGlobalTicketConfig] = useState<GlobalTicketConfig>(() => {
+    return loadTicketConfigFromStorage();
+  });
   const [isTicketConfigOpen, setIsTicketConfigOpen] = useState(false);
   const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
   const [gmailModalItems, setGmailModalItems] = useState<any[]>([]);
@@ -233,21 +239,29 @@ export const InventoryDashboard: React.FC = () => {
     return () => window.removeEventListener('click', handleGlobalClick);
   }, []);
 
+  // Sync ticket print config if sheetConfig updates from cloud
   useEffect(() => {
-    const saved = localStorage.getItem('global_ticket_print_config');
-    if (saved) {
-      try {
-        setGlobalTicketConfig(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse global ticket config', e);
-      }
+    if (sheetConfig.ticketPrintConfig) {
+      setGlobalTicketConfig(prev => ({
+        ...prev,
+        ...sheetConfig.ticketPrintConfig
+      }));
     }
-  }, []);
+  }, [sheetConfig.ticketPrintConfig]);
 
   const handleSaveTicketConfig = (view: string, viewConfig: ViewTicketConfig) => {
     setGlobalTicketConfig(prev => {
       const updated = { ...prev, [view]: viewConfig };
-      localStorage.setItem('global_ticket_print_config', JSON.stringify(updated));
+      saveTicketConfigToStorage(updated);
+      
+      const updatedSheetConfig: SheetConfig = {
+        ...sheetConfig,
+        ticketPrintConfig: updated
+      };
+      setSheetConfig(updatedSheetConfig);
+      saveConfig(updatedSheetConfig);
+
+      showToast(`Configuración de ticket para "${view}" guardada exitosamente`, 'success', 'Ticket Térmico');
       return updated;
     });
     setIsTicketConfigOpen(false);
@@ -1622,6 +1636,7 @@ export const InventoryDashboard: React.FC = () => {
           setIsWhatsAppModalOpen={setIsWhatsAppModalOpen}
           setIsPmReportOpen={setIsPmReportOpen}
           onOpenBulkActionsConfig={() => setIsBulkActionsConfigOpen(true)}
+          onOpenTicketConfig={() => setIsTicketConfigOpen(true)}
           drainageReportItems={drainageReportItems}
           headers={headers}
           filteredItems={filteredItems}
@@ -1870,15 +1885,24 @@ export const InventoryDashboard: React.FC = () => {
               
               <div className="flex items-center gap-2">
                 {isActionEnabledForTable('ticket', bulkActionCtx, sheetConfig) && (
-                  <button 
-                    onClick={() => {
-                      const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
-                      handlePrintTicket(selectedItems);
-                    }}
-                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
-                  >
-                    <Printer className="w-3.5 h-3.5 text-indigo-400" /> Imprimir Ticket
-                  </button>
+                  <div className="flex items-center bg-slate-700/80 rounded-xl p-0.5">
+                    <button 
+                      onClick={() => {
+                        const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
+                        handlePrintTicket(selectedItems);
+                      }}
+                      className="text-xs hover:bg-slate-600 px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 text-white"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-indigo-400" /> Imprimir Ticket
+                    </button>
+                    <button
+                      onClick={() => setIsTicketConfigOpen(true)}
+                      className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-600 rounded-lg transition-colors"
+                      title="Configurar columnas y formato del ticket"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 )}
                 
                 {isActionEnabledForTable('gmail', bulkActionCtx, sheetConfig) && (
@@ -2132,8 +2156,9 @@ export const InventoryDashboard: React.FC = () => {
         onClose={() => setIsTicketConfigOpen(false)}
         headers={headers}
         activeView={activeView}
-        config={globalTicketConfig[activeView] || {}}
+        config={globalTicketConfig[activeView] || sheetConfig.ticketPrintConfig?.[activeView] || {}}
         onSave={handleSaveTicketConfig}
+        sampleItems={filteredItems}
       />
 
       {/* UNIVERSAL IMPORT MODAL (EXCEL / CSV / TSV / CLIPBOARD) */}
@@ -2249,7 +2274,8 @@ export const InventoryDashboard: React.FC = () => {
     <TicketPrintView 
       items={selectedRowIds.length > 0 ? filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number)) : filteredItems} 
       headers={headers} 
-      config={globalTicketConfig[activeView] || {}} 
+      config={globalTicketConfig[activeView] || sheetConfig.ticketPrintConfig?.[activeView] || {}} 
+      activeView={activeView}
     />
     </>
   );

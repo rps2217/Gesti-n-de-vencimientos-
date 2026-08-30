@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { 
   Menu, Search, X, FilterX, Scan, Download, ChevronDown, 
-  Mail, Flame, FileSpreadsheet, Printer, RefreshCw, MessageSquare, Sliders 
+  Mail, Flame, FileSpreadsheet, Printer, RefreshCw, MessageSquare, Sliders, Settings 
 } from 'lucide-react';
 import { InventoryItem, SheetConfig } from '../../types';
 import { VIRTUAL_COLUMNS } from '../../utils/virtualColumns';
@@ -26,6 +26,7 @@ interface DashboardTopNavProps {
   setIsWhatsAppModalOpen?: (open: boolean) => void;
   setIsPmReportOpen: (open: boolean) => void;
   onOpenBulkActionsConfig?: () => void;
+  onOpenTicketConfig?: () => void;
   drainageReportItems: InventoryItem[];
   headers: string[];
   filteredItems: InventoryItem[];
@@ -57,6 +58,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
   setIsWhatsAppModalOpen,
   setIsPmReportOpen,
   onOpenBulkActionsConfig,
+  onOpenTicketConfig,
   drainageReportItems,
   headers,
   filteredItems,
@@ -266,21 +268,34 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
                 )}
 
                 {isTicketActive && (
-                  <button
-                    onClick={() => {
-                      handlePrintTicket(filteredItems);
-                      setIsActionsMenuOpen(false);
-                    }}
-                    className="w-full text-left px-3.5 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
-                  >
-                    <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 flex items-center justify-center shrink-0">
-                      <Printer className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-bold text-slate-800 dark:text-slate-100">Imprimir Ticket Térmico</div>
-                      <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">Formato continuo 80mm/58mm</div>
-                    </div>
-                  </button>
+                  <div className="flex items-center hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-xl transition-colors pr-2 group">
+                    <button
+                      onClick={() => {
+                        handlePrintTicket(filteredItems);
+                        setIsActionsMenuOpen(false);
+                      }}
+                      className="flex-1 text-left px-3.5 py-2 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 flex items-center justify-center shrink-0">
+                        <Printer className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-slate-800 dark:text-slate-100">Imprimir Ticket Térmico</div>
+                        <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">Formato continuo 80mm/58mm</div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenTicketConfig?.();
+                        setIsActionsMenuOpen(false);
+                      }}
+                      className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-lg transition-colors"
+                      title="Configurar columnas y formato del ticket"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 )}
 
                 {/* Scoping and Configuration Trigger */}

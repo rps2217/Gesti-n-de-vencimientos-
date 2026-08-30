@@ -44,6 +44,7 @@ export interface SheetConfig {
   tableBulkActions?: Record<string, TableBulkActionSetting>;
   slices?: TableSlice[];
   hiddenSliceIds?: string[];
+  ticketPrintConfig?: GlobalTicketConfig;
 }
 
 export type ColumnType = 'text' | 'longtext' | 'number' | 'date' | 'datetime' | 'enum' | 'enumlist' | 'ref' | 'calculated' | 'virtual';
@@ -120,7 +121,21 @@ export interface TicketColumnConfig {
   size: number;
   bold: boolean;
 }
-export type ViewTicketConfig = Record<string, TicketColumnConfig>;
+
+export interface TicketGeneralSettings {
+  title?: string;
+  paperWidth?: '80mm' | '58mm';
+  showDateTime?: boolean;
+  showTotalCount?: boolean;
+  footerText?: string;
+}
+
+export interface ViewTicketSettings {
+  columns: Record<string, TicketColumnConfig>;
+  general?: TicketGeneralSettings;
+}
+
+export type ViewTicketConfig = Record<string, TicketColumnConfig> | ViewTicketSettings;
 export type GlobalTicketConfig = Record<string, ViewTicketConfig>;
 
 export type SortDirection = 'asc' | 'desc' | null;

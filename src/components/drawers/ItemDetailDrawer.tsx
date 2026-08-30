@@ -36,8 +36,40 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
   products = [],
   customAliases
 }) => {
-  const [hiddenFields, setHiddenFields] = useState<Record<string, boolean>>({});
+  const [hiddenFields, setHiddenFields] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('appsheet_detail_hidden_fields');
+      return saved ? JSON.parse(saved) : {};
+    } catch (err) {
+      console.warn('Error loading detail drawer hidden fields:', err);
+      return {};
+    }
+  });
   const [isConfiguringFields, setIsConfiguringFields] = useState(false);
+
+  const toggleFieldVisibility = (key: string) => {
+    setHiddenFields(prev => {
+      const updated = {
+        ...prev,
+        [key]: !prev[key]
+      };
+      try {
+        localStorage.setItem('appsheet_detail_hidden_fields', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('Error saving detail drawer hidden fields:', err);
+      }
+      return updated;
+    });
+  };
+
+  const handleShowAllFields = () => {
+    setHiddenFields({});
+    try {
+      localStorage.removeItem('appsheet_detail_hidden_fields');
+    } catch (err) {
+      console.warn('Error resetting detail drawer hidden fields:', err);
+    }
+  };
 
   if (!product) return null;
 
@@ -68,13 +100,6 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
 
   const expirations = relatedRecords.filter(r => getEventCategory(r, Object.keys(r)) === 'VENCIMIENTO');
   const incidents = relatedRecords.filter(r => getEventCategory(r, Object.keys(r)) !== 'VENCIMIENTO');
-
-  const toggleFieldVisibility = (key: string) => {
-    setHiddenFields(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -194,7 +219,7 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Visibilidad de Campos (Vista Detalle)</span>
                   <button 
-                    onClick={() => setHiddenFields({})}
+                    onClick={handleShowAllFields}
                     className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-semibold"
                   >
                     Mostrar Todos

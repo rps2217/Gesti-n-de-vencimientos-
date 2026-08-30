@@ -129,44 +129,62 @@ export function dereferenceMasterProduct(
   const result: Record<string, any> = {};
   if (!masterProduct || !targetHeaders || targetHeaders.length === 0) return result;
 
-  const masterSummary = getMasterProductSummary(masterProduct, customAliases);
   const masterKeys = Object.keys(masterProduct);
 
-  const targetSkuCol = findColumnBySemantic(targetHeaders, 'sku', customAliases);
-  const targetDescCol = findColumnBySemantic(targetHeaders, 'descripcion', customAliases);
-  const targetProvCol = findColumnBySemantic(targetHeaders, 'proveedor', customAliases);
-  const targetPriceCol = findColumnBySemantic(targetHeaders, 'precio', customAliases);
-  const targetCatCol = findColumnBySemantic(targetHeaders, 'categoria', customAliases);
-  const targetPolicyCol = findColumnBySemantic(targetHeaders, 'politica', customAliases);
+  const getMasterVal = (semantic: KnownFieldSemantic, fallbackRegex: RegExp) => {
+    const masterCol = findColumnBySemantic(masterKeys, semantic, customAliases);
+    if (masterCol && masterProduct[masterCol] !== undefined && masterProduct[masterCol] !== '') {
+      return masterProduct[masterCol];
+    }
+    const fallbackCol = masterKeys.find(k => fallbackRegex.test(k));
+    if (fallbackCol && masterProduct[fallbackCol] !== undefined && masterProduct[fallbackCol] !== '') {
+      return masterProduct[fallbackCol];
+    }
+    return undefined;
+  };
 
-  if (targetSkuCol && masterSummary.sku) {
-    result[targetSkuCol] = masterSummary.sku;
-  }
-  if (targetDescCol && masterSummary.name) {
-    result[targetDescCol] = masterSummary.name;
-  }
-  if (targetProvCol && masterSummary.provider) {
-    result[targetProvCol] = masterSummary.provider;
-  }
-  if (targetPriceCol && masterSummary.price) {
-    result[targetPriceCol] = masterSummary.price;
-  }
-  if (targetCatCol && masterSummary.category) {
-    result[targetCatCol] = masterSummary.category;
-  }
+  for (const targetHeader of targetHeaders) {
+    const cleanHeader = targetHeader.trim();
+    let val: any = undefined;
 
-  // Also check if master has a direct policy column
-  const masterPolicyCol = findColumnBySemantic(masterKeys, 'politica', customAliases);
-  if (targetPolicyCol && masterPolicyCol && masterProduct[masterPolicyCol]) {
-    result[targetPolicyCol] = masterProduct[masterPolicyCol];
-  } else if (targetPolicyCol && masterProduct.POLITICA) {
-    result[targetPolicyCol] = masterProduct.POLITICA;
-  }
+    if (/sku|código|codigo/i.test(cleanHeader)) {
+      val = getMasterVal('sku', /sku|código|codigo/i);
+    } else if (/desc|nombre|name|producto/i.test(cleanHeader)) {
+      val = getMasterVal('descripcion', /desc|nombre|name|producto/i);
+    } else if (/proveedor|lab|fabricante|rut_prov/i.test(cleanHeader)) {
+      val = getMasterVal('proveedor', /proveedor|lab|fabricante|rut_prov/i);
+    } else if (/política|politica|regla/i.test(cleanHeader)) {
+      val = getMasterVal('politica', /política|politica|regla/i);
+    } else if (/dias(_|\s)?retiro|dias(_|\s)?ant|dias/i.test(cleanHeader)) {
+      val = getMasterVal('dias_retiro', /dias(_|\s)?retiro|dias(_|\s)?ant|dias|lead_time/i) ||
+            getMasterVal('dias_anticipacion', /dias(_|\s)?anticipacion|anticipacion/i);
+    } else if (/mundo|zona|division|segmento/i.test(cleanHeader)) {
+      val = getMasterVal('mundo', /mundo|zona|division|segmento|area/i);
+    } else if (/pm|product_manager|responsable|comprador|gestor/i.test(cleanHeader)) {
+      val = getMasterVal('pm', /pm|product_manager|responsable|comprador|gestor/i);
+    } else if (/precio|costo|price|valor/i.test(cleanHeader)) {
+      val = getMasterVal('precio', /precio|costo|price|valor/i);
+    } else if (/categor|familia|rubro/i.test(cleanHeader)) {
+      val = getMasterVal('categoria', /categor|familia|rubro|linea/i);
+    } else {
+      for (const sem of ['sku', 'descripcion', 'proveedor', 'politica', 'dias_retiro', 'dias_anticipacion', 'mundo', 'pm', 'precio', 'categoria'] as KnownFieldSemantic[]) {
+        const matchedTargetCol = findColumnBySemantic([targetHeader], sem, customAliases);
+        if (matchedTargetCol) {
+          val = getMasterVal(sem, new RegExp(sem, 'i'));
+          if (val !== undefined) break;
+        }
+      }
 
-  // In addition, if target header has exact matching name in masterProduct
-  for (const h of targetHeaders) {
-    if (result[h] === undefined && masterProduct[h] !== undefined && masterProduct[h] !== '') {
-      result[h] = masterProduct[h];
+      if (val === undefined) {
+        const exactMatchKey = masterKeys.find(k => k.trim().toLowerCase() === cleanHeader.toLowerCase());
+        if (exactMatchKey && masterProduct[exactMatchKey] !== undefined && masterProduct[exactMatchKey] !== '') {
+          val = masterProduct[exactMatchKey];
+        }
+      }
+    }
+
+    if (val !== undefined && val !== null && String(val).trim() !== '') {
+      result[targetHeader] = val;
     }
   }
 

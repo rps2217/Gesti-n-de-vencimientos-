@@ -199,7 +199,7 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
                   Sincronizado
                 </span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                 <div className="bg-white dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
                   <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase block">Descripción Maestra</span>
                   <span className="font-semibold text-slate-800 dark:text-slate-100 truncate block mt-0.5" title={masterSummary.name}>
@@ -210,12 +210,6 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
                   <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase block">Proveedor / Lab.</span>
                   <span className="font-semibold text-slate-800 dark:text-slate-100 truncate block mt-0.5" title={masterSummary.provider}>
                     {masterSummary.provider || '-'}
-                  </span>
-                </div>
-                <div className="bg-white dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
-                  <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase block">Costo / Precio Ref.</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-100 truncate block mt-0.5">
-                    {masterSummary.price ? `$${masterSummary.price}` : '-'}
                   </span>
                 </div>
                 <div className="bg-white dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-700/80">

@@ -22,7 +22,9 @@ export type KnownFieldSemantic =
   | 'n_traspaso'
   | 'telefono'
   | 'email'
-  | 'categoria';
+  | 'categoria'
+  | 'mundo'
+  | 'pm';
 
 const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
   id: [
@@ -244,6 +246,20 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
     /^category$/i,
     /^subcategor[ií]a$/i,
     /^grupo$/i
+  ],
+  mundo: [
+    /^mundo$/i,
+    /^zona$/i,
+    /^division$/i,
+    /^segmento$/i,
+    /^area$/i
+  ],
+  pm: [
+    /^pm$/i,
+    /^product(_|\s)?manager$/i,
+    /^responsable$/i,
+    /^comprador$/i,
+    /^gestor$/i
   ]
 };
 
@@ -315,7 +331,7 @@ export function detectAllColumnSemantics(
   const semantics: KnownFieldSemantic[] = [
     'id', 'sku', 'descripcion', 'fecha_vc', 'fecha_retiro', 'mes', 'anio', 
     'cantidad', 'lote', 'politica', 'dias_anticipacion', 'dias_retiro', 'tipo_evento', 
-    'frc_bod', 'precio', 'observacion', 'proveedor', 'n_traspaso', 'telefono', 'email', 'categoria'
+    'frc_bod', 'precio', 'observacion', 'proveedor', 'n_traspaso', 'telefono', 'email', 'categoria', 'mundo', 'pm'
   ];
 
   semantics.forEach(semantic => {

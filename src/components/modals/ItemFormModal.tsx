@@ -284,9 +284,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                         {linkedMasterSummary.name || linkedMasterSummary.sku}
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                     <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
                       {linkedMasterSummary.provider && `Proveedor: ${linkedMasterSummary.provider} • `}
-                      {linkedMasterSummary.price && `Costo: $${linkedMasterSummary.price} • `}
                       {linkedMasterSummary.category && `Familia: ${linkedMasterSummary.category}`}
                     </p>
                   </div>
@@ -295,7 +294,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                   type="button"
                   onClick={() => handleSelectMasterProduct(linkedMasterSummary)}
                   className="shrink-0 text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 hover:shadow-xs transition-all flex items-center gap-1 cursor-pointer"
-                  title="Vuelve a rellenar descripción, proveedor y costo desde el catálogo maestro"
+                  title="Vuelve a rellenar descripción y proveedor desde el catálogo maestro"
                 >
                   <RotateCcw className="w-3 h-3" />
                   <span>Sincronizar Ref</span>

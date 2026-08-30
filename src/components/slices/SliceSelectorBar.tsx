@@ -3,7 +3,7 @@ import {
   Layers, AlertTriangle, Clock, Truck, Scale, Flame, 
   CheckCircle2, RotateCcw, Bookmark, Sparkles, Package, 
   FileText, Tag, Filter, ShieldCheck, 
-  Plus, X, SlidersHorizontal 
+  Plus, X, SlidersHorizontal, EyeOff 
 } from 'lucide-react';
 import { TableSlice } from '../../types';
 import { SLICE_COLOR_CLASSES } from '../../utils/sliceRegistry';
@@ -18,6 +18,7 @@ interface SliceSelectorBarProps {
   onOpenCreateSlice: () => void;
   onOpenSliceManager?: () => void;
   activeSlice: TableSlice | null;
+  hiddenSlicesCount?: number;
 }
 
 export const SliceIcon: React.FC<{ iconName?: string; className?: string }> = ({ iconName, className = 'w-3.5 h-3.5' }) => {
@@ -65,7 +66,8 @@ export const SliceSelectorBar: React.FC<SliceSelectorBarProps> = ({
   hasActiveFilters,
   onOpenCreateSlice,
   onOpenSliceManager,
-  activeSlice
+  activeSlice,
+  hiddenSlicesCount = 0
 }) => {
   const isAllRowsActive = activeSliceId === null;
 
@@ -164,11 +166,20 @@ export const SliceSelectorBar: React.FC<SliceSelectorBarProps> = ({
           <button
             type="button"
             onClick={onOpenSliceManager}
-            className="text-xs px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            className="text-xs px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs relative"
             title="Administrar todas las vistas y slices de esta tabla"
           >
             <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
             <span className="hidden sm:inline">Administrar</span>
+            {hiddenSlicesCount > 0 && (
+              <span 
+                className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-bold flex items-center gap-0.5 border border-amber-200 dark:border-amber-800"
+                title={`${hiddenSlicesCount} vista${hiddenSlicesCount > 1 ? 's' : ''} oculta${hiddenSlicesCount > 1 ? 's' : ''} de la barra`}
+              >
+                <EyeOff className="w-2.5 h-2.5" />
+                <span>{hiddenSlicesCount}</span>
+              </span>
+            )}
           </button>
         )}
 

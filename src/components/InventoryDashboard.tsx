@@ -92,7 +92,10 @@ import { useToast } from './common/ToastContainer';
 import { 
   loadCustomSlices, 
   saveCustomSlices, 
+  loadHiddenSliceIds,
+  saveHiddenSliceIds,
   getSlicesForTable, 
+  getVisibleSlicesForTable,
   computeSliceCounts 
 } from '../utils/sliceRegistry';
 import { SliceSelectorBar } from './slices/SliceSelectorBar';
@@ -420,20 +423,36 @@ export const InventoryDashboard: React.FC = () => {
 
   // AppSheet Pattern: Slices / Vistas Personalizadas
   const [customSlices, setCustomSlices] = useState<TableSlice[]>(() => loadCustomSlices());
+  const [hiddenSliceIds, setHiddenSliceIds] = useState<string[]>(() => loadHiddenSliceIds(sheetConfig.hiddenSliceIds));
   const [activeSliceId, setActiveSliceId] = useState<string | null>(null);
   const [isSliceModalOpen, setIsSliceModalOpen] = useState(false);
   const [isSliceManagerOpen, setIsSliceManagerOpen] = useState(false);
   const [editingSliceModalItem, setEditingSliceModalItem] = useState<TableSlice | null>(null);
+
+  // Sync hidden slice IDs if sheetConfig updates from cloud
+  useEffect(() => {
+    if (sheetConfig.hiddenSliceIds) {
+      setHiddenSliceIds(prev => {
+        const merged = Array.from(new Set([...prev, ...(sheetConfig.hiddenSliceIds || [])]));
+        return merged;
+      });
+    }
+  }, [sheetConfig.hiddenSliceIds]);
 
   // Reset slice selection when active table/view changes
   useEffect(() => {
     setActiveSliceId(null);
   }, [activeView]);
 
-  // Compute all slices available for current table
+  // Compute all slices available for current table (built-in + custom)
   const currentTableSlices = useMemo(() => {
     return getSlicesForTable(activeView, customSlices, sheetConfig.slices);
   }, [activeView, customSlices, sheetConfig.slices]);
+
+  // Filtered slices visible in the top bar (excluding hidden ones)
+  const visibleTableSlices = useMemo(() => {
+    return getVisibleSlicesForTable(activeView, customSlices, sheetConfig.slices, hiddenSliceIds);
+  }, [activeView, customSlices, sheetConfig.slices, hiddenSliceIds]);
 
   const activeSlice = useMemo(() => {
     if (!activeSliceId) return null;
@@ -528,6 +547,47 @@ export const InventoryDashboard: React.FC = () => {
     }
     showToast('Slice eliminado', 'info');
   }, [sheetConfig, saveConfig, activeSliceId, handleSelectSlice, showToast]);
+
+  const handleToggleSliceVisibility = useCallback((sliceId: string) => {
+    setHiddenSliceIds(prev => {
+      const isHidden = prev.includes(sliceId);
+      const updated = isHidden ? prev.filter(id => id !== sliceId) : [...prev, sliceId];
+      saveHiddenSliceIds(updated);
+
+      const updatedConfig: SheetConfig = {
+        ...sheetConfig,
+        hiddenSliceIds: updated
+      };
+      setSheetConfig(updatedConfig);
+      saveConfig(updatedConfig);
+
+      showToast(isHidden ? 'Vista ahora visible en la barra superior' : 'Vista oculta de la barra superior', 'info');
+      return updated;
+    });
+  }, [sheetConfig, saveConfig, showToast]);
+
+  const handleSetBulkVisibility = useCallback((sliceIds: string[], visible: boolean) => {
+    setHiddenSliceIds(prev => {
+      let updated: string[];
+      if (visible) {
+        const toRemove = new Set(sliceIds);
+        updated = prev.filter(id => !toRemove.has(id));
+      } else {
+        updated = Array.from(new Set([...prev, ...sliceIds]));
+      }
+      saveHiddenSliceIds(updated);
+
+      const updatedConfig: SheetConfig = {
+        ...sheetConfig,
+        hiddenSliceIds: updated
+      };
+      setSheetConfig(updatedConfig);
+      saveConfig(updatedConfig);
+
+      showToast(visible ? 'Vistas ahora visibles en la barra' : 'Vistas ocultadas de la barra superior', 'info');
+      return updated;
+    });
+  }, [sheetConfig, saveConfig, showToast]);
 
   const totalPages = pageSize === 'all' || groupByColumn !== 'none' ? 1 : Math.ceil(filteredItems.length / (pageSize as number)) || 1;
 
@@ -1612,7 +1672,7 @@ export const InventoryDashboard: React.FC = () => {
         {/* SLICES & CUSTOM VIEWS BAR (AppSheet Pattern) */}
         {activeView !== 'schema' && activeView !== 'analytics' && activeSheet && (
           <SliceSelectorBar
-            slices={currentTableSlices}
+            slices={visibleTableSlices}
             activeSliceId={activeSliceId}
             onSelectSlice={handleSelectSlice}
             sliceCounts={sliceCounts}
@@ -1624,6 +1684,7 @@ export const InventoryDashboard: React.FC = () => {
             }}
             onOpenSliceManager={() => setIsSliceManagerOpen(true)}
             activeSlice={activeSlice}
+            hiddenSlicesCount={currentTableSlices.length - visibleTableSlices.length}
           />
         )}
 
@@ -2140,6 +2201,7 @@ export const InventoryDashboard: React.FC = () => {
         slices={currentTableSlices}
         sliceCounts={sliceCounts}
         activeSliceId={activeSliceId}
+        hiddenSliceIds={hiddenSliceIds}
         onSelectSlice={handleSelectSlice}
         onEditSlice={(slice) => {
           setEditingSliceModalItem(slice);
@@ -2150,6 +2212,8 @@ export const InventoryDashboard: React.FC = () => {
           setIsSliceModalOpen(true);
         }}
         onDeleteSlice={handleDeleteSlice}
+        onToggleSliceVisibility={handleToggleSliceVisibility}
+        onSetBulkVisibility={handleSetBulkVisibility}
       />
 
       {/* SLICE EDITOR MODAL (AppSheet Slices) */}

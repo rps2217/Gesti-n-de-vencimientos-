@@ -43,6 +43,7 @@ export interface SheetConfig {
   customAliases?: Record<string, string[]>;
   tableBulkActions?: Record<string, TableBulkActionSetting>;
   slices?: TableSlice[];
+  hiddenSliceIds?: string[];
 }
 
 export type ColumnType = 'text' | 'longtext' | 'number' | 'date' | 'datetime' | 'enum' | 'enumlist' | 'ref' | 'calculated' | 'virtual';

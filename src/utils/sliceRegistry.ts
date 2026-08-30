@@ -129,6 +129,7 @@ export const BUILT_IN_SLICES: TableSlice[] = [
 ];
 
 const CUSTOM_SLICES_STORAGE_KEY = 'appsheet_custom_slices';
+const HIDDEN_SLICES_STORAGE_KEY = 'appsheet_hidden_slice_ids';
 
 export function loadCustomSlices(): TableSlice[] {
   try {
@@ -147,6 +148,28 @@ export function saveCustomSlices(slices: TableSlice[]): void {
     localStorage.setItem(CUSTOM_SLICES_STORAGE_KEY, JSON.stringify(slices));
   } catch (err) {
     console.warn('Error saving custom slices to localStorage:', err);
+  }
+}
+
+export function loadHiddenSliceIds(sheetConfigHidden?: string[]): string[] {
+  try {
+    const raw = localStorage.getItem(HIDDEN_SLICES_STORAGE_KEY);
+    const localHidden: string[] = raw ? JSON.parse(raw) : [];
+    const configHidden = Array.isArray(sheetConfigHidden) ? sheetConfigHidden : [];
+    // Combine unique hidden IDs
+    const combined = Array.from(new Set([...localHidden, ...configHidden]));
+    return combined;
+  } catch (err) {
+    console.warn('Error loading hidden slice IDs:', err);
+    return Array.isArray(sheetConfigHidden) ? sheetConfigHidden : [];
+  }
+}
+
+export function saveHiddenSliceIds(hiddenIds: string[]): void {
+  try {
+    localStorage.setItem(HIDDEN_SLICES_STORAGE_KEY, JSON.stringify(hiddenIds));
+  } catch (err) {
+    console.warn('Error saving hidden slice IDs to localStorage:', err);
   }
 }
 
@@ -171,6 +194,18 @@ export function getSlicesForTable(
   });
 
   return [...builtIns, ...Array.from(customMap.values())];
+}
+
+export function getVisibleSlicesForTable(
+  tableKey: string,
+  customSlices: TableSlice[] = [],
+  sheetConfigSlices?: TableSlice[],
+  hiddenSliceIds: string[] = []
+): TableSlice[] {
+  const allSlices = getSlicesForTable(tableKey, customSlices, sheetConfigSlices);
+  if (!hiddenSliceIds || hiddenSliceIds.length === 0) return allSlices;
+  const hiddenSet = new Set(hiddenSliceIds);
+  return allSlices.filter(slice => !hiddenSet.has(slice.id));
 }
 
 /**

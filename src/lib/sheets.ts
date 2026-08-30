@@ -169,7 +169,12 @@ export async function updateRow(sheetName: string, rowIndex: number, values: any
 
 export async function deleteRow(sheetId: number, rowIndex: number, sheetName?: string) {
   clearSheetsCache(sheetName);
-  return fetchFromScript({ action: 'deleteRow', sheetId, rowIndex, spreadsheetId: SPREADSHEET_ID });
+  return fetchFromScript({ action: 'deleteRow', sheetId, rowIndex, sheetName, spreadsheetId: SPREADSHEET_ID });
+}
+
+export async function deleteRows(sheetId: number, rowIndexes: number[], sheetName?: string) {
+  clearSheetsCache(sheetName);
+  return fetchFromScript({ action: 'deleteRows', sheetId, rowIndexes, sheetName, spreadsheetId: SPREADSHEET_ID });
 }
 
 // PropertiesService storage (zero extra sheets needed)
@@ -286,11 +291,21 @@ function doPost(e) {
       return responseJson({ success: true });
     }
 
-    // 5. ELIMINAR FILA
-    if (action === 'deleteRow') {
-      const sheet = ss.getSheets().find(s => s.getSheetId() === payload.sheetId);
+    // 5. ELIMINAR FILA O FILAS
+    if (action === 'deleteRow' || action === 'deleteRows') {
+      let sheet = payload.sheetId !== undefined ? ss.getSheets().find(s => s.getSheetId() === payload.sheetId) : null;
+      if (!sheet && payload.sheetName) {
+        sheet = ss.getSheetByName(payload.sheetName);
+      }
       if (!sheet) return responseJson({ error: 'Hoja no encontrada' });
-      sheet.deleteRow(payload.rowIndex);
+
+      var indexes = action === 'deleteRows' ? (payload.rowIndexes || []) : [payload.rowIndex];
+      if (!indexes || !indexes.length) return responseJson({ error: 'No se especificaron filas para eliminar' });
+
+      var sortedIndexes = indexes.slice().sort(function(a, b) { return b - a; });
+      for (var i = 0; i < sortedIndexes.length; i++) {
+        sheet.deleteRow(sortedIndexes[i]);
+      }
       return responseJson({ success: true });
     }
 

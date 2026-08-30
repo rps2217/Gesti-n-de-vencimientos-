@@ -5,6 +5,7 @@ import {
   appendRow, 
   updateRow, 
   deleteRow,
+  deleteRows,
   saveCloudConfig,
   loadCloudConfig,
   getScriptPropertiesConfig,
@@ -53,6 +54,27 @@ import {
   SAMPLE_PRODUCTS, 
   SAMPLE_POLICIES 
 } from '../data/sampleInventory';
+
+// Helpers para almacenamiento persistente en Modo Demostración / Offline
+const getStoredDemoItems = (view: string, defaultItems: any[]) => {
+  try {
+    const raw = localStorage.getItem(`app_demo_items_${view}`);
+    if (raw !== null) {
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.warn('Error al leer ítems demo de localStorage:', e);
+  }
+  return defaultItems;
+};
+
+const saveStoredDemoItems = (view: string, items: any[]) => {
+  try {
+    localStorage.setItem(`app_demo_items_${view}`, JSON.stringify(items));
+  } catch (e) {
+    console.warn('Error al guardar ítems demo en localStorage:', e);
+  }
+};
 
 // Modals & Drawers & Sub-components
 import { BulkImportFRC } from './BulkImportFRC';
@@ -953,24 +975,28 @@ export const InventoryDashboard: React.FC = () => {
       if (currentView === 'events') {
         setActiveSheet({ sheetId: 2, title: 'FRC', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } });
         setHeaders(SAMPLE_EVENTS_HEADERS);
-        setItems(SAMPLE_EVENTS_ITEMS);
+        setItems(getStoredDemoItems('events', SAMPLE_EVENTS_ITEMS));
       } else if (currentView === 'products') {
         setActiveSheet({ sheetId: 3, title: 'Catalogo_Productos', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } });
         setHeaders(Object.keys(SAMPLE_PRODUCTS[0] || {}));
-        setItems(SAMPLE_PRODUCTS.map((p, i) => ({ _rowIndex: i + 2, ...p })));
+        const defaultProds = SAMPLE_PRODUCTS.map((p, i) => ({ _rowIndex: i + 2, ...p }));
+        setItems(getStoredDemoItems('products', defaultProds));
       } else if (currentView === 'policies') {
         setActiveSheet({ sheetId: 4, title: 'Politicas_Canje', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } });
         setHeaders(Object.keys(SAMPLE_POLICIES[0] || {}));
-        setItems(SAMPLE_POLICIES.map((p, i) => ({ _rowIndex: i + 2, ...p })));
+        const defaultPols = SAMPLE_POLICIES.map((p, i) => ({ _rowIndex: i + 2, ...p }));
+        setItems(getStoredDemoItems('policies', defaultPols));
       } else {
         setActiveSheet({ sheetId: 1, title: 'Vencimientos_Inventario', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } });
         setHeaders(SAMPLE_HEADERS);
-        setItems(SAMPLE_ITEMS);
+        setItems(getStoredDemoItems('main', SAMPLE_ITEMS));
       }
 
-      setAllMainItems(SAMPLE_ITEMS);
-      setProducts(SAMPLE_PRODUCTS);
-      setPolicies(SAMPLE_POLICIES);
+      setAllMainItems(getStoredDemoItems('main', SAMPLE_ITEMS));
+      const defaultProds = SAMPLE_PRODUCTS.map((p, i) => ({ _rowIndex: i + 2, ...p }));
+      setProducts(getStoredDemoItems('products', defaultProds));
+      const defaultPols = SAMPLE_POLICIES.map((p, i) => ({ _rowIndex: i + 2, ...p }));
+      setPolicies(getStoredDemoItems('policies', defaultPols));
       setIsRelationalActive(true);
       setError('Modo Demostración / Sin conexión: Mostrando datos de ejemplo de logística y vencimientos. Puede configurar su URL de Google Apps Script en Ajustes.');
     } finally {
@@ -1416,35 +1442,55 @@ export const InventoryDashboard: React.FC = () => {
 
     const originalItems = [...items];
     const originalMainItems = [...allMainItems];
+    const isDemo = !localStorage.getItem('appsheet_clone_scriptUrl')?.trim();
 
     try {
-      // Optimistic delete
-      setItems(prev => prev.filter(i => i._rowIndex !== item._rowIndex));
-      if (activeView === 'main') setAllMainItems(prev => prev.filter(i => i._rowIndex !== item._rowIndex));
+      setIsSaving(true);
       
-      try {
-        await deleteRow(activeSheet.sheetId, item._rowIndex);
-      } catch (delErr) {
-        console.warn('Network error during delete, adding to offline queue:', delErr);
-        await enqueueMutation({
-          type: 'delete',
-          sheetId: activeSheet.sheetId,
-          sheetTitle: activeSheet.title,
-          rowIndex: item._rowIndex,
-          entityKey: item._entityKey,
-          entityKeyCol: item._entityKeyCol,
-          keyValue: item._entityKey,
-          keyColumn: item._entityKeyCol,
-          headers
-        });
-        alert('Sin conexión. La eliminación se registró localmente en la cola offline.');
+      const nextItems = items
+        .filter(i => i._rowIndex !== item._rowIndex)
+        .map((it, idx) => ({ ...it, _rowIndex: idx + 2 }));
+
+      setItems(nextItems);
+      saveStoredDemoItems(activeView, nextItems);
+
+      if (activeView === 'main') {
+        const nextMain = allMainItems
+          .filter(i => i._rowIndex !== item._rowIndex)
+          .map((it, idx) => ({ ...it, _rowIndex: idx + 2 }));
+        setAllMainItems(nextMain);
+        saveStoredDemoItems('main', nextMain);
       }
-      await fetchData(sheetConfig, activeView, true);
+
+      if (isDemo) {
+        showToast('Registro eliminado en modo demostración', 'success', 'Eliminación Completada');
+      } else {
+        try {
+          await deleteRow(activeSheet.sheetId, item._rowIndex as number, activeSheet.title);
+          showToast('Registro eliminado de Google Sheets', 'success', 'Eliminación Completada');
+        } catch (delErr) {
+          console.warn('Error al eliminar en la nube, agregando a cola offline:', delErr);
+          await enqueueMutation({
+            type: 'delete',
+            sheetId: activeSheet.sheetId,
+            sheetTitle: activeSheet.title,
+            rowIndex: item._rowIndex as number,
+            entityKey: item._entityKey,
+            entityKeyCol: item._entityKeyCol,
+            keyValue: item._entityKey,
+            keyColumn: item._entityKeyCol,
+            headers
+          });
+          showToast('Sin conexión. La eliminación se guardó localmente en cola offline.', 'info', 'Modo Offline');
+        }
+        await fetchData(sheetConfig, activeView, true);
+      }
     } catch (err: any) {
-      // Rollback
       setItems(originalItems);
       setAllMainItems(originalMainItems);
-      alert(`Error eliminando fila (rollback aplicado): ${err.message}`);
+      showToast(`Error al eliminar fila: ${err.message}`, 'error', 'Error de Eliminación');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1579,50 +1625,76 @@ export const InventoryDashboard: React.FC = () => {
 
   const handleBulkDelete = async () => {
     if (!activeSheet || selectedRowIds.length === 0) return;
-    const confirmed = window.confirm(`¿Estás seguro de que deseas eliminar ${selectedRowIds.length} registros seleccionados? Esta acción no se puede deshacer.`);
+    const count = selectedRowIds.length;
+    const confirmed = window.confirm(`¿Estás seguro de que deseas eliminar ${count} registros seleccionados? Esta acción no se puede deshacer.`);
     if (!confirmed) return;
 
-    const count = selectedRowIds.length;
     const toastId = showToast(`Eliminando registros... ${count} restantes`, 'loading', 'Eliminación Masiva', 0);
 
     const originalItems = [...items];
     const originalMainItems = [...allMainItems];
+    const isDemo = !localStorage.getItem('appsheet_clone_scriptUrl')?.trim();
 
     try {
       setIsSaving(true);
-      setItems(prev => prev.filter(i => !selectedRowIds.includes(i._rowIndex as number)));
+      
+      const selectedSet = new Set(selectedRowIds);
+      const remainingItems = items
+        .filter(i => !selectedSet.has(i._rowIndex as number))
+        .map((it, idx) => ({ ...it, _rowIndex: idx + 2 }));
+
+      setItems(remainingItems);
+      saveStoredDemoItems(activeView, remainingItems);
+
       if (activeView === 'main') {
-        setAllMainItems(prev => prev.filter(i => !selectedRowIds.includes(i._rowIndex as number)));
+        const remainingMain = allMainItems
+          .filter(i => !selectedSet.has(i._rowIndex as number))
+          .map((it, idx) => ({ ...it, _rowIndex: idx + 2 }));
+        setAllMainItems(remainingMain);
+        saveStoredDemoItems('main', remainingMain);
       }
 
-      let remainingDelete = count;
-      for (const rowIndex of selectedRowIds) {
-        const itemToDelete = originalItems.find(i => i._rowIndex === rowIndex);
+      // Sort row indices in DESCENDING order so that deleting earlier rows doesn't shift later row indices
+      const sortedRowIds = [...selectedRowIds].sort((a, b) => (b as number) - (a as number));
+
+      if (isDemo) {
+        setSelectedRowIds([]);
+        updateToast(toastId, `¡Se eliminaron ${count} registros exitosamente!`, 'success', 'Eliminación Completada');
+      } else {
         try {
-          await deleteRow(activeSheet.sheetId, rowIndex);
-        } catch (err) {
-          console.warn(`Error deleting row ${rowIndex} in cloud, adding to offline queue`, err);
-          await enqueueMutation({
-            type: 'delete',
-            sheetId: activeSheet.sheetId,
-            sheetTitle: activeSheet.title,
-            rowIndex,
-            entityKey: itemToDelete?._entityKey,
-            entityKeyCol: itemToDelete?._entityKeyCol,
-            keyValue: itemToDelete?._entityKey,
-            keyColumn: itemToDelete?._entityKeyCol,
-            headers
-          });
+          await deleteRows(activeSheet.sheetId, sortedRowIds, activeSheet.title);
+        } catch (batchErr) {
+          console.warn('deleteRows masivo falló o no soportado, ejecutando eliminaciones individuales descendentes:', batchErr);
+          let remainingDelete = count;
+          for (const rowIndex of sortedRowIds) {
+            const itemToDelete = originalItems.find(i => i._rowIndex === rowIndex);
+            try {
+              await deleteRow(activeSheet.sheetId, rowIndex, activeSheet.title);
+            } catch (err) {
+              console.warn(`Error al eliminar fila ${rowIndex} en la nube, agregando a cola offline`, err);
+              await enqueueMutation({
+                type: 'delete',
+                sheetId: activeSheet.sheetId,
+                sheetTitle: activeSheet.title,
+                rowIndex,
+                entityKey: itemToDelete?._entityKey,
+                entityKeyCol: itemToDelete?._entityKeyCol,
+                keyValue: itemToDelete?._entityKey,
+                keyColumn: itemToDelete?._entityKeyCol,
+                headers
+              });
+            }
+            remainingDelete--;
+            if (remainingDelete > 0) {
+              updateToast(toastId, `Eliminando registros... ${remainingDelete} restantes`, 'loading', 'Eliminación Masiva', 0);
+            }
+          }
         }
-        remainingDelete--;
-        if (remainingDelete > 0) {
-          updateToast(toastId, `Eliminando registros... ${remainingDelete} restantes`, 'loading', 'Eliminación Masiva', 0);
-        }
-      }
 
-      setSelectedRowIds([]);
-      await fetchData(sheetConfig, activeView, true);
-      showToast(`¡Se eliminaron ${count} registros exitosamente en Google Sheets!`, 'success', 'Eliminación Completada');
+        setSelectedRowIds([]);
+        await fetchData(sheetConfig, activeView, true);
+        updateToast(toastId, `¡Se eliminaron ${count} registros exitosamente en Google Sheets!`, 'success', 'Eliminación Completada');
+      }
     } catch (err: any) {
       setItems(originalItems);
       setAllMainItems(originalMainItems);
@@ -2169,6 +2241,7 @@ export const InventoryDashboard: React.FC = () => {
           setSelectedProduct(null);
           handleOpenModal(prod);
         }}
+        onDeleteRow={handleDelete}
         onNewEventForProduct={(sku, category) => {
           handleOpenModal(undefined, sku, category);
         }}

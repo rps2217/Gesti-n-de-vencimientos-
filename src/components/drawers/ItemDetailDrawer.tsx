@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  Package, X, AlertCircle, CheckCircle2, Clock, Truck, FileSpreadsheet, PackageX, RotateCcw, Plus, ExternalLink, Edit2, Eye, EyeOff, SlidersHorizontal, Link2 
+  Package, X, AlertCircle, CheckCircle2, Clock, Truck, FileSpreadsheet, PackageX, RotateCcw, Plus, ExternalLink, Edit2, Eye, EyeOff, SlidersHorizontal, Link2, Trash2 
 } from 'lucide-react';
 import { InventoryItem, EventCategory } from '../../types';
 import { 
@@ -19,6 +19,7 @@ interface ItemDetailDrawerProps {
   product: InventoryItem | null;
   onClose: () => void;
   onEdit: (product: InventoryItem) => void;
+  onDeleteRow?: (product: InventoryItem) => void;
   onNewEventForProduct: (sku: string, category?: EventCategory) => void;
   allMainItems: InventoryItem[];
   policies: any[];
@@ -30,6 +31,7 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
   product,
   onClose,
   onEdit,
+  onDeleteRow,
   onNewEventForProduct,
   allMainItems,
   policies,
@@ -134,6 +136,19 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
               <Edit2 className="w-3.5 h-3.5" />
               <span>Editar</span>
             </button>
+            {onDeleteRow && (
+              <button
+                onClick={() => {
+                  onDeleteRow(product);
+                  onClose();
+                }}
+                className="px-3 py-2 bg-rose-600/10 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-800 font-bold text-xs rounded-xl hover:bg-rose-600 hover:text-white transition-colors flex items-center gap-1.5"
+                title="Eliminar registro"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Eliminar</span>
+              </button>
+            )}
             <button 
               onClick={onClose} 
               className="p-2 text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl hover:text-slate-700 dark:hover:text-slate-200 transition-colors"

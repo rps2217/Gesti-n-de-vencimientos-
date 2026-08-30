@@ -643,9 +643,11 @@ export const InventoryDashboard: React.FC = () => {
     getScrollElement: () => tableContainerRef.current,
     estimateSize: (index) => {
       const row = paginatedDisplayRows[index];
-      return row && row.type === 'header' ? 44 : 60;
+      const isMobile = window.innerWidth < 768;
+      if (row && row.type === 'header') return isMobile ? 60 : 44;
+      return isMobile ? 160 : 60;
     },
-    overscan: 20,
+    overscan: 10,
   });
   
   const virtualRows = rowVirtualizer.getVirtualItems();

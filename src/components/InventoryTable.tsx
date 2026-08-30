@@ -123,10 +123,10 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   handleToggleSort,
 }) => {
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col h-full">
-      <div className="flex-1 overflow-auto relative" ref={tableContainerRef}>
-        <table className="text-left border-collapse" style={{ width: 'max-content', minWidth: '100%' }}>
-          <thead className="bg-slate-100 dark:bg-slate-700/90 sticky top-0 border-b border-slate-200 dark:border-slate-600/80 text-xs font-bold text-slate-700 dark:text-slate-100 uppercase tracking-wider select-none z-10 shadow-sm">
+    <div className="bg-slate-50 md:bg-white md:dark:bg-slate-900 rounded-2xl md:shadow-sm md:border md:border-slate-200 md:dark:border-slate-800 overflow-hidden flex flex-col h-full">
+      <div className="flex-1 overflow-auto relative p-2 md:p-0" ref={tableContainerRef}>
+        <table className="text-left border-collapse block md:table w-full md:w-[max-content]" style={{ minWidth: '100%' }}>
+          <thead className="hidden md:table-header-group bg-slate-100 dark:bg-slate-700/90 sticky top-0 border-b border-slate-200 dark:border-slate-600/80 text-xs font-bold text-slate-700 dark:text-slate-100 uppercase tracking-wider select-none z-10 shadow-sm">
             <tr>
               <th className="p-4 text-center bg-slate-100 dark:bg-slate-700/90 border-b border-slate-200 dark:border-slate-600/80" style={{ width: '48px', minWidth: '48px' }}>
                 <div className="flex items-center justify-center">
@@ -365,7 +365,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm text-slate-700 dark:text-slate-200">
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm text-slate-700 dark:text-slate-200 block md:table-row-group">
             {filteredItems.length === 0 ? (
               <tr>
                 <td colSpan={visibleHeaders.length + (activeView === 'main' || activeView === 'events' ? 4 : 3)} className="p-8 text-center text-slate-400 dark:text-slate-500">

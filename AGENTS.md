@@ -92,7 +92,13 @@ Resuelve el problema común de las hojas de cálculo con encabezados inconsisten
 - **Persistencia en `SheetConfig`**: Se almacena en `sheetConfig.bulkActionSettings[tableKey][actionId]` y se sincroniza con el almacenamiento local y en la nube.
 - **Panel Modular y Reutilizable (`TableBulkActionsPanel.tsx`)**: Componente centralizado que gestiona los selectores de tabla, badges de detección y controles de 3 estados, utilizado tanto en el modal específico `BulkActionsConfigModal.tsx` como en la pestaña de ajustes globales `GlobalConfigModal.tsx`.
 
-### E. Funcionalidades Avanzadas Estilo AppSheet (`Ref`, `Show_If` y `Valid_If`)
+### E. Detección Inteligente de Acción según Política: Canje Proveedor vs. Merma Directa
+- **Lógica de Decisión Operativa (`detectPolicyActionType`)**:
+  - Distingue automáticamente entre ítems que tienen política de retorno acordada con el proveedor (`CANJE_PROVEEDOR`), mermas directas sin retorno (`MERMA_DIRECTA`), y ventas prioritarias de liquidación comercial (`VENTA_DRENAJE`).
+  - Reconoce patrones de texto e indicadores de políticas (`"Canje"`, `"Devolución"`, `"Garantía"`, `"Retorno"`, `"Sin Canje"`, `"Destrucción"`, `"Merma"`, o plazos contractuales en días).
+  - Se integra en el Radar PM (`PmRadarCards.tsx`), badges de tabla (`InventoryTableRow.tsx`), panel de detalle (`ItemDetailDrawer.tsx`), reportes para PM (`PmReportModal.tsx`) y slices nativos (`sliceRegistry.ts`).
+
+### F. Funcionalidades Avanzadas Estilo AppSheet (`Ref`, `Show_If` y `Valid_If`)
 - **Referencias Cruzadas y De-referenciación (`src/utils/referenceResolver.ts`)**:
   - `findMasterProduct` y `searchMasterProducts`: Búsqueda tolerante e interactiva en el catálogo maestro (`products`) por SKU, nombre, proveedor o categoría.
   - `dereferenceMasterProduct`: Propagación atómica automática de campos maestros (Descripción, Proveedor, Costo/Precio, Categoría y Política) hacia las columnas correspondientes en la hoja activa al seleccionar o ingresar un SKU.

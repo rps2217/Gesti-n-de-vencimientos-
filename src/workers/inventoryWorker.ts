@@ -3,7 +3,8 @@ import {
   getEventCategory, 
   computeItemRawStatus, 
   getItemResolutionStatus, 
-  ItemStatusCode 
+  ItemStatusCode,
+  ItemActionType 
 } from '../utils/pureCalculations';
 import { findColumnBySemantic } from '../utils/columnAliases';
 
@@ -12,6 +13,7 @@ export interface WorkerNormalizedItem {
   original: InventoryItem;
   eventCategory: EventCategory;
   statusCode: ItemStatusCode;
+  actionType: ItemActionType;
   daysToRetire: number | null;
   daysToExpiry: number | null;
   expiryMonthOffset: number | null;
@@ -43,6 +45,8 @@ export interface WorkerMetricsResult {
     upcoming: number;
     retireNow: number;
     enRegla: number;
+    canjeProveedor: number;
+    mermaDirecta: number;
   };
   eventResolutionMetrics: {
     total: number;
@@ -114,6 +118,8 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
     let drainagePm = 0;
     let upcoming = 0;
     let retireNow = 0;
+    let canjeProveedorCount = 0;
+    let mermaDirectaCount = 0;
     let pending = 0;
     let completed = 0;
 
@@ -179,6 +185,9 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
         if (statusRaw.code === 'DRAINAGE_PM') drainagePm++;
         else if (statusRaw.code === 'UPCOMING') upcoming++;
         else if (statusRaw.code === 'RETIRE_NOW' || statusRaw.code === 'EXPIRED') retireNow++;
+
+        if (statusRaw.actionType === 'CANJE_PROVEEDOR') canjeProveedorCount++;
+        else if (statusRaw.actionType === 'MERMA_DIRECTA') mermaDirectaCount++;
       }
 
       if (res.isResolved) completed++;
@@ -198,6 +207,7 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
         original: item,
         eventCategory: cat,
         statusCode: statusRaw.code,
+        actionType: statusRaw.actionType,
         daysToRetire: statusRaw.daysToRetire,
         daysToExpiry: statusRaw.daysToExpiry,
         expiryMonthOffset: statusRaw.expiryMonthOffset,
@@ -237,7 +247,9 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
         drainage: drainagePm,
         upcoming,
         retireNow,
-        enRegla: Math.max(0, vencimientos - drainagePm - upcoming - retireNow)
+        enRegla: Math.max(0, vencimientos - drainagePm - upcoming - retireNow),
+        canjeProveedor: canjeProveedorCount,
+        mermaDirecta: mermaDirectaCount
       },
       eventResolutionMetrics: {
         total: len,
@@ -311,6 +323,8 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
           )
             matchPm = true;
           else if (pmRadarFilterSet.has('en_regla') && item.statusCode === 'NORMAL') matchPm = true;
+          else if (pmRadarFilterSet.has('canje_proveedor') && item.actionType === 'CANJE_PROVEEDOR') matchPm = true;
+          else if (pmRadarFilterSet.has('merma_directa') && item.actionType === 'MERMA_DIRECTA') matchPm = true;
           if (!matchPm) continue;
         }
         if (dynamicMonthRange) {

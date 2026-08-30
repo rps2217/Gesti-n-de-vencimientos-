@@ -40,11 +40,11 @@ export const PmReportModal: React.FC<PmReportModalProps> = ({
       const fVc = vcCol && it[vcCol] ? formatDisplayDate(it[vcCol]) : '-';
       const fRet = retCol && it[retCol] ? formatDisplayDate(it[retCol]) : '-';
       const st = getItemStatus(it, keys);
-      lines.push(`${idx + 1}. [SKU: ${sku}] ${desc} | Vence: ${fVc} | Retiro: ${fRet} (${st.label})`);
+      lines.push(`${idx + 1}. [SKU: ${sku}] ${desc} | Vence: ${fVc} | Retiro: ${fRet} | ${st.label} [Acción: ${st.actionLabel}]`);
     });
 
     lines.push('------------------------------------------------------------');
-    lines.push('Acción requerida: Definir descuento o precio especial para drenar unidades antes de fecha de retiro.');
+    lines.push('Acción requerida: Gestionar canjes con proveedor o definir liquidación/drenaje comercial antes de fecha de retiro.');
 
     navigator.clipboard.writeText(lines.join('\n'));
     setCopiedReport(true);
@@ -107,7 +107,8 @@ export const PmReportModal: React.FC<PmReportModalProps> = ({
                     <th className="p-3">Vencimiento</th>
                     <th className="p-3">Fecha Retiro</th>
                     <th className="p-3">Días Restantes</th>
-                    <th className="p-3">Estado Comercial</th>
+                    <th className="p-3">Estado</th>
+                    <th className="p-3">Acción Sugerida</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -135,6 +136,12 @@ export const PmReportModal: React.FC<PmReportModalProps> = ({
                           <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border inline-flex items-center gap-1 ${st.color}`}>
                             {st.icon}
                             <span>{st.label}</span>
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold border inline-flex items-center gap-1 ${st.actionColor}`}>
+                            {st.actionIcon}
+                            <span>{st.actionLabel}</span>
                           </span>
                         </td>
                       </tr>

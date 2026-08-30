@@ -17,6 +17,30 @@ export const BUILT_IN_SLICES: TableSlice[] = [
     }
   },
   {
+    id: 'builtin_main_canje_proveedor',
+    name: 'Canje Proveedor',
+    description: 'Lotes vencidos o próximos con política de cambio/devolución acordada',
+    tableKey: 'main',
+    icon: 'ArrowLeftRight',
+    color: 'indigo',
+    isBuiltIn: true,
+    filterConfig: {
+      pmRadarFilter: ['canje_proveedor']
+    }
+  },
+  {
+    id: 'builtin_main_merma_directa',
+    name: 'Merma Directa',
+    description: 'Lotes vencidos o sin política de canje que pasan a baja directa',
+    tableKey: 'main',
+    icon: 'Trash2',
+    color: 'rose',
+    isBuiltIn: true,
+    filterConfig: {
+      pmRadarFilter: ['merma_directa']
+    }
+  },
+  {
     id: 'builtin_main_drainage_pm',
     name: 'Radar PM (Drenaje)',
     description: 'Lotes en ventana de acción comercial para jefatura de Producto',
@@ -271,6 +295,8 @@ export function itemMatchesSlice(
     else if (pmSet.has('drainage') && st.code === 'DRAINAGE_PM') matchesPm = true;
     else if (pmSet.has('upcoming') && st.code === 'UPCOMING') matchesPm = true;
     else if (pmSet.has('en_regla') && st.code === 'NORMAL') matchesPm = true;
+    else if (pmSet.has('canje_proveedor') && st.actionType === 'CANJE_PROVEEDOR') matchesPm = true;
+    else if (pmSet.has('merma_directa') && st.actionType === 'MERMA_DIRECTA') matchesPm = true;
     if (!matchesPm) return false;
   }
 

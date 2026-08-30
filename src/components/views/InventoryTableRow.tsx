@@ -123,22 +123,52 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
           className="p-4 truncate"
         >
           {eventCategory === 'VENCIMIENTO' || eventCategory === 'VENCIMIENTO_CERCANO' ? (
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                const code = status.code;
-                const targetFilter = 
-                  (code === 'EXPIRED' || code === 'RETIRE_NOW') ? 'retire_now' :
-                  (code === 'UPCOMING') ? 'upcoming' :
-                  (code === 'DRAINAGE_PM') ? 'drainage' : 'en_regla';
-                onPmRadarFilterClick(targetFilter, e.ctrlKey || e.metaKey);
-              }}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border truncate cursor-pointer hover:opacity-90 transition-all ${status.color}`}
-              title="Clic normal: Filtrar este estado. Ctrl+Clic: Sumar filtro."
-            >
-              <span className="shrink-0">{status.icon}</span>
-              <span className="truncate">{status.label}</span>
-            </button>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const code = status.code;
+                  const targetFilter = 
+                    (code === 'EXPIRED' || code === 'RETIRE_NOW') ? 'retire_now' :
+                    (code === 'UPCOMING') ? 'upcoming' :
+                    (code === 'DRAINAGE_PM') ? 'drainage' : 'en_regla';
+                  onPmRadarFilterClick(targetFilter, e.ctrlKey || e.metaKey);
+                }}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border truncate cursor-pointer hover:opacity-90 transition-all ${status.color}`}
+                title="Clic normal: Filtrar este estado. Ctrl+Clic: Sumar filtro."
+              >
+                <span className="shrink-0">{status.icon}</span>
+                <span className="truncate">{status.label}</span>
+              </button>
+
+              {/* Distinct Action Chip if Canje or Merma is detected */}
+              {status.actionType === 'CANJE_PROVEEDOR' && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPmRadarFilterClick('canje_proveedor', e.ctrlKey || e.metaKey);
+                  }}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border truncate cursor-pointer hover:opacity-85 transition-all ${status.actionColor}`}
+                  title="Política: Canje Proveedor. Clic para filtrar."
+                >
+                  <span className="shrink-0">{status.actionIcon}</span>
+                  <span className="truncate">Canje</span>
+                </button>
+              )}
+              {status.actionType === 'MERMA_DIRECTA' && (status.code === 'EXPIRED' || status.code === 'RETIRE_NOW') && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPmRadarFilterClick('merma_directa', e.ctrlKey || e.metaKey);
+                  }}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border truncate cursor-pointer hover:opacity-85 transition-all ${status.actionColor}`}
+                  title="Política: Merma Directa (sin canje). Clic para filtrar."
+                >
+                  <span className="shrink-0">{status.actionIcon}</span>
+                  <span className="truncate">Merma</span>
+                </button>
+              )}
+            </div>
           ) : (
             <span className="text-xs text-slate-400 dark:text-slate-500 italic">Incidencia FRC</span>
           )}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  Truck, FileSpreadsheet, PackageX, RotateCcw, Clock, AlertCircle, AlertTriangle, Clock3, Flame, CheckCircle2, Tag 
+  Truck, FileSpreadsheet, PackageX, RotateCcw, Clock, AlertCircle, AlertTriangle, Clock3, Flame, CheckCircle2, Tag, ArrowLeftRight, Trash2
 } from 'lucide-react';
 import { InventoryItem, EventCategory, EventTypeDefinition, EventResolutionStatus } from '../types';
 import { 
@@ -17,7 +17,9 @@ import {
   getItemResolutionStatus,
   calculateWithdrawalDate,
   getEventReason,
-  ItemStatusCode
+  detectPolicyActionType,
+  ItemStatusCode,
+  ItemActionType
 } from './pureCalculations';
 
 // Re-export pure calculation functions to keep existing consumers intact
@@ -34,7 +36,8 @@ export {
   computeItemRawStatus,
   getItemResolutionStatus,
   calculateWithdrawalDate,
-  getEventReason
+  getEventReason,
+  detectPolicyActionType
 };
 
 export const EVENT_CATEGORIES: Record<EventCategory, EventTypeDefinition> = {
@@ -182,31 +185,61 @@ export function renderEventIcon(category: EventCategory, className = 'w-4 h-4') 
 
 export interface ItemStatusResult {
   code: ItemStatusCode;
+  actionType: ItemActionType;
   label: string;
+  actionLabel: string;
+  actionColor: string;
   color: string;
   icon: React.ReactNode;
+  actionIcon: React.ReactNode;
   daysToRetire: number | null;
   daysToExpiry: number | null;
 }
 
 // Helper to compute expiration, retirement and drainage status for an item with React UI components
 export function getItemStatus(item: InventoryItem, headers: string[]): ItemStatusResult {
-  const { code, daysToRetire, daysToExpiry } = computeItemRawStatus(item, headers);
+  const { code, actionType, daysToRetire, daysToExpiry } = computeItemRawStatus(item, headers);
 
   let label = 'En Tiempo';
   let color = 'bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700';
   let icon = <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />;
 
+  let actionLabel = 'En Regla';
+  let actionColor = 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700';
+  let actionIcon = <CheckCircle2 className="w-3 h-3 text-emerald-600" />;
+
+  if (actionType === 'CANJE_PROVEEDOR') {
+    actionLabel = 'Canje Proveedor';
+    actionColor = 'bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 font-bold';
+    actionIcon = <ArrowLeftRight className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />;
+  } else if (actionType === 'MERMA_DIRECTA') {
+    actionLabel = 'Merma Directa';
+    actionColor = 'bg-rose-50 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800 font-bold';
+    actionIcon = <Trash2 className="w-3 h-3 text-rose-600 dark:text-rose-400" />;
+  } else if (actionType === 'VENTA_DRENAJE') {
+    actionLabel = 'Drenaje PM';
+    actionColor = 'bg-orange-50 dark:bg-orange-950/70 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800 font-bold';
+    actionIcon = <Flame className="w-3 h-3 text-orange-600 dark:text-orange-400" />;
+  }
+
   if (code === 'EXPIRED') {
-    label = 'Vencido';
-    color = 'bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-200 border-rose-200 dark:border-rose-800/80';
-    icon = <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />;
+    label = actionType === 'CANJE_PROVEEDOR' ? 'Vencido (Canje)' : 'Vencido (Merma)';
+    color = actionType === 'CANJE_PROVEEDOR'
+      ? 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-900 dark:text-indigo-200 border-indigo-300 dark:border-indigo-800 font-bold'
+      : 'bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-200 border-rose-200 dark:border-rose-800/80 font-bold';
+    icon = actionType === 'CANJE_PROVEEDOR'
+      ? <ArrowLeftRight className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+      : <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />;
   } else if (code === 'RETIRE_NOW') {
-    label = 'Retirar Inmediatamente';
-    color = 'bg-red-100 dark:bg-red-950/80 text-red-800 dark:text-red-200 border-red-200 dark:border-red-800 font-bold';
-    icon = <AlertTriangle className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />;
+    label = actionType === 'CANJE_PROVEEDOR' ? 'Retiro Canje Hoy' : 'Retiro Inmediato';
+    color = actionType === 'CANJE_PROVEEDOR'
+      ? 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-900 dark:text-indigo-200 border-indigo-300 dark:border-indigo-800 font-bold'
+      : 'bg-red-100 dark:bg-red-950/80 text-red-800 dark:text-red-200 border-red-200 dark:border-red-800 font-bold';
+    icon = actionType === 'CANJE_PROVEEDOR'
+      ? <ArrowLeftRight className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+      : <AlertTriangle className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />;
   } else if (code === 'UPCOMING') {
-    label = `Próximo Retiro (${daysToRetire}d)`;
+    label = actionType === 'CANJE_PROVEEDOR' ? `Próx. Canje (${daysToRetire}d)` : `Próx. Retiro (${daysToRetire}d)`;
     color = 'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-200 border-amber-200 dark:border-amber-800/80 font-semibold';
     icon = <Clock3 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />;
   } else if (code === 'DRAINAGE_PM') {
@@ -215,5 +248,16 @@ export function getItemStatus(item: InventoryItem, headers: string[]): ItemStatu
     icon = <Flame className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />;
   }
 
-  return { code, label, color, icon, daysToRetire, daysToExpiry };
+  return { 
+    code, 
+    actionType, 
+    label, 
+    actionLabel, 
+    actionColor, 
+    color, 
+    icon, 
+    actionIcon, 
+    daysToRetire, 
+    daysToExpiry 
+  };
 }

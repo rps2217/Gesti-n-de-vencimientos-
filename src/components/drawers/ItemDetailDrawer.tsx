@@ -290,10 +290,18 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
                         </div>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Fecha Retiro: {fRet}</p>
                       </div>
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border flex items-center gap-1 shrink-0 ${st.color}`}>
-                        {st.icon}
-                        <span>{st.label}</span>
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border flex items-center gap-1 shrink-0 ${st.color}`}>
+                          {st.icon}
+                          <span>{st.label}</span>
+                        </span>
+                        {st.actionType !== 'SIN_ACCION' && (
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 shrink-0 ${st.actionColor}`}>
+                            {st.actionIcon}
+                            <span>{st.actionLabel}</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

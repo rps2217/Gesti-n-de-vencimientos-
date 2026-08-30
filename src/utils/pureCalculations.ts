@@ -264,9 +264,66 @@ export function getExpiryDateFromYm(item: InventoryItem, headers: string[]): Dat
 }
 
 export type ItemStatusCode = 'EXPIRED' | 'RETIRE_NOW' | 'UPCOMING' | 'DRAINAGE_PM' | 'NORMAL';
+export type ItemActionType = 'CANJE_PROVEEDOR' | 'MERMA_DIRECTA' | 'VENTA_DRENAJE' | 'SIN_ACCION';
+
+/**
+ * Intelligent Action Detector according to Product Policy (Canje Proveedor vs. Merma Directa vs. Drenaje)
+ */
+export function detectPolicyActionType(
+  item: InventoryItem, 
+  headers: string[], 
+  statusCode: ItemStatusCode
+): ItemActionType {
+  if (statusCode === 'NORMAL') return 'SIN_ACCION';
+  if (statusCode === 'DRAINAGE_PM') return 'VENTA_DRENAJE';
+
+  // For EXPIRED, RETIRE_NOW, UPCOMING: check if policy indicates supplier exchange (Canje)
+  const polCol = findColumnBySemantic(headers, 'politica');
+  let polStr = polCol && item[polCol] ? String(item[polCol]).trim() : '';
+
+  if (!polStr) {
+    // Check other common field names in item
+    polStr = String(item.POLITICA || item.politica || item.POLITICA_CANJE || item.TIPO_POLITICA || item.CATEGORIA || item.FAMILIA || '').trim();
+  }
+
+  const normalized = polStr.toLowerCase();
+
+  // Explicit Canje patterns
+  if (
+    normalized.includes('canje') || 
+    normalized.includes('devol') || 
+    normalized.includes('retorno') || 
+    normalized.includes('proveedor') ||
+    normalized.includes('garantia') ||
+    normalized.includes('1x1')
+  ) {
+    return 'CANJE_PROVEEDOR';
+  }
+
+  // Explicit Sin Canje / Merma / Destrucción patterns
+  if (
+    normalized.includes('sin canje') || 
+    normalized.includes('no canje') || 
+    normalized.includes('merma') || 
+    normalized.includes('destruc') ||
+    normalized.includes('perdida') ||
+    normalized.includes('baja')
+  ) {
+    return 'MERMA_DIRECTA';
+  }
+
+  // If policy column explicitly exists but specifies a positive number of days (e.g. "60 días", "90d"), it usually denotes a supplier exchange agreement with advance notice
+  if (polStr && /\b\d{2,3}\s*(d|d[ií]as|dias)?\b/i.test(polStr)) {
+    return 'CANJE_PROVEEDOR';
+  }
+
+  // Default for expired/critical items without explicit exchange agreement is Merma Directa
+  return 'MERMA_DIRECTA';
+}
 
 export function computeItemRawStatus(item: InventoryItem, headers: string[]): {
   code: ItemStatusCode;
+  actionType: ItemActionType;
   daysToRetire: number | null;
   daysToExpiry: number | null;
   expiryMonthOffset: number | null;
@@ -320,7 +377,9 @@ export function computeItemRawStatus(item: InventoryItem, headers: string[]): {
     code = 'DRAINAGE_PM';
   }
 
-  return { code, daysToRetire, daysToExpiry, expiryMonthOffset };
+  const actionType = detectPolicyActionType(item, headers, code);
+
+  return { code, actionType, daysToRetire, daysToExpiry, expiryMonthOffset };
 }
 
 export function getItemResolutionStatus(item: InventoryItem, headers: string[]): EventResolutionStatus {

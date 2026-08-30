@@ -333,6 +333,8 @@ export function useInventoryFiltering({
             else if (pmRadarFilterSet.has('upcoming') && st.code === 'UPCOMING') matchPm = true;
             else if (pmRadarFilterSet.has('retire_now') && (st.code === 'RETIRE_NOW' || st.code === 'EXPIRED')) matchPm = true;
             else if (pmRadarFilterSet.has('en_regla') && st.code === 'NORMAL') matchPm = true;
+            else if (pmRadarFilterSet.has('canje_proveedor') && st.actionType === 'CANJE_PROVEEDOR') matchPm = true;
+            else if (pmRadarFilterSet.has('merma_directa') && st.actionType === 'MERMA_DIRECTA') matchPm = true;
             if (!matchPm) continue;
           }
           if (dynamicMonthRange) {

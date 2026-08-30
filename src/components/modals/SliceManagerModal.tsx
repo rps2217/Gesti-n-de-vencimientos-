@@ -62,7 +62,11 @@ export const SliceManagerModal: React.FC<SliceManagerModalProps> = ({
     const filterDetails: string[] = [];
     if (slice.filterConfig.searchTerm) filterDetails.push(`Búsqueda: "${slice.filterConfig.searchTerm}"`);
     if (slice.filterConfig.pmRadarFilter?.length) filterDetails.push(`Radar: ${slice.filterConfig.pmRadarFilter.join(', ')}`);
-    if (slice.filterConfig.dynamicMonthFilter?.length) filterDetails.push(`Meses: +${slice.filterConfig.dynamicMonthFilter.join(', +')}`);
+    if (slice.filterConfig.dynamicMonthRange) {
+      filterDetails.push(`Meses: +${slice.filterConfig.dynamicMonthRange.startOffset} a +${slice.filterConfig.dynamicMonthRange.endOffset}`);
+    } else if (slice.filterConfig.dynamicMonthFilter?.length) {
+      filterDetails.push(`Meses: +${slice.filterConfig.dynamicMonthFilter.join(', +')}`);
+    }
     if (slice.filterConfig.eventFilter?.length) filterDetails.push(`Categorías: ${slice.filterConfig.eventFilter.join(', ')}`);
     if (slice.filterConfig.eventResolutionFilter?.length) {
       filterDetails.push(slice.filterConfig.eventResolutionFilter.includes('pending') ? 'Sin Traspaso TR' : 'Regularizados');

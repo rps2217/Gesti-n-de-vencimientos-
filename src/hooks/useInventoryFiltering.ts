@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useDeferredValue } from 'react';
-import { InventoryItem, SheetConfig, SortConfig } from '../types';
+import { InventoryItem, SheetConfig, SortConfig, DynamicMonthRange } from '../types';
 import { 
   getItemStatus, 
   getEventCategory, 
@@ -76,6 +76,7 @@ export function useInventoryFiltering({
   const [pmRadarFilter, setPmRadarFilter] = useState<string[]>([]);
   const [columnFilters, setColumnFilters] = useState<Record<string, string[]>>({});
   const [dynamicMonthFilter, setDynamicMonthFilter] = useState<number[]>([]);
+  const [dynamicMonthRange, setDynamicMonthRange] = useState<DynamicMonthRange | null>(null);
   const [groupByColumn, setGroupByColumn] = useState<string>('none');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
@@ -111,7 +112,8 @@ export function useInventoryFiltering({
     eventResolutionFilter,
     pmRadarFilter,
     columnFilters,
-    dynamicMonthFilter
+    dynamicMonthFilter,
+    dynamicMonthRange
   });
 
   // Single-pass metrics fallback if worker metrics not yet ready
@@ -333,7 +335,22 @@ export function useInventoryFiltering({
             else if (pmRadarFilterSet.has('en_regla') && st.code === 'NORMAL') matchPm = true;
             if (!matchPm) continue;
           }
-          if (dynamicMonthFilter && dynamicMonthFilter.length > 0) {
+          if (dynamicMonthRange) {
+            const today = new Date();
+            let dVc = null;
+            const vcCol = findColumnBySemantic(headers, 'fecha_vc');
+            if (vcCol && item[vcCol]) {
+              dVc = parseAnyDate(item[vcCol]);
+            }
+            if (dVc) {
+              const offset = (dVc.getFullYear() - today.getFullYear()) * 12 + dVc.getMonth() - today.getMonth();
+              if (offset < dynamicMonthRange.startOffset || offset > dynamicMonthRange.endOffset) {
+                continue;
+              }
+            } else {
+              continue;
+            }
+          } else if (dynamicMonthFilter && dynamicMonthFilter.length > 0) {
             const today = new Date();
             let dVc = null;
             const vcCol = findColumnBySemantic(headers, 'fecha_vc');
@@ -417,6 +434,7 @@ export function useInventoryFiltering({
     pmRadarFilter, 
     columnFilters, 
     dynamicMonthFilter,
+    dynamicMonthRange,
     headers,
     sortConfig
   ]);
@@ -510,6 +528,7 @@ export function useInventoryFiltering({
     setPmRadarFilter([]);
     setColumnFilters({});
     setDynamicMonthFilter([]);
+    setDynamicMonthRange(null);
     setSortConfig({ column: null, direction: null });
   }, []);
 
@@ -530,6 +549,8 @@ export function useInventoryFiltering({
     setColumnFilters,
     dynamicMonthFilter,
     setDynamicMonthFilter,
+    dynamicMonthRange,
+    setDynamicMonthRange,
     groupByColumn,
     setGroupByColumn,
     collapsedGroups,

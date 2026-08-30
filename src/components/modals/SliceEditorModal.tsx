@@ -6,7 +6,7 @@ import {
   Truck, Scale, RotateCcw, ShieldCheck, Bookmark, FileText, Package
 } from 'lucide-react';
 import { 
-  TableSlice, SliceFilterConfig, SliceColor, SortConfig 
+  TableSlice, SliceFilterConfig, SliceColor, SortConfig, DynamicMonthRange 
 } from '../../types';
 import { SliceIcon } from '../slices/SliceSelectorBar';
 import { SLICE_COLOR_CLASSES } from '../../utils/sliceRegistry';
@@ -21,6 +21,8 @@ interface SliceEditorModalProps {
     quickChip?: string | null;
     eventFilter?: string[];
     pmRadarFilter?: string[];
+    dynamicMonthFilter?: number[];
+    dynamicMonthRange?: DynamicMonthRange | null;
     eventResolutionFilter?: ('pending' | 'completed')[];
     frcBodFilter?: string[];
     columnFilters?: Record<string, string[]>;
@@ -50,13 +52,21 @@ const PM_STATUS_OPTIONS = [
   { id: 'en_regla', label: 'Inventario en Regla', icon: 'CheckCircle2', color: 'emerald' }
 ];
 
-const DYNAMIC_MONTH_OPTIONS = [
-  { offset: 1, label: 'Mes Siguiente (+1)', icon: 'Clock', color: 'indigo' },
-  { offset: 2, label: 'En 2 Meses (+2)', icon: 'Clock', color: 'blue' },
-  { offset: 3, label: 'En 3 Meses (+3)', icon: 'Clock', color: 'cyan' },
-  { offset: 4, label: 'En 4 Meses (+4)', icon: 'Clock', color: 'teal' },
-  { offset: 5, label: 'En 5 Meses (+5)', icon: 'Clock', color: 'emerald' },
-  { offset: 6, label: 'En 6 Meses (+6)', icon: 'Clock', color: 'emerald' },
+export function getOffsetMonthName(offset: number): string {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+  const m = d.toLocaleString('es-ES', { month: 'short' });
+  const capitalized = m.charAt(0).toUpperCase() + m.slice(1);
+  return `${capitalized} ${d.getFullYear()}`;
+}
+
+const DYNAMIC_RANGE_PRESETS = [
+  { label: 'Próximo mes (+1)', start: 1, end: 1, desc: 'Solo mes entrante' },
+  { label: 'Próximos 3 meses (+1 a +3)', start: 1, end: 3, desc: 'Trimestre inmediato' },
+  { label: 'Próximos 6 meses (+1 a +6)', start: 1, end: 6, desc: 'Semestre inmediato' },
+  { label: 'De +2 a +4 meses', start: 2, end: 4, desc: 'Inicia en 2 meses (3 meses de ventana)' },
+  { label: 'De +2 a +6 meses', start: 2, end: 6, desc: 'Inicia en 2 meses (5 meses de ventana)' },
+  { label: 'De +3 a +6 meses', start: 3, end: 6, desc: 'Mediano plazo' },
 ];
 
 const EVENT_CATEGORY_OPTIONS = [
@@ -75,6 +85,12 @@ function getSuggestedSliceName(
 ): string {
   if (filters.searchTerm) return `Búsqueda: ${filters.searchTerm}`;
   if (filters.quickChip) return `Filtro: ${filters.quickChip}`;
+  if (filters.dynamicMonthRange) {
+    return `Vencimientos +${filters.dynamicMonthRange.startOffset} a +${filters.dynamicMonthRange.endOffset} meses`;
+  }
+  if (filters.dynamicMonthFilter && filters.dynamicMonthFilter.length > 0) {
+    return `Vencimientos +${filters.dynamicMonthFilter.join(', +')} meses`;
+  }
   if (filters.pmRadarFilter && filters.pmRadarFilter.length > 0) {
     const map: Record<string, string> = {
       retire_now: 'Retiro Urgente',
@@ -177,6 +193,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
           eventFilter: currentFilters.eventFilter?.length ? [...currentFilters.eventFilter] : undefined,
           pmRadarFilter: currentFilters.pmRadarFilter?.length ? [...currentFilters.pmRadarFilter] : undefined,
           dynamicMonthFilter: currentFilters.dynamicMonthFilter?.length ? [...currentFilters.dynamicMonthFilter] : undefined,
+          dynamicMonthRange: currentFilters.dynamicMonthRange ? { ...currentFilters.dynamicMonthRange } : undefined,
           eventResolutionFilter: currentFilters.eventResolutionFilter?.length ? [...currentFilters.eventResolutionFilter] : undefined,
           frcBodFilter: currentFilters.frcBodFilter?.length ? [...currentFilters.frcBodFilter] : undefined,
           columnFilters: currentFilters.columnFilters && Object.keys(currentFilters.columnFilters).length > 0
@@ -221,6 +238,7 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
       eventFilter: currentFilters.eventFilter?.length ? [...currentFilters.eventFilter] : undefined,
       pmRadarFilter: currentFilters.pmRadarFilter?.length ? [...currentFilters.pmRadarFilter] : undefined,
       dynamicMonthFilter: currentFilters.dynamicMonthFilter?.length ? [...currentFilters.dynamicMonthFilter] : undefined,
+      dynamicMonthRange: currentFilters.dynamicMonthRange ? { ...currentFilters.dynamicMonthRange } : undefined,
       eventResolutionFilter: currentFilters.eventResolutionFilter?.length ? [...currentFilters.eventResolutionFilter] : undefined,
       frcBodFilter: currentFilters.frcBodFilter?.length ? [...currentFilters.frcBodFilter] : undefined,
       columnFilters: currentFilters.columnFilters && Object.keys(currentFilters.columnFilters).length > 0
@@ -265,17 +283,22 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
     });
   };
 
-  const handleToggleDynamicMonth = (offset: number) => {
-    setFilterConfig(prev => {
-      const current = prev.dynamicMonthFilter || [];
-      const updated = current.includes(offset)
-        ? current.filter(o => o !== offset)
-        : [...current, offset];
-      return {
-        ...prev,
-        dynamicMonthFilter: updated.length > 0 ? updated : undefined
-      };
-    });
+  const handleSetDynamicRange = (start: number, end: number) => {
+    const validStart = Math.max(0, start);
+    const validEnd = Math.max(validStart, end);
+    setFilterConfig(prev => ({
+      ...prev,
+      dynamicMonthRange: { startOffset: validStart, endOffset: validEnd },
+      dynamicMonthFilter: undefined
+    }));
+  };
+
+  const handleClearDynamicRange = () => {
+    setFilterConfig(prev => ({
+      ...prev,
+      dynamicMonthRange: undefined,
+      dynamicMonthFilter: undefined
+    }));
   };
 
   const handleToggleEventCategory = (catId: string) => {
@@ -355,7 +378,9 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
   if (filterConfig.pmRadarFilter && filterConfig.pmRadarFilter.length > 0) {
     filterSummary.push(`Radar PM: ${filterConfig.pmRadarFilter.join(', ')}`);
   }
-  if (filterConfig.dynamicMonthFilter && filterConfig.dynamicMonthFilter.length > 0) {
+  if (filterConfig.dynamicMonthRange) {
+    filterSummary.push(`Rango Meses: +${filterConfig.dynamicMonthRange.startOffset} a +${filterConfig.dynamicMonthRange.endOffset} (${getOffsetMonthName(filterConfig.dynamicMonthRange.startOffset)} - ${getOffsetMonthName(filterConfig.dynamicMonthRange.endOffset)})`);
+  } else if (filterConfig.dynamicMonthFilter && filterConfig.dynamicMonthFilter.length > 0) {
     filterSummary.push(`Meses Futuros: +${filterConfig.dynamicMonthFilter.join(', +')}`);
   }
   if (filterConfig.eventFilter && filterConfig.eventFilter.length > 0) {
@@ -698,48 +723,133 @@ export const SliceEditorModal: React.FC<SliceEditorModalProps> = ({
                 </div>
               </div>
 
-              {/* 2.5. Filtros de Meses Futuros Dinámicos */}
-              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-2.5">
+              {/* 2.5. Filtro Dinámico de Rango de Meses de Vencimiento */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5 text-blue-500" />
-                    <span>Filtro Dinámico de Vencimiento (Meses adelante)</span>
+                    <span>Rango Dinámico de Meses de Vencimiento</span>
                   </label>
-                  {filterConfig.dynamicMonthFilter && filterConfig.dynamicMonthFilter.length > 0 && (
+                  {filterConfig.dynamicMonthRange && (
                     <button
                       type="button"
-                      onClick={() => setFilterConfig(prev => ({ ...prev, dynamicMonthFilter: undefined }))}
+                      onClick={handleClearDynamicRange}
                       className="text-[10px] text-red-500 hover:underline font-bold cursor-pointer"
                     >
-                      Limpiar
+                      Limpiar Rango
                     </button>
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {DYNAMIC_MONTH_OPTIONS.map((opt) => {
-                    const isSelected = (filterConfig.dynamicMonthFilter || []).includes(opt.offset);
-                    const scheme = SLICE_COLOR_CLASSES[opt.color] || SLICE_COLOR_CLASSES.blue;
-                    return (
-                      <button
-                        key={opt.offset}
-                        type="button"
-                        onClick={() => handleToggleDynamicMonth(opt.offset)}
-                        className={`text-xs p-2 rounded-xl font-bold border transition-all flex items-center justify-between cursor-pointer ${
-                          isSelected
-                            ? `${scheme.bg} ${scheme.text} ${scheme.border} ring-2 ${scheme.ring}`
-                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
-                        }`}
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <SliceIcon iconName={opt.icon} className="w-3.5 h-3.5" />
-                          <span>{opt.label}</span>
-                        </span>
-                        {isSelected && <Check className="w-3.5 h-3.5" />}
-                      </button>
-                    );
-                  })}
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Define una ventana de tiempo móvil relativa al mes actual.
+                </p>
+
+                {/* Presets Rápidos */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                    Atajos de Ventanas Frecuentes:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {DYNAMIC_RANGE_PRESETS.map((p) => {
+                      const isSelected =
+                        filterConfig.dynamicMonthRange?.startOffset === p.start &&
+                        filterConfig.dynamicMonthRange?.endOffset === p.end;
+                      return (
+                        <button
+                          key={p.label}
+                          type="button"
+                          onClick={() => handleSetDynamicRange(p.start, p.end)}
+                          title={p.desc}
+                          className={`text-[11px] px-2.5 py-1.5 rounded-xl font-bold border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs ring-1 ring-blue-500'
+                              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
+
+                {/* Selectores de Inicio y Fin de Rango */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-200/80 dark:border-slate-700/60">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                      Desde (Mes de inicio):
+                    </label>
+                    <select
+                      value={filterConfig.dynamicMonthRange?.startOffset ?? ''}
+                      onChange={(e) => {
+                        if (e.target.value === '') {
+                          handleClearDynamicRange();
+                        } else {
+                          const start = parseInt(e.target.value, 10);
+                          const currentEnd = filterConfig.dynamicMonthRange?.endOffset ?? Math.max(1, start);
+                          handleSetDynamicRange(start, Math.max(start, currentEnd));
+                        }
+                      }}
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="">-- Sin Rango Dinámico --</option>
+                      <option value="0">Mes actual (+0: {getOffsetMonthName(0)})</option>
+                      <option value="1">Próximo mes (+1: {getOffsetMonthName(1)})</option>
+                      <option value="2">En 2 meses (+2: {getOffsetMonthName(2)})</option>
+                      <option value="3">En 3 meses (+3: {getOffsetMonthName(3)})</option>
+                      <option value="4">En 4 meses (+4: {getOffsetMonthName(4)})</option>
+                      <option value="5">En 5 meses (+5: {getOffsetMonthName(5)})</option>
+                      <option value="6">En 6 meses (+6: {getOffsetMonthName(6)})</option>
+                      <option value="9">En 9 meses (+9: {getOffsetMonthName(9)})</option>
+                      <option value="12">En 1 año (+12: {getOffsetMonthName(12)})</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                      Hasta (Mes de fin):
+                    </label>
+                    <select
+                      disabled={filterConfig.dynamicMonthRange === undefined || filterConfig.dynamicMonthRange === null}
+                      value={filterConfig.dynamicMonthRange?.endOffset ?? ''}
+                      onChange={(e) => {
+                        const end = parseInt(e.target.value, 10);
+                        const currentStart = filterConfig.dynamicMonthRange?.startOffset ?? 0;
+                        handleSetDynamicRange(currentStart, end);
+                      }}
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {filterConfig.dynamicMonthRange ? (
+                        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 24]
+                          .filter(val => val >= (filterConfig.dynamicMonthRange?.startOffset ?? 0))
+                          .map((val) => (
+                            <option key={val} value={val}>
+                              +{val} meses ({getOffsetMonthName(val)})
+                            </option>
+                          ))
+                      ) : (
+                        <option value="">Selecciona inicio primero</option>
+                      )}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Explicación en Tiempo Real */}
+                {filterConfig.dynamicMonthRange && (
+                  <div className="p-2.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/80 flex items-start gap-2">
+                    <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                    <div className="text-[11px] text-blue-900 dark:text-blue-200">
+                      <span className="font-bold">Ventana activa: </span>
+                      Desde <span className="font-semibold">{getOffsetMonthName(filterConfig.dynamicMonthRange.startOffset)} (+{filterConfig.dynamicMonthRange.startOffset})</span> hasta <span className="font-semibold">{getOffsetMonthName(filterConfig.dynamicMonthRange.endOffset)} (+{filterConfig.dynamicMonthRange.endOffset})</span>.
+                      {filterConfig.dynamicMonthRange.startOffset > 0 && (
+                        <span className="block text-[10px] text-blue-700 dark:text-blue-300 mt-0.5">
+                          ✓ Excluye automáticamente el mes en curso ({getOffsetMonthName(0)}).
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 3. Filtros de Categoría de Incidencia (Para FRC / Events) */}

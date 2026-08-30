@@ -21,6 +21,7 @@ export interface UseInventoryWorkerProps {
   pmRadarFilter: string[];
   columnFilters: Record<string, string[]>;
   dynamicMonthFilter?: number[];
+  dynamicMonthRange?: { startOffset: number; endOffset: number } | null;
 }
 
 export function useInventoryWorker({
@@ -36,7 +37,8 @@ export function useInventoryWorker({
   eventResolutionFilter,
   pmRadarFilter,
   columnFilters,
-  dynamicMonthFilter = []
+  dynamicMonthFilter = [],
+  dynamicMonthRange = null
 }: UseInventoryWorkerProps) {
   const workerRef = useRef<Worker | null>(null);
   const [isWorkerReady, setIsWorkerReady] = useState(false);
@@ -109,7 +111,8 @@ export function useInventoryWorker({
           eventResolutionFilter,
           pmRadarFilter,
           columnFilters,
-          dynamicMonthFilter
+          dynamicMonthFilter,
+          dynamicMonthRange
         }
       });
     }
@@ -130,7 +133,8 @@ export function useInventoryWorker({
           eventResolutionFilter,
           pmRadarFilter,
           columnFilters,
-          dynamicMonthFilter
+          dynamicMonthFilter,
+          dynamicMonthRange
         }
       });
     }
@@ -146,6 +150,7 @@ export function useInventoryWorker({
     pmRadarFilter,
     columnFilters,
     dynamicMonthFilter,
+    dynamicMonthRange,
     isWorkerReady
   ]);
 

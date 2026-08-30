@@ -131,6 +131,11 @@ export interface SortConfig {
 
 export type SliceColor = 'blue' | 'rose' | 'amber' | 'emerald' | 'purple' | 'indigo' | 'slate';
 
+export interface DynamicMonthRange {
+  startOffset: number; // Offset respecto al mes actual (0 = mes en curso, +1 = próximo mes, +2 = en 2 meses...)
+  endOffset: number;   // Offset final inclusive (ej. +4 = hasta 4 meses adelante)
+}
+
 export interface SliceFilterConfig {
   searchTerm?: string;
   quickChip?: string | null;
@@ -140,6 +145,7 @@ export interface SliceFilterConfig {
   frcBodFilter?: string[];
   columnFilters?: Record<string, string[]>;
   dynamicMonthFilter?: number[];
+  dynamicMonthRange?: DynamicMonthRange;
 }
 
 export interface TableSlice {

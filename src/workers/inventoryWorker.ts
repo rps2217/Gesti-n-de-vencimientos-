@@ -75,7 +75,8 @@ export type WorkerInMessage =
         eventResolutionFilter: string[];
         pmRadarFilter: string[];
         columnFilters: Record<string, string[]>;
-        dynamicMonthFilter: number[];
+        dynamicMonthFilter?: number[];
+        dynamicMonthRange?: { startOffset: number; endOffset: number } | null;
       };
     };
 
@@ -262,7 +263,8 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
       eventResolutionFilter,
       pmRadarFilter,
       columnFilters,
-      dynamicMonthFilter
+      dynamicMonthFilter,
+      dynamicMonthRange
     } = payload;
 
     const hasEventFilter = activeView === 'events' && eventFilter.length > 0;
@@ -311,7 +313,15 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
           else if (pmRadarFilterSet.has('en_regla') && item.statusCode === 'NORMAL') matchPm = true;
           if (!matchPm) continue;
         }
-        if (dynamicMonthFilter && dynamicMonthFilter.length > 0) {
+        if (dynamicMonthRange) {
+          if (
+            item.expiryMonthOffset === null ||
+            item.expiryMonthOffset < dynamicMonthRange.startOffset ||
+            item.expiryMonthOffset > dynamicMonthRange.endOffset
+          ) {
+            continue;
+          }
+        } else if (dynamicMonthFilter && dynamicMonthFilter.length > 0) {
           if (item.expiryMonthOffset === null || !dynamicMonthFilter.includes(item.expiryMonthOffset)) {
             continue;
           }

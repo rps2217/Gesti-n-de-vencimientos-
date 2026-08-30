@@ -98,11 +98,11 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
       data-index={virtualIndex} 
       ref={measureElementRef} 
       onClick={() => onClickItem(item)}
-      className={`transition-colors group cursor-pointer ${rowBgClass} border-b border-slate-100 dark:border-slate-800 block md:table-row w-full`}
+      className={`transition-colors group cursor-pointer ${rowBgClass} md:border-b border-transparent md:border-slate-100 dark:md:border-slate-800 block md:table-row w-full bg-transparent md:bg-white dark:md:bg-slate-900`}
       title="Haz clic para ver detalles del registro"
     >
       {/* 📱 TRUE MOBILE CARD VIEW (Only visible on small screens) */}
-      <td className="md:hidden p-4 relative block w-full" colSpan={visibleColumnMeta.length + 4} onClick={(e) => { e.stopPropagation(); onClickItem(item); }}>
+      <td className="md:hidden p-4 relative block w-full bg-white dark:bg-slate-900 rounded-2xl mb-3 shadow-sm border border-slate-200 dark:border-slate-800" colSpan={visibleColumnMeta.length + 4} onClick={(e) => { e.stopPropagation(); onClickItem(item); }}>
         <div className="flex flex-col gap-2 relative">
           <div className="flex justify-between items-start pr-8">
             <div className="flex flex-col gap-1.5">

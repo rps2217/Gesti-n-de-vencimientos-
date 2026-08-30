@@ -144,7 +144,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
       </div>
 
       {/* Global Utils (Export/Share Menu, View Menu, Sync, Refresh) */}
-      <div className="flex items-center gap-2.5 shrink-0">
+      <div className="hidden md:flex items-center gap-2.5 shrink-0">
         {activeView !== 'schema' && (
           <div className="relative">
             <button

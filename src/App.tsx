@@ -127,7 +127,7 @@ export default function App() {
   return (
     <ToastProvider>
       <div className="flex flex-col h-screen w-full bg-[#F8FAFC] dark:bg-slate-950 font-sans overflow-hidden transition-colors print:overflow-visible">
-        <nav className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between shrink-0 shadow-sm print:hidden">
+        <nav className="hidden md:flex h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 items-center justify-between shrink-0 shadow-sm print:hidden">
           <div className="flex items-center gap-3">
             <div className="bg-blue-600 p-2 rounded-lg text-white shadow-sm shadow-blue-200 dark:shadow-none">
               <Package className="w-6 h-6" />

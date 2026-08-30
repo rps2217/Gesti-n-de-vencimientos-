@@ -44,7 +44,17 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     const startScanner = async () => {
       try {
         setErrorMsg(null);
-        // Wait for DOM element
+        
+        // Request camera permission immediately to preserve the user gesture context
+        // Otherwise, browsers might auto-deny if we wait for the timeout first.
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          stream.getTracks().forEach(track => track.stop());
+        } catch (mediaErr) {
+          console.warn("Pre-authorization failed, proceeding to let Html5Qrcode try:", mediaErr);
+        }
+
+        // Wait for DOM element and animations to settle
         await new Promise(resolve => setTimeout(resolve, 400));
         if (!isMounted || !isOpen) return;
 

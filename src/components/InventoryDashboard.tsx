@@ -1737,96 +1737,99 @@ export const InventoryDashboard: React.FC = () => {
           />
         )}
 
-        {/* CONTEXTUAL PAGE HEADER */}
-        {!isZenMode && (
-          <DashboardPageHeader
-            activeView={activeView}
-            isRelationalActive={isRelationalActive}
-            isViewMenuOpen={isViewMenuOpen}
-            setIsViewMenuOpen={setIsViewMenuOpen}
-            groupByColumn={groupByColumn}
-            setGroupByColumn={setGroupByColumn}
-            visibleHeaders={visibleHeaders}
-            setIsColumnManagerOpen={setIsColumnManagerOpen}
-            areFiltersVisible={areFiltersVisible}
-            setAreFiltersVisible={setAreFiltersVisible}
-            setIsTicketConfigOpen={setIsTicketConfigOpen}
-            hasCustomColWidths={hasCustomColWidths}
-            handleResetColWidths={handleResetColWidths}
-            setIsBulkImportOpen={setIsBulkImportOpen}
-            setIsScriptModalOpen={setIsScriptModalOpen}
-            activeSheet={activeSheet}
-            isModalOpen={isModalOpen}
-            handleOpenModal={handleOpenModal}
-            onOpenCreateSlice={() => {
-              setEditingSliceModalItem(null);
-              setIsSliceModalOpen(true);
-            }}
-            onOpenSliceManager={() => setIsSliceManagerOpen(true)}
-            activeSlice={activeSlice}
-            onEditSlice={(slice) => {
-              setEditingSliceModalItem(slice);
-              setIsSliceModalOpen(true);
-            }}
-            isSummaryView={isSummaryView}
-            onToggleSummaryView={handleToggleSummaryView}
-            isZenMode={isZenMode}
-            onToggleZenMode={() => {
-              const next = !isZenMode;
-              setIsZenMode(next);
-              showToast(next ? 'Modo Zen activado (Presiona Esc para salir)' : 'Modo Zen desactivado', 'info', 'Enfoque');
-            }}
-          />
-        )}
+        {/* DESKTOP ONLY CONTEXTUAL TOOLS */}
+        <div className="hidden md:flex flex-col">
+          {/* CONTEXTUAL PAGE HEADER */}
+          {!isZenMode && (
+            <DashboardPageHeader
+              activeView={activeView}
+              isRelationalActive={isRelationalActive}
+              isViewMenuOpen={isViewMenuOpen}
+              setIsViewMenuOpen={setIsViewMenuOpen}
+              groupByColumn={groupByColumn}
+              setGroupByColumn={setGroupByColumn}
+              visibleHeaders={visibleHeaders}
+              setIsColumnManagerOpen={setIsColumnManagerOpen}
+              areFiltersVisible={areFiltersVisible}
+              setAreFiltersVisible={setAreFiltersVisible}
+              setIsTicketConfigOpen={setIsTicketConfigOpen}
+              hasCustomColWidths={hasCustomColWidths}
+              handleResetColWidths={handleResetColWidths}
+              setIsBulkImportOpen={setIsBulkImportOpen}
+              setIsScriptModalOpen={setIsScriptModalOpen}
+              activeSheet={activeSheet}
+              isModalOpen={isModalOpen}
+              handleOpenModal={handleOpenModal}
+              onOpenCreateSlice={() => {
+                setEditingSliceModalItem(null);
+                setIsSliceModalOpen(true);
+              }}
+              onOpenSliceManager={() => setIsSliceManagerOpen(true)}
+              activeSlice={activeSlice}
+              onEditSlice={(slice) => {
+                setEditingSliceModalItem(slice);
+                setIsSliceModalOpen(true);
+              }}
+              isSummaryView={isSummaryView}
+              onToggleSummaryView={handleToggleSummaryView}
+              isZenMode={isZenMode}
+              onToggleZenMode={() => {
+                const next = !isZenMode;
+                setIsZenMode(next);
+                showToast(next ? 'Modo Zen activado (Presiona Esc para salir)' : 'Modo Zen desactivado', 'info', 'Enfoque');
+              }}
+            />
+          )}
 
-        {/* SLICES & CUSTOM VIEWS BAR (AppSheet Pattern) */}
-        {!isZenMode && activeView !== 'schema' && activeView !== 'analytics' && activeSheet && (
-          <SliceSelectorBar
-            slices={visibleTableSlices}
-            activeSliceId={activeSliceId}
-            onSelectSlice={handleSelectSlice}
-            sliceCounts={sliceCounts}
-            totalItemsCount={items.length}
-            hasActiveFilters={hasActiveFilters}
-            onOpenCreateSlice={() => {
-              setEditingSliceModalItem(null);
-              setIsSliceModalOpen(true);
-            }}
-            onOpenSliceManager={() => setIsSliceManagerOpen(true)}
-            activeSlice={activeSlice}
-            hiddenSlicesCount={currentTableSlices.length - visibleTableSlices.length}
-          />
-        )}
+          {/* SLICES & CUSTOM VIEWS BAR (AppSheet Pattern) */}
+          {!isZenMode && activeView !== 'schema' && activeView !== 'analytics' && activeSheet && (
+            <SliceSelectorBar
+              slices={visibleTableSlices}
+              activeSliceId={activeSliceId}
+              onSelectSlice={handleSelectSlice}
+              sliceCounts={sliceCounts}
+              totalItemsCount={items.length}
+              hasActiveFilters={hasActiveFilters}
+              onOpenCreateSlice={() => {
+                setEditingSliceModalItem(null);
+                setIsSliceModalOpen(true);
+              }}
+              onOpenSliceManager={() => setIsSliceManagerOpen(true)}
+              activeSlice={activeSlice}
+              hiddenSlicesCount={currentTableSlices.length - visibleTableSlices.length}
+            />
+          )}
 
-        {/* FILTERS & RADAR PANELS (Collapsible) */}
-        {!isZenMode && (
-          <DashboardFilterPanels
-            areFiltersVisible={areFiltersVisible}
-            quickChips={quickChips}
-            activeQuickChip={activeQuickChip}
-            setActiveQuickChip={setActiveQuickChip}
-            activeView={activeView}
-            activeSheet={activeSheet}
-            items={items}
-            eventResolutionFilter={eventResolutionFilter}
-          setEventResolutionFilter={setEventResolutionFilter}
-          handleFilterToggle={handleFilterToggle}
-          eventResolutionMetrics={eventResolutionMetrics}
-          eventFilter={eventFilter}
-          setEventFilter={setEventFilter}
-          eventMetrics={eventMetrics}
-          frcBodValues={frcBodValues}
-          frcBodCounts={frcBodCounts}
-          frcBodFilter={frcBodFilter}
-          setFrcBodFilter={setFrcBodFilter}
-          pmRadarFilter={pmRadarFilter}
-          setPmRadarFilter={setPmRadarFilter}
-          pmMetrics={pmMetrics}
-        />
-        )}
+          {/* FILTERS & RADAR PANELS (Collapsible) */}
+          {!isZenMode && (
+            <DashboardFilterPanels
+              areFiltersVisible={areFiltersVisible}
+              quickChips={quickChips}
+              activeQuickChip={activeQuickChip}
+              setActiveQuickChip={setActiveQuickChip}
+              activeView={activeView}
+              activeSheet={activeSheet}
+              items={items}
+              eventResolutionFilter={eventResolutionFilter}
+              setEventResolutionFilter={setEventResolutionFilter}
+              handleFilterToggle={handleFilterToggle}
+              eventResolutionMetrics={eventResolutionMetrics}
+              eventFilter={eventFilter}
+              setEventFilter={setEventFilter}
+              eventMetrics={eventMetrics}
+              frcBodValues={frcBodValues}
+              frcBodCounts={frcBodCounts}
+              frcBodFilter={frcBodFilter}
+              setFrcBodFilter={setFrcBodFilter}
+              pmRadarFilter={pmRadarFilter}
+              setPmRadarFilter={setPmRadarFilter}
+              pmMetrics={pmMetrics}
+            />
+          )}
+        </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-auto p-6">
+        <div className="flex-1 overflow-auto p-2 md:p-6">
           {error && (
             <div className="mb-6 rounded-xl bg-red-50 p-4 border border-red-100">
               <div className="flex items-center">
@@ -1873,7 +1876,7 @@ export const InventoryDashboard: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="h-full flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden min-h-0 relative">
+            <div className="h-full flex flex-col bg-slate-50 md:bg-white dark:bg-slate-900 md:border border-slate-200 dark:border-slate-800 md:rounded-3xl md:shadow-sm overflow-hidden min-h-0 relative">
               <InventoryTable 
                 filteredItems={filteredItems}
                 selectedRowIds={selectedRowIds}
@@ -1939,7 +1942,7 @@ export const InventoryDashboard: React.FC = () => {
               />
 
               {/* Footer summary bar */}
-              <div className="p-3 bg-slate-100 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 flex flex-col sm:flex-row justify-between items-center gap-2">
+              <div className="hidden md:flex p-3 bg-slate-100 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 flex-col sm:flex-row justify-between items-center gap-2">
                 <div className="flex items-center gap-3">
                   <span>
                     Mostrando <strong className="text-slate-800 dark:text-slate-100">{filteredItems.length}</strong> de <strong className="text-slate-800 dark:text-slate-100">{items.length}</strong> registros
@@ -1974,7 +1977,7 @@ export const InventoryDashboard: React.FC = () => {
 
           {/* FLOATING ACTION BAR (BULK ACTIONS) */}
           {selectedRowIds.length > 0 && activeView !== 'schema' && activeView !== 'analytics' && (
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 bg-slate-800 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-bottom-10 fade-in duration-300 border border-slate-700">
+            <div className="hidden md:flex absolute bottom-8 left-1/2 -translate-x-1/2 z-50 bg-slate-800 text-white px-4 py-3 rounded-2xl shadow-2xl items-center gap-4 animate-in slide-in-from-bottom-10 fade-in duration-300 border border-slate-700">
               <div className="flex items-center gap-2 border-r border-slate-600 pr-4">
                 <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-lg shadow-inner">{selectedRowIds.length}</span>
                 <span className="text-sm font-medium whitespace-nowrap">seleccionados</span>
@@ -2107,6 +2110,17 @@ export const InventoryDashboard: React.FC = () => {
                 </button>
               </div>
             </div>
+          )}
+
+          {/* MOBILE ONLY FAB (Floating Action Button) for New Record */}
+          {!isZenMode && activeView !== 'schema' && activeView !== 'analytics' && activeSheet && (
+            <button
+              onClick={() => handleOpenModal()}
+              className="md:hidden fixed bottom-6 right-6 z-40 bg-blue-600 text-white p-4 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-blue-500/20 active:scale-95 transition-transform"
+              title="Nuevo Registro"
+            >
+              <Plus className="w-6 h-6" />
+            </button>
           )}
         </div>
       </div>

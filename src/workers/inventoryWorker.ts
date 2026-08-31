@@ -20,7 +20,6 @@ export interface WorkerNormalizedItem {
   isResolved: boolean;
   traspasoVal: string | null;
   bodegaVal: string;
-  searchableText: string;
 }
 
 export interface WorkerMetricsResult {
@@ -98,6 +97,7 @@ export type WorkerOutMessage =
 
 let cachedNormalizedItems: WorkerNormalizedItem[] = [];
 let cachedHeaders: string[] = [];
+let cachedSearchableHeaders: string[] = [];
 
 self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
   const { type, payload } = e.data;
@@ -105,6 +105,7 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
   if (type === 'PROCESS_DATA') {
     const { items, headers, frcBodCol, searchableHeaders } = payload;
     cachedHeaders = headers;
+    cachedSearchableHeaders = searchableHeaders || [];
 
     let vencimientos = 0;
     let transporte = 0;
@@ -206,15 +207,6 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
       if (res.isResolved) completed++;
       else pending++;
 
-      // Searchable text string cache
-      let searchText = '';
-      for (let s = 0; s < searchableHeaders.length; s++) {
-        const sVal = item[searchableHeaders[s]];
-        if (sVal !== undefined && sVal !== null) {
-          searchText += ' ' + String(sVal).toLowerCase();
-        }
-      }
-
       cachedNormalizedItems[i] = {
         index: i,
         original: item,
@@ -226,8 +218,7 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
         expiryMonthOffset: statusRaw.expiryMonthOffset,
         isResolved: res.isResolved,
         traspasoVal: res.traspasoNumber || null,
-        bodegaVal,
-        searchableText: searchText.trim()
+        bodegaVal
       };
     }
 
@@ -395,11 +386,19 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
         if (!matchCols) continue;
       }
 
-      // Fast substring search
+      // Fast dynamic early-exit search
       if (hasSearch) {
-        if (!item.searchableText.includes(term)) {
-          continue;
+        let matchSearch = false;
+        const searchCols = cachedSearchableHeaders.length > 0 ? cachedSearchableHeaders : cachedHeaders;
+        for (let s = 0; s < searchCols.length; s++) {
+          const colName = searchCols[s];
+          const sVal = item.original[colName];
+          if (sVal !== undefined && sVal !== null && String(sVal).toLowerCase().includes(term)) {
+            matchSearch = true;
+            break;
+          }
         }
+        if (!matchSearch) continue;
       }
 
       matchingIndices.push(item.index);

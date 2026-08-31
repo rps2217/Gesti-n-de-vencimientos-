@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Database, Key, Link2, Trash2, Plus, HelpCircle, 
-  ChevronRight, Sparkles, X, Info, Settings, ToggleLeft, Layers
+  ChevronRight, Sparkles, X, Info, Settings, ToggleLeft, Layers, Tag
 } from 'lucide-react';
 import { SheetConfig, SpreadsheetMetadata, ColumnSchema, ColumnType } from '../../types';
 
@@ -237,6 +237,53 @@ export const VisualSchemaDesigner: React.FC<VisualSchemaDesignerProps> = ({
     });
   };
 
+  // Handle updating generic column properties in schema
+  const handleUpdateColumnProperty = (table: string, column: string, updates: Partial<ColumnSchema>) => {
+    const newSchema = { ...sheetConfig.schema };
+    if (!newSchema[table]) newSchema[table] = {};
+    
+    const existing = newSchema[table][column] || {
+      visible: true,
+      searchable: true,
+      type: 'text',
+      behavior: 'none'
+    };
+
+    // If making this key, unset isKey for other columns in the same table
+    if (updates.isKey) {
+      Object.keys(newSchema[table]).forEach(colName => {
+        if (colName !== column) {
+          newSchema[table][colName] = {
+            ...newSchema[table][colName],
+            isKey: false
+          };
+        }
+      });
+    }
+
+    // If making this label, unset isLabel for other columns in the same table
+    if (updates.isLabel) {
+      Object.keys(newSchema[table]).forEach(colName => {
+        if (colName !== column) {
+          newSchema[table][colName] = {
+            ...newSchema[table][colName],
+            isLabel: false
+          };
+        }
+      });
+    }
+
+    newSchema[table][column] = {
+      ...existing,
+      ...updates
+    } as ColumnSchema;
+
+    saveConfig({
+      ...sheetConfig,
+      schema: newSchema
+    });
+  };
+
   // Handle adding new relation
   const handleAddRelationSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -381,13 +428,37 @@ export const VisualSchemaDesigner: React.FC<VisualSchemaDesignerProps> = ({
         >
           {/* Interactive Connecting SVG Lines */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none z-10 overflow-visible">
+            <defs>
+              <marker
+                id="designer-arrow"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="5"
+                markerHeight="5"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6" />
+              </marker>
+              <marker
+                id="designer-arrow-hover"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="6"
+                markerHeight="6"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb" />
+              </marker>
+            </defs>
             {lineCoords.map(line => {
               const isHovered = hoveredRelation === line.id;
               return (
                 <g key={line.id}>
                   {/* Invisible broad stroke for easier hovering */}
                   <path
-                    d={`M ${line.x1} ${line.y1} C ${(line.x1 + line.x2) / 2} ${line.y1}, ${(line.x1 + line.x2) / 2} ${line.y2}, ${line.x2} ${line.y2}`}
+                    d={`M ${line.x1} ${line.y1} C ${(line.x1 + line.x2) / 2} ${line.y1}, ${(line.x1 + line.x2) / 2} ${line.y2}, ${line.x2 - 4} ${line.y2}`}
                     fill="none"
                     stroke="transparent"
                     strokeWidth="16"
@@ -397,7 +468,7 @@ export const VisualSchemaDesigner: React.FC<VisualSchemaDesignerProps> = ({
                   />
                   {/* Glowing background line on hover */}
                   <path
-                    d={`M ${line.x1} ${line.y1} C ${(line.x1 + line.x2) / 2} ${line.y1}, ${(line.x1 + line.x2) / 2} ${line.y2}, ${line.x2} ${line.y2}`}
+                    d={`M ${line.x1} ${line.y1} C ${(line.x1 + line.x2) / 2} ${line.y1}, ${(line.x1 + line.x2) / 2} ${line.y2}, ${line.x2 - 4} ${line.y2}`}
                     fill="none"
                     stroke={isHovered ? "#3b82f6" : "#cbd5e1"}
                     strokeOpacity={isHovered ? "0.4" : "0.15"}
@@ -406,10 +477,11 @@ export const VisualSchemaDesigner: React.FC<VisualSchemaDesignerProps> = ({
                   />
                   {/* Core connecting line */}
                   <path
-                    d={`M ${line.x1} ${line.y1} C ${(line.x1 + line.x2) / 2} ${line.y1}, ${(line.x1 + line.x2) / 2} ${line.y2}, ${line.x2} ${line.y2}`}
+                    d={`M ${line.x1} ${line.y1} C ${(line.x1 + line.x2) / 2} ${line.y1}, ${(line.x1 + line.x2) / 2} ${line.y2}, ${line.x2 - 6} ${line.y2}`}
                     fill="none"
                     stroke={isHovered ? "#2563eb" : "#3b82f6"}
                     strokeWidth="2"
+                    markerEnd={isHovered ? "url(#designer-arrow-hover)" : "url(#designer-arrow)"}
                     strokeDasharray={isHovered ? "4 2" : undefined}
                     className="transition-all duration-150"
                   />
@@ -463,16 +535,19 @@ export const VisualSchemaDesigner: React.FC<VisualSchemaDesignerProps> = ({
                         hoveredRelation === `${table.title}-${col.name}-${col.schema?.refTable}` ||
                         (col.schema?.type === 'ref' && hoveredRelation.endsWith(`-${col.schema.refTable}`) && hoveredRelation.startsWith(`${table.title}-${col.name}`))
                       );
+                      const isSelected = selectedColumn && selectedColumn.table === table.title && selectedColumn.column === col.name;
 
                       return (
                         <div
                           key={col.name}
                           id={`col-item-${table.title}-${col.name}`}
                           onClick={() => setSelectedColumn({ table: table.title, column: col.name })}
-                          className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all ${
-                            isHoveredCol 
-                              ? 'bg-blue-100 dark:bg-blue-950/80 border-blue-300 dark:border-blue-800 text-blue-900 dark:text-blue-200 shadow-xs'
-                              : 'bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:border-slate-200 dark:hover:border-slate-600'
+                          className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all border ${
+                            isSelected
+                              ? 'bg-blue-50/80 dark:bg-blue-950/40 border-blue-500 text-blue-950 dark:text-blue-100 shadow-xs ring-2 ring-blue-500/10'
+                              : isHoveredCol 
+                                ? 'bg-blue-100 dark:bg-blue-950/80 border-blue-300 dark:border-blue-800 text-blue-900 dark:text-blue-200 shadow-xs'
+                                : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:border-slate-200 dark:hover:border-slate-600'
                           }`}
                         >
                           <span className="truncate pr-2">{col.name}</span>
@@ -556,74 +631,182 @@ export const VisualSchemaDesigner: React.FC<VisualSchemaDesignerProps> = ({
               Editor de Columna
             </h3>
 
-            {selectedColumn ? (
-              <div className="space-y-4 animate-in fade-in duration-150">
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase block">Pestaña</span>
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-0.5 block">{selectedColumn.table}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase block">Columna</span>
-                  <span className="text-xs font-black text-slate-800 dark:text-slate-100 mt-0.5 block">{selectedColumn.column}</span>
-                </div>
+            {selectedColumn ? (() => {
+                const colSchema = sheetConfig.schema?.[selectedColumn.table]?.[selectedColumn.column] || {
+                  visible: true,
+                  searchable: true,
+                  type: 'text',
+                  behavior: 'none'
+                };
 
-                <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
-                  <label className="block text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-2">Relación de Referencia</label>
-                  
-                  {(() => {
-                    const colSchema = sheetConfig.schema?.[selectedColumn.table]?.[selectedColumn.column];
-                    const isRef = colSchema?.type === 'ref';
+                return (
+                  <div className="space-y-4 animate-in fade-in duration-150 text-xs">
+                    <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase block">Pestaña / Tabla</span>
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-0.5 block">{selectedColumn.table}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase block">Columna</span>
+                        <span className="text-xs font-black text-slate-800 dark:text-slate-100 mt-0.5 block">{selectedColumn.column}</span>
+                      </div>
+                    </div>
 
-                    if (isRef && colSchema?.refTable) {
-                      return (
-                        <div className="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-800/50 rounded-xl p-3 flex items-start justify-between gap-2">
-                          <div>
-                            <span className="text-xs font-bold text-blue-900 dark:text-blue-300 block">Referencia Activa</span>
-                            <p className="text-[11px] text-blue-600 dark:text-blue-400 mt-0.5">
-                              Apunta a la tabla <strong className="font-bold">{colSchema.refTable}</strong>
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => {
-                              handleRemoveRelation({
-                                id: '',
-                                fromTable: selectedColumn.table,
-                                fromColumn: selectedColumn.column,
-                                toTable: colSchema.refTable || ''
-                              });
-                              setSelectedColumn(null);
-                            }}
-                            title="Eliminar Relación"
-                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div className="text-center py-4 bg-slate-50 dark:bg-slate-800/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
-                        <p className="text-xs text-slate-400 dark:text-slate-500">Esta columna no tiene relaciones configuradas.</p>
-                        <button
-                          onClick={() => {
-                            setFromTable(selectedColumn.table);
-                            setFromColumn(selectedColumn.column);
-                            // default to any other table as target
+                    {/* Property: Data Type */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1.5">Tipo de Dato</label>
+                      <select
+                        value={colSchema.type || 'text'}
+                        onChange={(e) => {
+                          const newType = e.target.value as any;
+                          const updates: any = { type: newType };
+                          if (newType !== 'ref') {
+                            updates.refTable = undefined;
+                          } else {
                             const other = tables.find(t => t.title !== selectedColumn.table);
-                            setToTable(other?.title || '');
-                            setIsCreatingRelation(true);
+                            updates.refTable = other?.title || '';
+                          }
+                          handleUpdateColumnProperty(selectedColumn.table, selectedColumn.column, updates);
+                        }}
+                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-blue-500/20"
+                      >
+                        <option value="text">Texto Corto (text)</option>
+                        <option value="longtext">Texto Largo (longtext)</option>
+                        <option value="number">Número (number)</option>
+                        <option value="date">Fecha (date)</option>
+                        <option value="datetime">Fecha y Hora (datetime)</option>
+                        <option value="ref">Referencia / Enlace (ref)</option>
+                        <option value="enum">Lista de Opciones (enum)</option>
+                        <option value="calculated">Fórmula Calculada (calculated)</option>
+                      </select>
+                    </div>
+
+                    {/* Property: Reference Table (Only visible when type is ref) */}
+                    {colSchema.type === 'ref' && (
+                      <div className="bg-blue-50/30 dark:bg-blue-950/25 border border-blue-100/50 dark:border-blue-900/40 rounded-xl p-3 space-y-2">
+                        <label className="block text-[10px] font-bold text-blue-900 dark:text-blue-300 uppercase">Tabla de Destino</label>
+                        <select
+                          value={colSchema.refTable || ''}
+                          onChange={(e) => {
+                            handleUpdateColumnProperty(selectedColumn.table, selectedColumn.column, { refTable: e.target.value });
                           }}
-                          className="mt-2 text-[11px] px-3 py-1.5 bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 font-bold rounded-lg border border-blue-200/30 dark:border-blue-800/50 hover:bg-blue-100 transition-colors"
+                          className="w-full bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800/80 rounded-lg px-2.5 py-1.5 text-xs font-bold text-blue-900 dark:text-blue-200 outline-none focus:ring-2 focus:ring-blue-500/20"
                         >
-                          Crear Enlace
+                          <option value="">-- Seleccionar Tabla Destino --</option>
+                          {tables
+                            .filter(t => t.title !== selectedColumn.table)
+                            .map(t => (
+                              <option key={t.title} value={t.title}>{t.title}</option>
+                            ))}
+                        </select>
+                        <p className="text-[10px] text-blue-600/80 dark:text-blue-400/80 leading-relaxed">
+                          La columna actuará como un selector dinámico apuntando a la tabla seleccionada.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Property: Behavior */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1.5">Comportamiento Especial</label>
+                      <select
+                        value={colSchema.behavior || 'none'}
+                        onChange={(e) => {
+                          handleUpdateColumnProperty(selectedColumn.table, selectedColumn.column, { behavior: e.target.value as any });
+                        }}
+                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-700 dark:text-slate-300 outline-none"
+                      >
+                        <option value="none">Ninguno (Estándar)</option>
+                        <option value="auto_id">Autogenerar ID Secuencial (auto_id)</option>
+                        <option value="calc_fecha_vc">Cálculo de Alerta Vencimiento (calc_fecha_vc)</option>
+                        <option value="calc_retiro">Cálculo de Fecha de Retiro (calc_retiro)</option>
+                        <option value="sku_lookup">Búsqueda Automática en Maestro (sku_lookup)</option>
+                      </select>
+                    </div>
+
+                    {/* Boolean Toggles Grid */}
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-3.5 space-y-3">
+                      <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Configuración de Atributos</label>
+                      
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {/* isKey */}
+                        <button
+                          onClick={() => handleUpdateColumnProperty(selectedColumn.table, selectedColumn.column, { isKey: !colSchema.isKey })}
+                          className={`flex items-center gap-2 px-3 py-2 border rounded-xl font-bold cursor-pointer transition-colors text-left ${
+                            colSchema.isKey 
+                              ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-300 shadow-2xs' 
+                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                          }`}
+                        >
+                          <Key className="w-3.5 h-3.5 text-amber-500" />
+                          <div className="leading-tight">
+                            <span className="block text-[10px]">Llave Primaria</span>
+                            <span className="text-[9px] font-normal opacity-80">{colSchema.isKey ? 'Activo' : 'Inactivo'}</span>
+                          </div>
+                        </button>
+
+                        {/* isLabel */}
+                        <button
+                          onClick={() => handleUpdateColumnProperty(selectedColumn.table, selectedColumn.column, { isLabel: !colSchema.isLabel })}
+                          className={`flex items-center gap-2 px-3 py-2 border rounded-xl font-bold cursor-pointer transition-colors text-left ${
+                            colSchema.isLabel 
+                              ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-300 shadow-2xs' 
+                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                          }`}
+                        >
+                          <Tag className="w-3.5 h-3.5 text-emerald-500" />
+                          <div className="leading-tight">
+                            <span className="block text-[10px]">Etiqueta Vista</span>
+                            <span className="text-[9px] font-normal opacity-80">{colSchema.isLabel ? 'Activo' : 'Inactivo'}</span>
+                          </div>
                         </button>
                       </div>
-                    );
-                  })()}
-                </div>
-              </div>
-            ) : (
+
+                      <div className="flex flex-col gap-2 bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/80">
+                        {/* visible */}
+                        <label className="flex items-center justify-between cursor-pointer py-1">
+                          <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Mostrar columna en tablas</span>
+                          <input
+                            type="checkbox"
+                            checked={colSchema.visible !== false}
+                            onChange={(e) => handleUpdateColumnProperty(selectedColumn.table, selectedColumn.column, { visible: e.target.checked })}
+                            className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-700 cursor-pointer"
+                          />
+                        </label>
+
+                        {/* searchable */}
+                        <label className="flex items-center justify-between cursor-pointer py-1">
+                          <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Habilitar buscador / filtros</span>
+                          <input
+                            type="checkbox"
+                            checked={colSchema.searchable !== false}
+                            onChange={(e) => handleUpdateColumnProperty(selectedColumn.table, selectedColumn.column, { searchable: e.target.checked })}
+                            className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-700 cursor-pointer"
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Active reference deletion indicator */}
+                    {colSchema.type === 'ref' && colSchema.refTable && (
+                      <button
+                        onClick={() => {
+                          handleRemoveRelation({
+                            id: '',
+                            fromTable: selectedColumn.table,
+                            fromColumn: selectedColumn.column,
+                            toTable: colSchema.refTable || ''
+                          });
+                          setSelectedColumn(null);
+                        }}
+                        className="w-full py-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-950/50 text-rose-600 dark:text-rose-400 font-bold rounded-xl transition-colors cursor-pointer text-center flex items-center justify-center gap-1.5 border border-rose-200/40 dark:border-rose-900/40"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Desvincular Relación</span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })() : (
               <div className="text-center py-12 text-slate-400 dark:text-slate-500">
                 <HelpCircle className="w-8 h-8 text-slate-300 dark:text-slate-700 mx-auto mb-2" />
                 <p className="text-xs">Haz clic en cualquier columna del mapa para editar sus relaciones o propiedades.</p>

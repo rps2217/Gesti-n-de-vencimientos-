@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { VIRTUAL_COLUMNS } from '../../utils/virtualColumns';
 import { 
-  Sparkles, Code2, UploadCloud, Cloud, Sliders, CheckCircle2, Loader2, Key, Eye, EyeOff, Search, Link2, CheckSquare, Square
+  Sparkles, Code2, UploadCloud, Cloud, Sliders, CheckCircle2, Loader2, Key, Eye, EyeOff, Search, Link2, CheckSquare, Square, TableProperties, Layers
 } from 'lucide-react';
 import { SheetConfig, SpreadsheetMetadata, SheetProperties, ColumnSchema, ColumnType, ColumnBehavior } from '../../types';
 import { getSheetData } from '../../lib/sheets';
+import { VisualSchemaDesigner } from './VisualSchemaDesigner';
 
 interface SchemaEditorViewProps {
   configStorageMode: 'properties' | 'sheet' | 'local';
@@ -47,6 +48,8 @@ export const SchemaEditorView: React.FC<SchemaEditorViewProps> = ({
   handlePushCloudConfig,
   activeView
 }) => {
+  const [schemaSubView, setSchemaSubView] = useState<'visual' | 'table'>('visual');
+
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden p-6 max-w-6xl mx-auto transition-colors">
       
@@ -183,48 +186,84 @@ export const SchemaEditorView: React.FC<SchemaEditorViewProps> = ({
         </p>
       </div>
 
-      <div className="mb-6">
-        <label className="block text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">Selecciona una pestaña para configurar:</label>
-        <select 
-          className="w-full max-w-sm border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-medium focus:border-blue-500 outline-none focus:ring-4 focus:ring-blue-500/10 shadow-sm bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 disabled:opacity-50"
-          disabled={isSchemaLoading}
-          onChange={async (e) => {
-            const sheetTitle = e.target.value;
-            if (sheetTitle) {
-              const sheetProp = metadata?.sheets.find((s: any) => s.properties.title === sheetTitle)?.properties || null;
-              setActiveSheet(sheetProp);
-              
-              if (sheetProp) {
-                setIsSchemaLoading(true);
-                try {
-                  const rows = await getSheetData(sheetProp.title);
-                  if (rows.length > 0) {
-                    setHeaders(rows[0]);
-                  } else {
-                    setHeaders([]);
-                  }
-                } catch (err) {
-                  console.error(err);
-                  setHeaders([]);
-                } finally {
-                  setIsSchemaLoading(false);
-                }
-              }
-            } else {
-              setActiveSheet(null);
-              setHeaders([]);
-            }
-          }}
-          value={activeSheet?.title || ''}
+      {/* Sub-view Toggle */}
+      <div className="flex border-b border-slate-200 dark:border-slate-800 mb-6">
+        <button
+          onClick={() => setSchemaSubView('visual')}
+          className={`px-5 py-3 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
+            schemaSubView === 'visual'
+              ? 'border-blue-600 text-blue-600 dark:text-blue-400 font-black'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+          }`}
         >
-          <option value="">-- Seleccionar Pestaña --</option>
-          {metadata?.sheets
-            .filter((s: any) => !/^_/i.test(s.properties.title))
-            .map((s: any) => (
-              <option key={s.properties.sheetId} value={s.properties.title}>{s.properties.title}</option>
-            ))}
-        </select>
+          <Layers className="w-4 h-4" />
+          <span>Diseñador Relacional (Visual)</span>
+        </button>
+        <button
+          onClick={() => setSchemaSubView('table')}
+          className={`px-5 py-3 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
+            schemaSubView === 'table'
+              ? 'border-blue-600 text-blue-600 dark:text-blue-400 font-black'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+          }`}
+        >
+          <TableProperties className="w-4 h-4" />
+          <span>Configuración de Columnas (Pestaña)</span>
+        </button>
       </div>
+
+      {schemaSubView === 'visual' ? (
+        <VisualSchemaDesigner
+          sheetConfig={sheetConfig}
+          saveConfig={saveConfig}
+          metadata={metadata}
+          activeSheetTitle={activeSheet?.title}
+          activeSheetHeaders={headers}
+        />
+      ) : (
+        <>
+          <div className="mb-6">
+            <label className="block text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">Selecciona una pestaña para configurar:</label>
+            <select 
+              className="w-full max-w-sm border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-medium focus:border-blue-500 outline-none focus:ring-4 focus:ring-blue-500/10 shadow-sm bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 disabled:opacity-50"
+              disabled={isSchemaLoading}
+              onChange={async (e) => {
+                const sheetTitle = e.target.value;
+                if (sheetTitle) {
+                  const sheetProp = metadata?.sheets.find((s: any) => s.properties.title === sheetTitle)?.properties || null;
+                  setActiveSheet(sheetProp);
+                  
+                  if (sheetProp) {
+                    setIsSchemaLoading(true);
+                    try {
+                      const rows = await getSheetData(sheetProp.title);
+                      if (rows.length > 0) {
+                        setHeaders(rows[0]);
+                      } else {
+                        setHeaders([]);
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      setHeaders([]);
+                    } finally {
+                      setIsSchemaLoading(false);
+                    }
+                  }
+                } else {
+                  setActiveSheet(null);
+                  setHeaders([]);
+                }
+              }}
+              value={activeSheet?.title || ''}
+            >
+              <option value="">-- Seleccionar Pestaña --</option>
+              {metadata?.sheets
+                .filter((s: any) => !/^_/i.test(s.properties.title))
+                .map((s: any) => (
+                  <option key={s.properties.sheetId} value={s.properties.title}>{s.properties.title}</option>
+                ))}
+            </select>
+          </div>
 
       {isSchemaLoading && (
         <div className="flex justify-center py-12">
@@ -515,6 +554,8 @@ export const SchemaEditorView: React.FC<SchemaEditorViewProps> = ({
           </div>
         </>
       )}
+    </>
+  )}
     </div>
   );
 };

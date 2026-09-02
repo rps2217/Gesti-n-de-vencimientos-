@@ -184,3 +184,63 @@ export interface TableSlice {
   groupByDirection?: 'asc' | 'desc';
   visibleColumns?: string[];
 }
+
+// ==========================================
+// MÓDULO DE CONTEO MASIVO DE EXISTENCIAS
+// ==========================================
+
+export type StockCountMode = 'BLIND' | 'DOCUMENT';
+export type StockCountStatus = 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED';
+
+export interface StockCountEntry {
+  id: string;                      // Identificador local de la lectura
+  sku: string;                     // Código escaneado o digitado
+  descripcion: string;             // De-referenciada del catálogo maestro o ingresada
+  cu_vc?: string;                  // SKU_VC + YYYY + MM (ej: 2000210218569202712)
+  mm?: string;                     // "01" a "12"
+  yyyy?: string;                   // "2026", "2027", etc.
+  fecha_vc?: string;               // "31/12/2027" (último día del mes)
+  cantidad: number;                // Stock físico contado
+  ubicacion?: string;              // Pasillo / Rack / Bodega (opcional)
+  timestamp: string;               // Fecha/hora de la captura (ISO)
+  // Campos maestros de-referenciados
+  rutProveedor?: string;
+  politica?: string;
+  diasRetiro?: number | string;
+  mundo?: string;
+  pm?: string;
+}
+
+export interface StockCountSession {
+  id: string;
+  nombre: string;                  // Nombre identificador (ej: "Conteo Pasillo 3 - Lácteos")
+  modo: StockCountMode;            // 'BLIND' o 'DOCUMENT'
+  requiereVencimiento: boolean;    // Toggle MM/YYYY activable/desactivable a necesidad
+  hojaOrigen: string;              // Pestaña de referencia (ej: 'main', 'products')
+  estado: StockCountStatus;        // 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED'
+  fechaInicio: string;             // ISO
+  fechaCierre?: string;            // ISO
+  conteos: StockCountEntry[];      // Lecturas físicas registradas
+  notas?: string;
+  rangoAnos?: { desde: number; hasta: number }; // Rango de años de interés para vencimiento
+}
+
+export interface StockCountReconciliationItem {
+  itemKey: string;                 // CU_VC (si aplica vencimiento) o SKU
+  sku: string;
+  descripcion: string;
+  cu_vc?: string;
+  mm?: string;
+  yyyy?: string;
+  fecha_vc?: string;
+  teorico: number;                 // Cantidad teórica según la hoja
+  contado: number;                 // Cantidad física total contada
+  diferencia: number;              // contado - teorico
+  estado: 'CUADRADO' | 'FALTANTE' | 'SOBRANTE' | 'NO_CATALOGADO';
+  rutProveedor?: string;
+  politica?: string;
+  diasRetiro?: number | string;
+  mundo?: string;
+  pm?: string;
+  rowIndexOriginal?: number;       // Fila original en la hoja si ya existía
+}

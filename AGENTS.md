@@ -138,7 +138,23 @@ Resuelve el problema común de las hojas de cálculo con encabezados inconsisten
 - **Re-resolución Dinámica en Cola Offline (`matchRowIndexByIdentity`)**:
   - Al vaciar mutaciones (`update` o `delete`) en `useOfflineSync.ts`, el sistema re-localiza dinámicamente el `rowIndex` exacto en los datos frescos de Google Sheets mediante la clave de entidad o coincidencia de `CU_VC` / `SKU`+`YYYY`+`MM`, previniendo sobreescrituras o eliminaciones accidentales de filas contiguas.
 
-### I. Componentes de UI
+### I. Módulo de Conteo Masivo de Existencias (`src/utils/stockCountUtils.ts` & `StockCountModal.tsx`)
+- **Dos Modalidades Operativas**:
+  - **Conteo a Ciegas (`BLIND`)**: Auditoría limpia donde el operario registra lecturas y cantidades físicas sin ver el stock teórico en pantalla, previniendo sesgos de conteo.
+  - **Conteo Contra Documento (`DOCUMENT`)**: Comparación en tiempo real contra la hoja de inventario activa, mostrando cobertura y estado de avance.
+- **Captura Opcional de Vencimiento (Mes/Año)**:
+  - Toggle activable/desactivable por sesión para registrar `MM` (01-12) y `YYYY`.
+  - Generación automática de `CU_VC` (`${SKU}${YYYY}${MM}`) para evitar duplicados.
+  - Cálculo automático de `FECHA_VC` en formato latino (`DD/MM/YYYY`) fijada en el último día del mes correspondiente.
+- **Búsqueda y De-referenciación en Catálogo Maestro (`products`)**:
+  - Coincidencia exacta instantánea por SKU o autocompletado en tiempo real al escribir nombre/código.
+  - Asignación atómica de descripción, RUT del proveedor, política de canje, días de retiro preventivo, departamento/mundo y jefe de producto (PM).
+- **Cuadratura y Sincronización con VENCIMIENTOS**:
+  - Comparativa de métricas: Total Físico vs. Teórico, Diferencia Neta, Cuadrados, Faltantes, Sobrantes y No Catalogados.
+  - Exportación directa a planilla Excel (`.xlsx`).
+  - Botón de sincronización con la pestaña `VENCIMIENTOS` que estructura automáticamente las 14 columnas canónicas (`ID_VC`, `SKU_VC`, `PRODUCTO_VC`, `MM`, `YYYY`, `FECHA_VC`, `RUT_PROVEEDOR_VC`, `POLITICA`, `DIAS RETIRO_VC`, `MUNDO`, `PM`, `timestamp`, `CU_VC`, `TIPO_EVENTO`) y encola mutaciones offline/online de manera segura.
+
+### J. Componentes de UI
 - **`App.tsx`**: Administra el estado global de los datos de inventario, pestañas activas (Dashboard vs Schema Editor), modales y conectividad con Google Sheets / datos locales.
 - **`InventoryDashboard.tsx`**: Tabla interactiva con filtros avanzados, búsqueda rápida, tarjetas de resumen KPI y botones de acción rápida.
 - **`ItemDetailDrawer.tsx`**: Drawer lateral que agrupa toda la trazabilidad de un SKU (historial de vencimientos, lotes y eventos relacionados).

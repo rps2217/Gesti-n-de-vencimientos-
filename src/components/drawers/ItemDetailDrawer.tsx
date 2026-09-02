@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  Package, X, AlertCircle, CheckCircle2, Clock, Truck, FileSpreadsheet, PackageX, RotateCcw, Plus, ExternalLink, Edit2, Eye, EyeOff, SlidersHorizontal, Link2, Trash2 
+  Package, X, AlertCircle, CheckCircle2, Clock, Truck, FileSpreadsheet, PackageX, RotateCcw, Plus, ExternalLink, Edit2, Eye, EyeOff, SlidersHorizontal, Link2, Trash2, Barcode as BarcodeIcon 
 } from 'lucide-react';
 import { InventoryItem, EventCategory } from '../../types';
 import { 
@@ -15,12 +15,14 @@ import {
 } from '../../utils/dateCalculations';
 import { findColumnBySemantic } from '../../utils/columnAliases';
 import { findMasterProduct, getMasterProductSummary } from '../../utils/referenceResolver';
+import { Barcode } from '../common/Barcode';
 
 interface ItemDetailDrawerProps {
   product: InventoryItem | null;
   onClose: () => void;
   onEdit: (product: InventoryItem) => void;
   onDeleteRow?: (product: InventoryItem) => void;
+  onPrintBarcode?: (product: InventoryItem) => void;
   onNewEventForProduct: (sku: string, category?: EventCategory) => void;
   allMainItems: InventoryItem[];
   policies: any[];
@@ -33,6 +35,7 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
   onClose,
   onEdit,
   onDeleteRow,
+  onPrintBarcode,
   onNewEventForProduct,
   allMainItems,
   policies,
@@ -143,6 +146,16 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {onPrintBarcode && sku && sku !== '-' && (
+              <button
+                onClick={() => onPrintBarcode(product)}
+                className="px-3 py-2 bg-indigo-600/10 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-bold text-xs rounded-xl hover:bg-indigo-600 hover:text-white transition-colors shadow-xs flex items-center gap-1.5"
+                title="Imprimir código de barras del SKU en formato ticket"
+              >
+                <BarcodeIcon className="w-3.5 h-3.5" />
+                <span>Ticket Barra</span>
+              </button>
+            )}
             <button
               onClick={() => onEdit(product)}
               className="px-3 py-2 bg-blue-600 text-white font-bold text-xs rounded-xl hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1.5"
@@ -176,6 +189,26 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
 
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+          {/* Barcode Visualizer Card */}
+          {sku && sku !== '-' && (
+            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs flex flex-col items-center justify-center text-center">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 font-mono mb-2 flex items-center gap-1.5">
+                <BarcodeIcon className="w-3.5 h-3.5 text-indigo-500" />
+                Código de Barras 1D (Code 128)
+              </div>
+              <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-inner max-w-full overflow-x-auto flex justify-center">
+                <Barcode 
+                  value={sku} 
+                  width={1.6} 
+                  height={44} 
+                  showText={true} 
+                  fontSize={11} 
+                  color="#0f172a" 
+                />
+              </div>
+            </div>
+          )}
 
           {/* AppSheet Feature: Ref Master Product Connection Card */}
           {masterSummary && (

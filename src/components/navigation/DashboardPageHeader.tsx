@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   Sparkles, Columns, ChevronDown, Tag, Sliders, Settings, 
   RotateCcw, Plus, Layers, Edit2, SlidersHorizontal, Eye, EyeOff, LayoutGrid, Maximize2,
-  ArrowUpAZ, ArrowDownZA
+  ArrowUpAZ, ArrowDownZA, Barcode
 } from 'lucide-react';
 import { SheetProperties, TableSlice } from '../../types';
 
@@ -35,6 +35,7 @@ interface DashboardPageHeaderProps {
   onToggleSummaryView?: () => void;
   isZenMode?: boolean;
   onToggleZenMode?: () => void;
+  onOpenStockCount?: () => void;
 }
 
 export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
@@ -66,6 +67,7 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
   onToggleSummaryView,
   isZenMode = false,
   onToggleZenMode,
+  onOpenStockCount,
 }) => {
   return (
     <div className="bg-slate-50/50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 px-8 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -351,6 +353,18 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
           >
             <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             <span>Conector Apps Script</span>
+          </button>
+        )}
+
+        {/* Action: Stock Count Terminal */}
+        {onOpenStockCount && activeView !== 'schema' && activeView !== 'analytics' && (
+          <button
+            onClick={onOpenStockCount}
+            className="text-xs bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2.5 rounded-xl font-bold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Abrir módulo de conteo físico de existencias (a ciegas o contra documento)"
+          >
+            <Barcode className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span>Conteo Físico</span>
           </button>
         )}
 

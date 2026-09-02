@@ -1,5 +1,6 @@
 import { 
   Printer, 
+  Barcode,
   Mail, 
   MessageSquare, 
   Download, 
@@ -9,10 +10,11 @@ import {
   LucideIcon 
 } from 'lucide-react';
 import { SheetConfig } from '../types';
-import { findPhoneColumn, findEmailColumn } from './columnAliases';
+import { findPhoneColumn, findEmailColumn, findColumnBySemantic } from './columnAliases';
 
 export type BulkActionId = 
   | 'ticket' 
+  | 'barcode_ticket'
   | 'gmail' 
   | 'whatsapp' 
   | 'excel' 
@@ -63,6 +65,26 @@ export const ALL_BULK_ACTIONS: BulkActionDefinition[] = [
     iconClass: 'w-3.5 h-3.5 text-indigo-400',
     defaultEnabled: true,
     getContextualReason: () => 'Impresión de etiquetas térmicas de inventario'
+  },
+  {
+    id: 'barcode_ticket',
+    label: 'Imprimir Códigos de Barras',
+    shortLabel: 'Código Barras',
+    description: 'Imprime el SKU como código de barras 1D (Code128) en formato ticket térmico',
+    category: 'operations',
+    icon: Barcode,
+    buttonClass: 'text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 bg-indigo-600/40 text-indigo-200 border border-indigo-500/40 shadow-sm',
+    iconClass: 'w-3.5 h-3.5 text-indigo-300',
+    defaultEnabled: (ctx) => {
+      // Enabled by default if SKU or code column is detected, or for main/products/events views
+      const hasSku = ctx.headers.some(h => findColumnBySemantic([h], 'sku') !== undefined);
+      return hasSku || ['main', 'products', 'events'].includes(ctx.activeView);
+    },
+    getContextualReason: (ctx) => {
+      const hasSku = ctx.headers.some(h => findColumnBySemantic([h], 'sku') !== undefined);
+      if (hasSku) return 'Detectada columna de SKU/Código en la tabla para generar código de barras';
+      return 'Generador de etiquetas térmicas con código de barras 1D (Code128)';
+    }
   },
   {
     id: 'gmail',

@@ -24,9 +24,19 @@ export type KnownFieldSemantic =
   | 'email'
   | 'categoria'
   | 'mundo'
-  | 'pm';
+  | 'pm'
+  | 'ubicacion';
 
 const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
+  ubicacion: [
+    /^ubicaci[oó]n(_|\s)?(bod|bodega|almacen|pasillo)?$/i,
+    /^pasillo$/i,
+    /^estante$/i,
+    /^posici[oó]n$/i,
+    /^bin$/i,
+    /^rack$/i,
+    /^locaci[oó]n$/i
+  ],
   id: [
     /^cu(_|\s)?(vc|calculado)?$/i,
     /^codigo(_|\s)?unico$/i,

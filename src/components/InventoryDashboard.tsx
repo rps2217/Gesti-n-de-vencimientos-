@@ -22,7 +22,7 @@ import { z } from 'zod';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
   Plus, Edit2, Trash2, RefreshCw, Loader2, Database, AlertCircle, Package, 
-  FileSpreadsheet, Printer, Settings, FileText, Search, X, Truck, RotateCcw, 
+  FileSpreadsheet, Printer, Barcode, Settings, FileText, Search, X, Truck, RotateCcw, 
   PackageX, Sparkles, Clock, Clock3, Flame, AlertTriangle, CheckCircle2, FilterX, 
   Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown, Menu, Scan, GripVertical, Tag, Mail, MessageSquare, ChevronDown, Check, MoreVertical, Building2, Maximize2
 } from 'lucide-react';
@@ -127,6 +127,7 @@ import {
 import { SliceSelectorBar } from './slices/SliceSelectorBar';
 import { SliceEditorModal } from './modals/SliceEditorModal';
 import { SliceManagerModal } from './modals/SliceManagerModal';
+import { StockCountModal } from './modals/StockCountModal';
 
 export const InventoryDashboard: React.FC = () => {
   const { showToast, updateToast } = useToast();
@@ -233,11 +234,13 @@ export const InventoryDashboard: React.FC = () => {
     return loadTicketConfigFromStorage();
   });
   const [isTicketConfigOpen, setIsTicketConfigOpen] = useState(false);
+  const [ticketPrintMode, setTicketPrintMode] = useState<'standard' | 'barcode'>('standard');
   const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
   const [gmailModalItems, setGmailModalItems] = useState<any[]>([]);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [whatsAppModalItems, setWhatsAppModalItems] = useState<any[]>([]);
   const [isBulkActionsConfigOpen, setIsBulkActionsConfigOpen] = useState(false);
+  const [isStockCountOpen, setIsStockCountOpen] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
 
@@ -289,11 +292,12 @@ export const InventoryDashboard: React.FC = () => {
     setIsTicketConfigOpen(false);
   };
 
-  const handlePrintTicket = (itemsToPrint: InventoryItem[]) => {
+  const handlePrintTicket = (itemsToPrint: InventoryItem[], mode: 'standard' | 'barcode' = 'standard') => {
     if (itemsToPrint.length === 0) {
       alert("No hay registros para imprimir.");
       return;
     }
+    setTicketPrintMode(mode);
     // El renderizado de TicketPrintView se encarga de mostrar solo el ticket en modo @media print
     setTimeout(() => {
       window.print();
@@ -1814,6 +1818,7 @@ export const InventoryDashboard: React.FC = () => {
             setSelectedProduct={setSelectedProduct}
             otherSheets={otherSheets}
             onOpenConfig={() => setIsConfigOpen(true)}
+            onOpenStockCount={() => setIsStockCountOpen(true)}
           />
         </div>
       )}
@@ -1838,6 +1843,7 @@ export const InventoryDashboard: React.FC = () => {
                 setSelectedProduct={setSelectedProduct}
                 otherSheets={otherSheets}
                 onOpenConfig={() => { setIsConfigOpen(true); setIsMobileMenuOpen(false); }}
+                onOpenStockCount={() => { setIsStockCountOpen(true); setIsMobileMenuOpen(false); }}
               />
             </div>
           </div>
@@ -1973,6 +1979,7 @@ export const InventoryDashboard: React.FC = () => {
                 setIsZenMode(next);
                 showToast(next ? 'Modo Zen activado (Presiona Esc para salir)' : 'Modo Zen desactivado', 'info', 'Enfoque');
               }}
+              onOpenStockCount={() => setIsStockCountOpen(true)}
             />
           )}
 
@@ -2192,7 +2199,7 @@ export const InventoryDashboard: React.FC = () => {
                     <button 
                       onClick={() => {
                         const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
-                        handlePrintTicket(selectedItems);
+                        handlePrintTicket(selectedItems, 'standard');
                       }}
                       className="text-xs hover:bg-slate-600 px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 text-white"
                     >
@@ -2206,6 +2213,19 @@ export const InventoryDashboard: React.FC = () => {
                       <Settings className="w-3.5 h-3.5" />
                     </button>
                   </div>
+                )}
+
+                {isActionEnabledForTable('barcode_ticket', bulkActionCtx, sheetConfig) && (
+                  <button 
+                    onClick={() => {
+                      const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
+                      handlePrintTicket(selectedItems, 'barcode');
+                    }}
+                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 bg-indigo-600/40 text-indigo-200 border border-indigo-500/40 shadow-sm"
+                    title="Imprimir etiquetas térmicas con código de barras 1D (Code128) del SKU"
+                  >
+                    <Barcode className="w-3.5 h-3.5 text-indigo-300" /> Código Barras ({selectedRowIds.length})
+                  </button>
                 )}
                 
                 {isActionEnabledForTable('gmail', bulkActionCtx, sheetConfig) && (
@@ -2338,6 +2358,7 @@ export const InventoryDashboard: React.FC = () => {
           handleOpenModal(prod);
         }}
         onDeleteRow={handleDelete}
+        onPrintBarcode={(prod) => handlePrintTicket([prod], 'barcode')}
         onNewEventForProduct={(sku, category) => {
           handleOpenModal(undefined, sku, category);
         }}
@@ -2585,6 +2606,75 @@ export const InventoryDashboard: React.FC = () => {
         onSaveSlice={handleSaveSlice}
         onDeleteSlice={handleDeleteSlice}
       />
+
+      {/* STOCK COUNT TERMINAL MODAL */}
+      <StockCountModal
+        isOpen={isStockCountOpen}
+        onClose={() => setIsStockCountOpen(false)}
+        sheetItems={items}
+        headers={headers}
+        masterProducts={products}
+        activeSheetTitle={activeSheet?.title || activeView}
+        showToast={showToast}
+        onSyncRowsToVencimientos={async (rowsToSync) => {
+          const targetSheetTitle = sheetConfig.tables?.main || 
+            (metadata?.sheets.find(s => /vencimiento|main/i.test(s.title))?.title) || 
+            (activeView === 'main' && activeSheet?.title ? activeSheet.title : 'VENCIMIENTOS');
+
+          const targetHeaders = activeView === 'main' && headers.length > 0 ? headers : [
+            'ID_VC', 'SKU_VC', 'PRODUCTO_VC', 'MM', 'YYYY', 'FECHA_VC',
+            'RUT_PROVEEDOR_VC', 'POLITICA', 'DIAS RETIRO_VC', 'MUNDO', 'PM', 'timestamp', 'CU_VC', 'TIPO_EVENTO'
+          ];
+
+          let nextRowIndex = items.length ? Math.max(...items.map(i => i._rowIndex || 2)) + 1 : 2;
+
+          for (const record of rowsToSync) {
+            const existingMatch = items.find(i => {
+              const iCu = i.CU_VC || (i.SKU_VC && i.YYYY && i.MM ? `${i.SKU_VC}${i.YYYY}${String(i.MM).padStart(2, '0')}` : null);
+              return iCu && record.CU_VC && String(iCu).trim() === String(record.CU_VC).trim();
+            });
+
+            const rowValues = targetHeaders.map(h => {
+              if (record[h] !== undefined) return String(record[h]);
+              if (h === 'CU_VC') return String(record.CU_VC || '');
+              if (h === 'SKU_VC') return String(record.SKU_VC || '');
+              if (h === 'PRODUCTO_VC') return String(record.PRODUCTO_VC || '');
+              return '';
+            });
+
+            if (existingMatch && existingMatch._rowIndex) {
+              try {
+                await updateRow(targetSheetTitle, existingMatch._rowIndex, rowValues);
+              } catch (err) {
+                console.warn('Network error updating row in Vencimientos, queueing offline mutation:', err);
+                await enqueueMutation({
+                  type: 'update',
+                  sheetTitle: targetSheetTitle,
+                  rowIndex: existingMatch._rowIndex,
+                  values: rowValues,
+                  entityKey: record.CU_VC
+                });
+              }
+            } else {
+              try {
+                await appendRow(targetSheetTitle, rowValues);
+              } catch (err) {
+                console.warn('Network error appending row to Vencimientos, queueing offline mutation:', err);
+                await enqueueMutation({
+                  type: 'append',
+                  sheetTitle: targetSheetTitle,
+                  values: rowValues,
+                  entityKey: record.CU_VC
+                });
+              }
+            }
+          }
+
+          if (activeView === 'main') {
+            await fetchData(sheetConfig, 'main', true);
+          }
+        }}
+      />
     </div>
 
     {/* HIDDEN UNLESS PRINTING: TICKET PRINT VIEW */}
@@ -2593,6 +2683,7 @@ export const InventoryDashboard: React.FC = () => {
       headers={headers} 
       config={globalTicketConfig[activeView] || sheetConfig.ticketPrintConfig?.[activeView] || {}} 
       activeView={activeView}
+      mode={ticketPrintMode}
     />
     </>
   );

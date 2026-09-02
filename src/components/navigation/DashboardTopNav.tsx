@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { 
   Menu, Search, X, FilterX, Scan, Download, ChevronDown, 
-  Mail, Flame, FileSpreadsheet, Printer, RefreshCw, MessageSquare, Sliders, Settings 
+  Mail, Flame, FileSpreadsheet, Printer, Barcode, RefreshCw, MessageSquare, Sliders, Settings 
 } from 'lucide-react';
 import { InventoryItem, SheetConfig } from '../../types';
 import { VIRTUAL_COLUMNS } from '../../utils/virtualColumns';
@@ -34,7 +34,7 @@ interface DashboardTopNavProps {
   sheetConfig: SheetConfig;
   products: any[];
   policies: any[];
-  handlePrintTicket: (items: InventoryItem[]) => void;
+  handlePrintTicket: (items: InventoryItem[], mode?: 'standard' | 'barcode') => void;
   isOffline: boolean;
   lastCachedAt: number | null;
   offlineQueue: any[];
@@ -83,6 +83,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
   const isGmailActive = isActionEnabledForTable('gmail', bulkActionCtx, sheetConfig);
   const isPmReportActive = isActionEnabledForTable('pm_report', bulkActionCtx, sheetConfig);
   const isTicketActive = isActionEnabledForTable('ticket', bulkActionCtx, sheetConfig);
+  const isBarcodeTicketActive = isActionEnabledForTable('barcode_ticket', bulkActionCtx, sheetConfig);
   const isExcelActive = isActionEnabledForTable('excel', bulkActionCtx, sheetConfig);
 
   return (
@@ -295,7 +296,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
                   <div className="flex items-center hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-xl transition-colors pr-2 group">
                     <button
                       onClick={() => {
-                        handlePrintTicket(filteredItems);
+                        handlePrintTicket(filteredItems, 'standard');
                         setIsActionsMenuOpen(false);
                       }}
                       className="flex-1 text-left px-3.5 py-2 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors"
@@ -320,6 +321,24 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
                       <Settings className="w-3.5 h-3.5" />
                     </button>
                   </div>
+                )}
+
+                {isBarcodeTicketActive && (
+                  <button
+                    onClick={() => {
+                      handlePrintTicket(filteredItems, 'barcode');
+                      setIsActionsMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3.5 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2.5 transition-colors rounded-xl group"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 flex items-center justify-center shrink-0">
+                      <Barcode className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-slate-800 dark:text-slate-100">Imprimir Códigos de Barras</div>
+                      <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">Etiquetas térmicas con SKU (Code128)</div>
+                    </div>
+                  </button>
                 )}
 
                 {/* Scoping and Configuration Trigger */}

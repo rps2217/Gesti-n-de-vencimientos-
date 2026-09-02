@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  Database, FileSpreadsheet, Package, FileText, TableProperties, List, Settings, PanelLeftClose, PanelLeftOpen, PieChart
+  Database, FileSpreadsheet, Package, FileText, TableProperties, List, Settings, PanelLeftClose, PanelLeftOpen, PieChart, Barcode
 } from 'lucide-react';
 
 interface SidebarItemProps {
@@ -10,9 +10,10 @@ interface SidebarItemProps {
   active: boolean;
   onClick: () => void;
   collapsed?: boolean;
+  badge?: string;
 }
 
-const SidebarItem: React.FC<SidebarItemProps> = ({ icon, label, active, onClick, collapsed }) => {
+const SidebarItem: React.FC<SidebarItemProps> = ({ icon, label, active, onClick, collapsed, badge }) => {
   return (
     <button
       onClick={onClick}
@@ -27,7 +28,12 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ icon, label, active, onClick,
         {icon}
       </div>
       {!collapsed && <span className="truncate">{label}</span>}
-      {active && !collapsed && (
+      {badge && !collapsed && (
+        <span className="ml-auto text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300">
+          {badge}
+        </span>
+      )}
+      {active && !collapsed && !badge && (
         <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white"></div>
       )}
     </button>
@@ -42,6 +48,7 @@ interface SidebarProps {
   setSelectedProduct: (prod: any) => void;
   otherSheets: string[];
   onOpenConfig: () => void;
+  onOpenStockCount?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -51,7 +58,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveView,
   setSelectedProduct,
   otherSheets,
-  onOpenConfig
+  onOpenConfig,
+  onOpenStockCount
 }) => {
   return (
     <div className={`${isSidebarCollapsed ? 'w-20' : 'w-64'} bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0 z-20 transition-all duration-300`}>
@@ -96,6 +104,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => { setActiveView('policies'); setSelectedProduct(null); }}
             collapsed={isSidebarCollapsed}
           />
+
+          {onOpenStockCount && (
+            <SidebarItem 
+              icon={<Barcode className="w-5 h-5" />} 
+              label="Conteo de Stock" 
+              active={false} 
+              onClick={onOpenStockCount}
+              collapsed={isSidebarCollapsed}
+              badge="Físico"
+            />
+          )}
           
           <div className="my-2 border-t border-slate-100 dark:border-slate-800"></div>
           

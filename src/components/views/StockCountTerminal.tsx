@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   X, Check, Plus, Minus, Trash2, Play, Pause, CheckCircle2, 
   AlertTriangle, ArrowRight, RotateCcw, Download, Calendar, 
@@ -28,9 +29,7 @@ import {
 import { searchMasterProducts, findMasterProduct, getMasterProductSummary } from '../../utils/referenceResolver';
 import { formatLocaleNumber, parseLocaleNumber } from '../../utils/pureCalculations';
 
-interface StockCountModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+interface StockCountTerminalProps {
   sheetItems: InventoryItem[];
   headers: string[];
   masterProducts: any[];
@@ -55,9 +54,7 @@ const MONTHS_LIST = [
   { val: '12', label: '12 - Dic' }
 ];
 
-export const StockCountModal: React.FC<StockCountModalProps> = ({
-  isOpen,
-  onClose,
+export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
   sheetItems,
   headers,
   masterProducts,
@@ -65,6 +62,7 @@ export const StockCountModal: React.FC<StockCountModalProps> = ({
   onSyncRowsToVencimientos,
   showToast
 }) => {
+  const navigate = useNavigate();
   // Session list & active session
   const [sessions, setSessions] = useState<StockCountSession[]>(() => loadStockCountSessionsFromStorage());
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -113,12 +111,12 @@ export const StockCountModal: React.FC<StockCountModalProps> = ({
 
   // Focus SKU input whenever switching to counting view
   useEffect(() => {
-    if (viewState === 'COUNTING' && isOpen) {
+    if (viewState === 'COUNTING') {
       setTimeout(() => {
         skuInputRef.current?.focus();
       }, 100);
     }
-  }, [viewState, isOpen]);
+  }, [viewState]);
 
   // Current active session
   const currentSession = useMemo(() => {
@@ -478,11 +476,8 @@ export const StockCountModal: React.FC<StockCountModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[92vh] max-h-[850px] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden text-slate-800 dark:text-slate-100">
+    <div className="flex-1 w-full h-full bg-white dark:bg-slate-900 flex flex-col overflow-hidden text-slate-800 dark:text-slate-100">
         
         {/* ======================================================== */}
         {/* HEADER                                                  */}
@@ -527,7 +522,7 @@ export const StockCountModal: React.FC<StockCountModalProps> = ({
             )}
 
             <button
-              onClick={onClose}
+              onClick={() => navigate('/')}
               className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
             >
               <X className="w-5 h-5" />
@@ -1418,8 +1413,6 @@ export const StockCountModal: React.FC<StockCountModalProps> = ({
 
           </div>
         )}
-
       </div>
-    </div>
   );
 };

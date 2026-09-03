@@ -128,7 +128,7 @@ import {
 import { SliceSelectorBar } from './slices/SliceSelectorBar';
 import { SliceEditorModal } from './modals/SliceEditorModal';
 import { SliceManagerModal } from './modals/SliceManagerModal';
-import { StockCountModal } from './modals/StockCountModal';
+// StockCountModal removed
 
 export const InventoryDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -2609,74 +2609,8 @@ export const InventoryDashboard: React.FC = () => {
         onDeleteSlice={handleDeleteSlice}
       />
 
-      {/* STOCK COUNT TERMINAL MODAL */}
-      <StockCountModal
-        isOpen={isStockCountOpen}
-        onClose={() => setIsStockCountOpen(false)}
-        sheetItems={items}
-        headers={headers}
-        masterProducts={products}
-        activeSheetTitle={activeSheet?.title || activeView}
-        showToast={showToast}
-        onSyncRowsToVencimientos={async (rowsToSync) => {
-          const targetSheetTitle = sheetConfig.tables?.main || 
-            (metadata?.sheets.find(s => /vencimiento|main/i.test(s.title))?.title) || 
-            (activeView === 'main' && activeSheet?.title ? activeSheet.title : 'VENCIMIENTOS');
 
-          const targetHeaders = activeView === 'main' && headers.length > 0 ? headers : [
-            'ID_VC', 'SKU_VC', 'PRODUCTO_VC', 'MM', 'YYYY', 'FECHA_VC',
-            'RUT_PROVEEDOR_VC', 'POLITICA', 'DIAS RETIRO_VC', 'MUNDO', 'PM', 'timestamp', 'CU_VC', 'TIPO_EVENTO'
-          ];
 
-          let nextRowIndex = items.length ? Math.max(...items.map(i => i._rowIndex || 2)) + 1 : 2;
-
-          for (const record of rowsToSync) {
-            const existingMatch = items.find(i => {
-              const iCu = i.CU_VC || (i.SKU_VC && i.YYYY && i.MM ? `${i.SKU_VC}${i.YYYY}${String(i.MM).padStart(2, '0')}` : null);
-              return iCu && record.CU_VC && String(iCu).trim() === String(record.CU_VC).trim();
-            });
-
-            const rowValues = targetHeaders.map(h => {
-              if (record[h] !== undefined) return String(record[h]);
-              if (h === 'CU_VC') return String(record.CU_VC || '');
-              if (h === 'SKU_VC') return String(record.SKU_VC || '');
-              if (h === 'PRODUCTO_VC') return String(record.PRODUCTO_VC || '');
-              return '';
-            });
-
-            if (existingMatch && existingMatch._rowIndex) {
-              try {
-                await updateRow(targetSheetTitle, existingMatch._rowIndex, rowValues);
-              } catch (err) {
-                console.warn('Network error updating row in Vencimientos, queueing offline mutation:', err);
-                await enqueueMutation({
-                  type: 'update',
-                  sheetTitle: targetSheetTitle,
-                  rowIndex: existingMatch._rowIndex,
-                  values: rowValues,
-                  entityKey: record.CU_VC
-                });
-              }
-            } else {
-              try {
-                await appendRow(targetSheetTitle, rowValues);
-              } catch (err) {
-                console.warn('Network error appending row to Vencimientos, queueing offline mutation:', err);
-                await enqueueMutation({
-                  type: 'append',
-                  sheetTitle: targetSheetTitle,
-                  values: rowValues,
-                  entityKey: record.CU_VC
-                });
-              }
-            }
-          }
-
-          if (activeView === 'main') {
-            await fetchData(sheetConfig, 'main', true);
-          }
-        }}
-      />
     </div>
 
     {/* HIDDEN UNLESS PRINTING: TICKET PRINT VIEW */}

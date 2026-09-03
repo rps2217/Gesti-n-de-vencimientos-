@@ -185,7 +185,7 @@ export function reconcileStockCountSession(
 
   // If blind count, we DON'T populate the theoreticalMap from the sheetItems, 
   // so teorico will remain 0 for all items.
-  if (session.mode !== 'BLIND') {
+  if (session.modo !== 'BLIND') {
     for (const item of sheetItems) {
       const rawSku = skuCol ? item[skuCol] : item.SKU_VC || item.SKU;
       const cleanSku = String(rawSku || '').trim();

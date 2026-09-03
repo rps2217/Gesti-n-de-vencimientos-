@@ -1,10 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, Loader2, Sparkles, AlertCircle, Link2, Info, Search, 
-  Check, RotateCcw, Eye, EyeOff, Sliders, Plus, CheckCircle2, ChevronDown
+  Check, RotateCcw, Eye, EyeOff, Sliders, Plus, CheckCircle2, ChevronDown, Calendar
 } from 'lucide-react';
 import { SheetProperties, InventoryItem, EventCategory, SheetConfig } from '../../types';
-import { EVENT_CATEGORIES, renderEventIcon } from '../../utils/dateCalculations';
+import { 
+  EVENT_CATEGORIES, 
+  renderEventIcon, 
+  formatInputDate, 
+  formatInputDateTime, 
+  formatDisplayDate, 
+  parseAnyDate 
+} from '../../utils/dateCalculations';
 import { evaluateShowIf, getOperationalSuggestions, QUICK_QUANTITY_PRESETS } from '../../utils/dynamicFormRules';
 import { 
   findMasterProduct, 
@@ -340,8 +347,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
             {/* Input Fields Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {visibleFields.map(({ header, colSchema, isKey }) => {
-                const isAutoCalc = colSchema?.behavior === 'calc_fecha_vc' || 
-                                   colSchema?.behavior === 'calc_retiro' || 
+                const isAutoCalc = (colSchema?.behavior === 'calc_fecha_vc' && activeView === 'main') || 
+                                   (colSchema?.behavior === 'calc_retiro' && activeView === 'main') || 
                                    colSchema?.behavior === 'auto_id' || 
                                    colSchema?.type === 'calculated' || 
                                    /^ID_VC$/i.test(header.trim());
@@ -349,6 +356,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 const isSku = /sku|código|codigo/i.test(header);
                 const isObs = /observ|nota|motivo|detalle|coment|causa/i.test(header);
                 const isCant = /^cant|unidades|stock/i.test(header);
+                const isDateCol = colSchema?.type === 'date' || (/fecha|vencimiento|vence|retiro/i.test(header) && !/time/i.test(header));
+                const isDateTimeCol = colSchema?.type === 'datetime' || /timestamp|created_at/i.test(header);
                 const isTraspasoCol = /traspaso/i.test(header);
                 const traspasoVal = (formData[header] || '').trim();
                 const isTraspasoFilled = traspasoVal !== '' && traspasoVal !== '-' && traspasoVal !== '0';
@@ -531,16 +540,112 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                           </div>
                         </div>
                       </div>
+                    ) : isDateCol ? (
+                      <div className="space-y-1.5">
+                        <div className="relative flex items-center">
+                          <input
+                            type="text"
+                            name={header}
+                            value={formData[header] || ''}
+                            onChange={onChange}
+                            readOnly={isAutoCalc}
+                            placeholder={
+                              isAutoCalc 
+                                ? 'Calculado automáticamente' 
+                                : 'DD/MM/AAAA o AAAA-MM-DD (opcional)'
+                            }
+                            className={`w-full border rounded-xl pl-3.5 pr-20 py-2.5 text-sm font-medium text-slate-800 dark:text-slate-100 outline-none transition-all ${
+                              isAutoCalc
+                                ? 'bg-slate-100/70 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
+                                : hasError
+                                  ? 'bg-rose-50/50 dark:bg-rose-950/40 border-rose-400 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10'
+                                  : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
+                            }`}
+                          />
+
+                          {/* Quick Calendar & Clear buttons */}
+                          {!isAutoCalc && (
+                            <div className="absolute right-2 flex items-center gap-1">
+                              {formData[header] && (
+                                <button
+                                  type="button"
+                                  title="Borrar fecha (dejar vacío)"
+                                  onClick={() => {
+                                    onChange({ target: { name: header, value: '' } } as any);
+                                  }}
+                                  className="p-1 rounded-md text-slate-400 hover:text-rose-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              <label 
+                                className="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer relative" 
+                                title="Seleccionar en calendario"
+                              >
+                                <Calendar className="w-4 h-4" />
+                                <input
+                                  type="date"
+                                  tabIndex={-1}
+                                  value={formatInputDate(formData[header]) || ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val) {
+                                      const d = parseAnyDate(val);
+                                      const formatted = d ? formatDisplayDate(d) : val;
+                                      onChange({ target: { name: header, value: formatted } } as any);
+                                    }
+                                  }}
+                                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer pointer-events-auto"
+                                />
+                              </label>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Date Helper footer */}
+                        {!isAutoCalc && (
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 px-1 pt-0.5">
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const today = new Date();
+                                  const formatted = formatDisplayDate(today);
+                                  onChange({ target: { name: header, value: formatted } } as any);
+                                }}
+                                className="font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                              >
+                                Hoy
+                              </button>
+                              {formData[header] && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onChange({ target: { name: header, value: '' } } as any);
+                                  }}
+                                  className="font-semibold text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+                                >
+                                  Sin fecha
+                                </button>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-slate-400">
+                              {formData[header] && parseAnyDate(formData[header])
+                                ? `✓ ${formatDisplayDate(formData[header])}`
+                                : 'Opcional'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <div className="space-y-1.5">
                         <input
                           type={
-                            colSchema?.type === 'datetime' ? 'datetime-local' :
-                            colSchema?.type === 'date' || (/fecha/i.test(header) && !/time/i.test(header)) ? 'date' :
+                            isDateTimeCol ? 'datetime-local' :
                             colSchema?.type === 'number' || /^cant|unidades|stock|dias|precio/i.test(header) ? 'number' : 'text'
                           }
                           name={header}
-                          value={formData[header] || ''}
+                          value={isDateTimeCol ? (formatInputDateTime(formData[header]) || formData[header] || '') : (formData[header] || '')}
                           onChange={onChange}
                           readOnly={isAutoCalc}
                           placeholder={

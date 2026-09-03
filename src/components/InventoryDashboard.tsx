@@ -33,6 +33,8 @@ import {
   EVENT_CATEGORIES, 
   renderEventIcon, 
   parseAnyDate, 
+  formatInputDate,
+  formatInputDateTime,
   getEventCategory, 
   getItemStatus,
   getCategoryFromEventValue,
@@ -128,7 +130,7 @@ import {
 import { SliceSelectorBar } from './slices/SliceSelectorBar';
 import { SliceEditorModal } from './modals/SliceEditorModal';
 import { SliceManagerModal } from './modals/SliceManagerModal';
-// StockCountModal removed
+import { StockCountTerminal } from './views/StockCountTerminal';
 
 export const InventoryDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -144,6 +146,7 @@ export const InventoryDashboard: React.FC = () => {
   const [selectedProduct, setSelectedProduct] = useState<InventoryItem | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isStockCountOpen, setIsStockCountOpen] = useState<boolean>(false);
   
   // Storage & Cloud Sync Status
   const [hasCloudConfigSheet, setHasCloudConfigSheet] = useState<boolean>(false);
@@ -1132,7 +1135,18 @@ export const InventoryDashboard: React.FC = () => {
       setSelectedEventCategory(cat);
       const initialData: Record<string, string> = {};
       headers.forEach(h => {
-        initialData[h] = item[h] || '';
+        const colSchema = sheetConfig.schema?.[activeSheet.title]?.[h];
+        const isDateTime = colSchema?.type === 'datetime' || /timestamp|created_at|fecha_creaci[oó]n|fecha_registro/i.test(h);
+        const isDate = colSchema?.type === 'date' || (/fecha|vencimiento|vence|retiro/i.test(h) && !/time/i.test(h));
+        const raw = item[h] !== undefined && item[h] !== null ? String(item[h]).trim() : '';
+
+        if (isDateTime && raw) {
+          initialData[h] = formatInputDateTime(raw) || raw;
+        } else if (isDate && raw) {
+          initialData[h] = formatInputDate(raw) || raw;
+        } else {
+          initialData[h] = raw;
+        }
       });
       setFormData(initialData);
     } else {
@@ -1188,6 +1202,53 @@ export const InventoryDashboard: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  // Handle batch synchronization from stock count terminal to VENCIMIENTOS sheet
+  const handleSyncRowsToVencimientos = async (rows: Record<string, any>[]) => {
+    if (!activeSheet) return;
+    const targetTitle = activeSheet.title;
+    try {
+      showToast(`Sincronizando ${rows.length} registros con ${targetTitle}...`, 'info', 'Sincronización');
+      for (const row of rows) {
+        const rowValues = headers.map(h => row[h] !== undefined ? String(row[h]) : '');
+        const cuVc = row.CU_VC || row.cu_vc;
+        const existingItem = items.find(it => (cuVc && it.CU_VC === cuVc) || (it.SKU_VC === row.SKU_VC && it.MM === row.MM && it.YYYY === row.YYYY));
+
+        if (existingItem && existingItem._rowIndex) {
+          try {
+            await updateRow(targetTitle, existingItem._rowIndex, rowValues);
+          } catch (err) {
+            await enqueueMutation({
+              type: 'update',
+              sheetTitle: targetTitle,
+              rowIndex: existingItem._rowIndex,
+              entityKey: existingItem._entityKey || cuVc,
+              entityKeyCol: existingItem._entityKeyCol || 'CU_VC',
+              headers,
+              values: rowValues
+            });
+          }
+        } else {
+          try {
+            await appendRow(targetTitle, rowValues);
+          } catch (err) {
+            await enqueueMutation({
+              type: 'append',
+              sheetTitle: targetTitle,
+              entityKey: cuVc,
+              entityKeyCol: 'CU_VC',
+              headers,
+              values: rowValues
+            });
+          }
+        }
+      }
+      showToast(`${rows.length} registros sincronizados exitosamente con ${targetTitle}`, 'success', 'Sincronización Completa');
+      await fetchData(sheetConfig, activeView, true);
+    } catch (err: any) {
+      showToast(`Error durante sincronización: ${err.message}`, 'error', 'Error');
+    }
+  };
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingItem(null);
@@ -1200,13 +1261,14 @@ export const InventoryDashboard: React.FC = () => {
     if (!activeSheet) return errors;
 
     const currentSchema = sheetConfig.schema?.[activeSheet.title] || {};
+    const isEventsSheet = activeView === 'events' || /frc|evento|incidenc|averia|merma|diferencia|transporte/i.test(activeSheet.title);
     
     // Dynamic Zod Schema generation based on our internal types
     const zSchemaShape: Record<string, z.ZodTypeAny> = {};
 
     headers.forEach(header => {
       const colSchema = currentSchema[header];
-      const effectiveType = colSchema?.type || (/fecha|vencimiento|retiro/i.test(header) ? 'date' : 'text');
+      const effectiveType = colSchema?.type || (/fecha|vencimiento|vence|retiro/i.test(header) ? 'date' : 'text');
       const isAutoCalculated = colSchema?.behavior === 'auto_id' || 
                                colSchema?.behavior === 'calc_fecha_vc' || 
                                colSchema?.behavior === 'calc_retiro' || 
@@ -1222,8 +1284,16 @@ export const InventoryDashboard: React.FC = () => {
       // Base string schema
       let fieldSchema: z.ZodTypeAny = z.string().trim();
 
-      // Required logic: Sku, dates, and amounts are usually required, others optional.
-      const isRequired = colSchema?.isKey || /sku|código|codigo|cantidad|fecha|lote|estado/i.test(header);
+      const isDateOrTimeCol = effectiveType === 'date' || effectiveType === 'datetime' || /fecha|vencimiento|vence|retiro|timestamp/i.test(header);
+
+      // Required logic:
+      // En incidencias/FRC, las fechas (ej. FRC_VENCE), observaciones y folios son estrictamente opcionales.
+      // Solo las llaves primarias declaradas o SKU en tabla principal son obligatorios.
+      const isRequired = Boolean(
+        colSchema?.isKey || 
+        colSchema?.required || 
+        (!isEventsSheet && !isDateOrTimeCol && /^(sku|c[oó]digo)$/i.test(header.trim()))
+      );
 
       if (!isRequired) {
         fieldSchema = z.string().trim().optional().or(z.literal(''));
@@ -1234,14 +1304,19 @@ export const InventoryDashboard: React.FC = () => {
       // Type specific validation
       if (effectiveType === 'number' || /^cant|unidades|stock|dias|precio/i.test(header)) {
         fieldSchema = fieldSchema.refine((val: any) => {
-          if (!isRequired && (!val || val === '')) return true;
+          if (!isRequired && (!val || val === '' || val === '-')) return true;
           return !isNaN(Number(val));
         }, 'Debe ser un número válido.');
-      } else if (effectiveType === 'date' || /fecha/i.test(header)) {
+      } else if (effectiveType === 'date' || /fecha|vencimiento|vence|retiro/i.test(header)) {
         fieldSchema = fieldSchema.refine((val: any) => {
-          if (!isRequired && (!val || val === '')) return true;
-          return !isNaN(new Date(val as string).getTime());
+          if (!isRequired && (!val || String(val).trim() === '' || String(val).trim() === '-' || String(val).trim() === 'N/A')) return true;
+          return parseAnyDate(val) !== null;
         }, 'Formato de fecha inválido.');
+      } else if (effectiveType === 'datetime' || /timestamp/i.test(header)) {
+        fieldSchema = fieldSchema.refine((val: any) => {
+          if (!isRequired && (!val || String(val).trim() === '' || String(val).trim() === '-' || String(val).trim() === 'N/A')) return true;
+          return !isNaN(new Date(val).getTime()) || parseAnyDate(val) !== null;
+        }, 'Formato de fecha y hora inválido.');
       }
 
       // Custom validations for Vencimiento
@@ -1819,7 +1894,7 @@ export const InventoryDashboard: React.FC = () => {
             setSelectedProduct={setSelectedProduct}
             otherSheets={otherSheets}
             onOpenConfig={() => setIsConfigOpen(true)}
-            onOpenStockCount={() => navigate('/conteo')}
+            onOpenStockCount={() => setIsStockCountOpen(true)}
           />
         </div>
       )}
@@ -1844,7 +1919,7 @@ export const InventoryDashboard: React.FC = () => {
                 setSelectedProduct={setSelectedProduct}
                 otherSheets={otherSheets}
                 onOpenConfig={() => { setIsConfigOpen(true); setIsMobileMenuOpen(false); }}
-                onOpenStockCount={() => { navigate('/conteo'); setIsMobileMenuOpen(false); }}
+                onOpenStockCount={() => { setIsStockCountOpen(true); setIsMobileMenuOpen(false); }}
               />
             </div>
           </div>
@@ -1980,7 +2055,7 @@ export const InventoryDashboard: React.FC = () => {
                 setIsZenMode(next);
                 showToast(next ? 'Modo Zen activado (Presiona Esc para salir)' : 'Modo Zen desactivado', 'info', 'Enfoque');
               }}
-              onOpenStockCount={() => navigate('/conteo')}
+              onOpenStockCount={() => setIsStockCountOpen(true)}
             />
           )}
 
@@ -2608,7 +2683,22 @@ export const InventoryDashboard: React.FC = () => {
         onDeleteSlice={handleDeleteSlice}
       />
 
-
+      {/* STOCK COUNT TERMINAL OVERLAY */}
+      {isStockCountOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-150">
+          <div className="w-full h-full max-w-7xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col">
+            <StockCountTerminal
+              sheetItems={items}
+              headers={headers}
+              masterProducts={products}
+              activeSheetTitle={activeSheet?.title || 'VENCIMIENTOS'}
+              onSyncRowsToVencimientos={handleSyncRowsToVencimientos}
+              showToast={showToast}
+              onClose={() => setIsStockCountOpen(false)}
+            />
+          </div>
+        </div>
+      )}
 
     </div>
 

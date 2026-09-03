@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Package, Link as LinkIcon, Settings2, CheckCircle2, Moon, Sun, Contrast, Check } from 'lucide-react';
 import InventoryDashboard from './components/InventoryDashboard';
-import { StockCountView } from './components/views/StockCountView';
 import { ToastProvider } from './components/common/ToastContainer';
 
 export type ThemeMode = 'light' | 'dark-slate' | 'dark-gray';
@@ -244,15 +243,7 @@ export default function App() {
                 </main>
               </>
             } />
-            <Route path="/conteo" element={
-              <StockCountView 
-                sheetItems={[]}
-                headers={[]} 
-                masterProducts={[]}
-                activeSheetTitle=""
-                showToast={() => {}}
-              />
-            } />
+            <Route path="/conteo" element={<Navigate to="/" replace />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </div>

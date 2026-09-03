@@ -36,6 +36,7 @@ interface StockCountTerminalProps {
   activeSheetTitle: string;
   onSyncRowsToVencimientos: (rows: Record<string, any>[]) => Promise<void>;
   showToast: (message: string, type: 'success' | 'error' | 'warning' | 'info', title?: string) => void;
+  onClose?: () => void;
 }
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -60,7 +61,8 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
   masterProducts,
   activeSheetTitle,
   onSyncRowsToVencimientos,
-  showToast
+  showToast,
+  onClose
 }) => {
   const navigate = useNavigate();
   // Session list & active session
@@ -425,11 +427,23 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
   }, [currentSession, reconciliation, pendingSearch]);
 
   // Export reconciliation report to Excel
-  const handleExportExcel = async () => {
+  const handleExportExcel = async (exportScope: 'FILTERED' | 'COUNTED_ONLY' | 'ALL' = 'FILTERED') => {
     if (!currentSession) return;
     try {
-      await exportStockCountToExcel(currentSession, reconciliation);
-      showToast('Planilla de cuadratura exportada exitosamente', 'success', 'Excel Generado');
+      let exportList = filteredReconciliation;
+      if (exportScope === 'COUNTED_ONLY') {
+        exportList = reconciliation.filter(r => r.contado > 0);
+      } else if (exportScope === 'ALL') {
+        exportList = reconciliation;
+      }
+
+      if (exportList.length === 0) {
+        showToast('No hay registros para exportar con el criterio seleccionado', 'warning');
+        return;
+      }
+
+      await exportStockCountToExcel(currentSession, exportList);
+      showToast(`Planilla de cuadratura exportada (${exportList.length} registros)`, 'success', 'Excel Generado');
     } catch (e: any) {
       showToast(`Error al exportar: ${e.message}`, 'error');
     }
@@ -522,8 +536,8 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
             )}
 
             <button
-              onClick={() => navigate('/')}
-              className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              onClick={() => onClose ? onClose() : navigate('/')}
+              className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -1334,13 +1348,39 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
               </div>
 
               <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                <button
-                  onClick={handleExportExcel}
-                  className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5"
-                >
-                  <Download className="w-4 h-4 text-emerald-600" />
-                  <span>Exportar Excel</span>
-                </button>
+                <div className="flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => handleExportExcel('FILTERED')}
+                    title={`Exportar vista actual filtrada (${filteredReconciliation.length} registros)`}
+                    className="px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Download className="w-4 h-4 text-emerald-600" />
+                    <span>Exportar ({filteredReconciliation.length})</span>
+                  </button>
+
+                  {reconciliation.filter(r => r.contado > 0).length > 0 && reconciliation.filter(r => r.contado > 0).length !== filteredReconciliation.length && (
+                    <button
+                      type="button"
+                      onClick={() => handleExportExcel('COUNTED_ONLY')}
+                      title="Exportar únicamente los productos con conteo físico registrado"
+                      className="px-2.5 py-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-md transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ml-1"
+                    >
+                      Solo Contados ({reconciliation.filter(r => r.contado > 0).length})
+                    </button>
+                  )}
+
+                  {reconciliation.length > filteredReconciliation.length && (
+                    <button
+                      type="button"
+                      onClick={() => handleExportExcel('ALL')}
+                      title={`Exportar padrón teórico completo (${reconciliation.length} registros)`}
+                      className="px-2 py-1 text-[11px] font-medium text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ml-1"
+                    >
+                      Todo ({reconciliation.length})
+                    </button>
+                  )}
+                </div>
 
                 <button
                   onClick={handleSyncToVencimientos}

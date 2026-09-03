@@ -160,6 +160,34 @@ export function formatInputDate(dateVal: any): string {
 }
 
 /**
+ * Format a Date or Timestamp for HTML `<input type="datetime-local">` (YYYY-MM-DDTHH:mm)
+ */
+export function formatInputDateTime(dateVal: any): string {
+  if (!dateVal) return '';
+  let d: Date | null = null;
+  if (dateVal instanceof Date) {
+    d = dateVal;
+  } else {
+    const str = String(dateVal).trim();
+    if (!str || str === '-' || str === 'N/A' || str === 'null' || str === 'undefined') return '';
+    const native = new Date(str);
+    if (!isNaN(native.getTime())) {
+      d = native;
+    } else {
+      d = parseAnyDate(str);
+    }
+  }
+  if (!d || isNaN(d.getTime())) return '';
+  const yyyy = d.getFullYear();
+  if (yyyy < 1900 || yyyy > 2100) return '';
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+}
+
+/**
  * Format a Date for elegant table display (DD/MM/YYYY)
  */
 export function formatDisplayDate(dateVal: any, fallback = '-'): string {

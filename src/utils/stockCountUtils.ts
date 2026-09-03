@@ -183,47 +183,51 @@ export function reconcileStockCountSession(
     pm?: string;
   }>();
 
-  for (const item of sheetItems) {
-    const rawSku = skuCol ? item[skuCol] : item.SKU_VC || item.SKU;
-    const cleanSku = String(rawSku || '').trim();
-    if (!cleanSku) continue;
+  // If blind count, we DON'T populate the theoreticalMap from the sheetItems, 
+  // so teorico will remain 0 for all items.
+  if (session.mode !== 'BLIND') {
+    for (const item of sheetItems) {
+      const rawSku = skuCol ? item[skuCol] : item.SKU_VC || item.SKU;
+      const cleanSku = String(rawSku || '').trim();
+      if (!cleanSku) continue;
 
-    const rawCu = cuCol ? item[cuCol] : item.CU_VC;
-    const cleanCu = rawCu ? String(rawCu).trim() : '';
+      const rawCu = cuCol ? item[cuCol] : item.CU_VC;
+      const cleanCu = rawCu ? String(rawCu).trim() : '';
 
-    const rawQty = qtyCol ? item[qtyCol] : item.CANTIDAD || item.CANT;
-    const qtyNum = parseLocaleNumber(rawQty, 0);
+      const rawQty = qtyCol ? item[qtyCol] : item.CANTIDAD || item.CANT;
+      const qtyNum = parseLocaleNumber(rawQty, 0);
 
-    const rawDesc = descCol ? item[descCol] : item.PRODUCTO_VC || item.DESCRIPCION || '';
-    const rawM = mCol ? item[mCol] : item.MM;
-    const rawY = yCol ? item[yCol] : item.YYYY;
-    const rawFecha = fechaCol ? item[fechaCol] : item.FECHA_VC;
+      const rawDesc = descCol ? item[descCol] : item.PRODUCTO_VC || item.DESCRIPCION || '';
+      const rawM = mCol ? item[mCol] : item.MM;
+      const rawY = yCol ? item[yCol] : item.YYYY;
+      const rawFecha = fechaCol ? item[fechaCol] : item.FECHA_VC;
 
-    const key = session.requiereVencimiento && cleanCu 
-      ? cleanCu 
-      : (session.requiereVencimiento && rawY && rawM 
-          ? generateCuVc(cleanSku, rawY, rawM) 
-          : cleanSku);
+      const key = session.requiereVencimiento && cleanCu 
+        ? cleanCu 
+        : (session.requiereVencimiento && rawY && rawM 
+            ? generateCuVc(cleanSku, rawY, rawM) 
+            : cleanSku);
 
-    const existingTheor = theoreticalMap.get(key);
-    if (existingTheor) {
-      existingTheor.teorico += qtyNum;
-    } else {
-      theoreticalMap.set(key, {
-        item,
-        teorico: qtyNum,
-        sku: cleanSku,
-        descripcion: String(rawDesc || ''),
-        cu_vc: cleanCu || (rawY && rawM ? generateCuVc(cleanSku, rawY, rawM) : undefined),
-        mm: rawM ? String(rawM).padStart(2, '0') : undefined,
-        yyyy: rawY ? String(rawY) : undefined,
-        fecha_vc: rawFecha ? String(rawFecha) : undefined,
-        rutProveedor: rutCol ? item[rutCol] : item.RUT_PROVEEDOR_VC,
-        politica: polCol ? item[polCol] : item.POLITICA,
-        diasRetiro: diasCol ? item[diasCol] : item['DIAS RETIRO_VC'],
-        mundo: mundoCol ? item[mundoCol] : item.MUNDO,
-        pm: pmCol ? item[pmCol] : item.PM
-      });
+      const existingTheor = theoreticalMap.get(key);
+      if (existingTheor) {
+        existingTheor.teorico += qtyNum;
+      } else {
+        theoreticalMap.set(key, {
+          item,
+          teorico: qtyNum,
+          sku: cleanSku,
+          descripcion: String(rawDesc || ''),
+          cu_vc: cleanCu || (rawY && rawM ? generateCuVc(cleanSku, rawY, rawM) : undefined),
+          mm: rawM ? String(rawM).padStart(2, '0') : undefined,
+          yyyy: rawY ? String(rawY) : undefined,
+          fecha_vc: rawFecha ? String(rawFecha) : undefined,
+          rutProveedor: rutCol ? item[rutCol] : item.RUT_PROVEEDOR_VC,
+          politica: polCol ? item[polCol] : item.POLITICA,
+          diasRetiro: diasCol ? item[diasCol] : item['DIAS RETIRO_VC'],
+          mundo: mundoCol ? item[mundoCol] : item.MUNDO,
+          pm: pmCol ? item[pmCol] : item.PM
+        });
+      }
     }
   }
 

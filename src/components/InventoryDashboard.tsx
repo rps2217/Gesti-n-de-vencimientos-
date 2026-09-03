@@ -26,6 +26,7 @@ import {
   PackageX, Sparkles, Clock, Clock3, Flame, AlertTriangle, CheckCircle2, FilterX, 
   Sliders, Link2, Download, CheckSquare, Square, Columns, Eye, EyeOff, ArrowUp, ArrowDown, Menu, Scan, GripVertical, Tag, Mail, MessageSquare, ChevronDown, Check, MoreVertical, Building2, Maximize2
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 // Utilities & Hooks
 import { 
@@ -130,6 +131,7 @@ import { SliceManagerModal } from './modals/SliceManagerModal';
 import { StockCountModal } from './modals/StockCountModal';
 
 export const InventoryDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const { showToast, updateToast } = useToast();
   const [metadata, setMetadata] = useState<SpreadsheetMetadata | null>(null);
   const [activeSheet, setActiveSheet] = useState<SheetProperties | null>(null);

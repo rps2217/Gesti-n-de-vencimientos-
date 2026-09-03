@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Package, Link as LinkIcon, Settings2, CheckCircle2, Moon, Sun, Contrast, Check } from 'lucide-react';
 import InventoryDashboard from './components/InventoryDashboard';
+import { StockCountView } from './components/views/StockCountView';
 import { ToastProvider } from './components/common/ToastContainer';
 
 export type ThemeMode = 'light' | 'dark-slate' | 'dark-gray';
@@ -125,120 +127,137 @@ export default function App() {
   }
 
   return (
-    <ToastProvider>
-      <div className="flex flex-col h-screen w-full bg-[#F8FAFC] dark:bg-slate-950 font-sans overflow-hidden transition-colors print:overflow-visible">
-        <nav className="hidden md:flex h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 items-center justify-between shrink-0 shadow-sm print:hidden">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg text-white shadow-sm shadow-blue-200 dark:shadow-none">
-              <Package className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
-                Gestión de <span className="text-blue-600 dark:text-blue-400 font-medium">Vencimientos</span>
-              </h1>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Modo Desarrollo (Sin PIN)</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Theme Selector Dropdown */}
-            <div className="relative" ref={themeMenuRef}>
-              <button
-                onClick={() => setIsThemeMenuOpen(!isThemeMenuOpen)}
-                className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-sm flex items-center gap-2 text-xs font-semibold"
-                title="Cambiar Tema Visual"
-              >
-                {themeMode === 'light' && <Sun className="h-4 w-4 text-amber-500" />}
-                {themeMode === 'dark-slate' && <Moon className="h-4 w-4 text-blue-400" />}
-                {themeMode === 'dark-gray' && <Contrast className="h-4 w-4 text-zinc-300" />}
-                <span className="hidden sm:inline">
-                  {themeMode === 'light' && 'Modo Claro'}
-                  {themeMode === 'dark-slate' && 'Modo Azul'}
-                  {themeMode === 'dark-gray' && 'Modo Gris'}
-                </span>
-              </button>
-
-              {isThemeMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-2 z-50 text-xs animate-in fade-in slide-in-from-top-2 duration-150">
-                  <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                    Tema Visual
+    <Router>
+      <ToastProvider>
+        <div className="flex flex-col h-screen w-full bg-[#F8FAFC] dark:bg-slate-950 font-sans overflow-hidden transition-colors print:overflow-visible">
+          <Routes>
+            <Route path="/" element={
+              <>
+                <nav className="hidden md:flex h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 items-center justify-between shrink-0 shadow-sm print:hidden">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-blue-600 p-2 rounded-lg text-white shadow-sm shadow-blue-200 dark:shadow-none">
+                      <Package className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
+                        Gestión de <span className="text-blue-600 dark:text-blue-400 font-medium">Vencimientos</span>
+                      </h1>
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Modo Desarrollo (Sin PIN)</span>
+                    </div>
                   </div>
-                  
-                  {/* Light Option */}
-                  <button
-                    onClick={() => {
-                      setThemeMode('light');
-                      setIsThemeMenuOpen(false);
-                    }}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors ${
-                      themeMode === 'light'
-                        ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Sun className="w-4 h-4 text-amber-500" />
-                      <span>Modo Claro</span>
+
+                  <div className="flex items-center gap-3">
+                    {/* Theme Selector Dropdown */}
+                    <div className="relative" ref={themeMenuRef}>
+                      <button
+                        onClick={() => setIsThemeMenuOpen(!isThemeMenuOpen)}
+                        className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-sm flex items-center gap-2 text-xs font-semibold"
+                        title="Cambiar Tema Visual"
+                      >
+                        {themeMode === 'light' && <Sun className="h-4 w-4 text-amber-500" />}
+                        {themeMode === 'dark-slate' && <Moon className="h-4 w-4 text-blue-400" />}
+                        {themeMode === 'dark-gray' && <Contrast className="h-4 w-4 text-zinc-300" />}
+                        <span className="hidden sm:inline">
+                          {themeMode === 'light' && 'Modo Claro'}
+                          {themeMode === 'dark-slate' && 'Modo Azul'}
+                          {themeMode === 'dark-gray' && 'Modo Gris'}
+                        </span>
+                      </button>
+
+                      {isThemeMenuOpen && (
+                        <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-2 z-50 text-xs animate-in fade-in slide-in-from-top-2 duration-150">
+                          <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                            Tema Visual
+                          </div>
+                          
+                          {/* Light Option */}
+                          <button
+                            onClick={() => {
+                              setThemeMode('light');
+                              setIsThemeMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors ${
+                              themeMode === 'light'
+                                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold'
+                                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Sun className="w-4 h-4 text-amber-500" />
+                              <span>Modo Claro</span>
+                            </div>
+                            {themeMode === 'light' && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
+                          </button>
+
+                          {/* Dark Slate Option */}
+                          <button
+                            onClick={() => {
+                              setThemeMode('dark-slate');
+                              setIsThemeMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors ${
+                              themeMode === 'dark-slate'
+                                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold'
+                                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Moon className="w-4 h-4 text-blue-400" />
+                              <span>Modo Azul</span>
+                            </div>
+                            {themeMode === 'dark-slate' && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
+                          </button>
+
+                          {/* Dark Gray Option */}
+                          <button
+                            onClick={() => {
+                              setThemeMode('dark-gray');
+                              setIsThemeMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors ${
+                              themeMode === 'dark-gray'
+                                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold'
+                                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Contrast className="w-4 h-4 text-zinc-300" />
+                              <span>Modo Gris</span>
+                            </div>
+                            {themeMode === 'dark-gray' && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    {themeMode === 'light' && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
-                  </button>
 
-                  {/* Dark Slate Option */}
-                  <button
-                    onClick={() => {
-                      setThemeMode('dark-slate');
-                      setIsThemeMenuOpen(false);
-                    }}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors ${
-                      themeMode === 'dark-slate'
-                        ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Moon className="w-4 h-4 text-blue-400" />
-                      <span>Modo Azul</span>
-                    </div>
-                    {themeMode === 'dark-slate' && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
-                  </button>
-
-                  {/* Dark Gray Option */}
-                  <button
-                    onClick={() => {
-                      setThemeMode('dark-gray');
-                      setIsThemeMenuOpen(false);
-                    }}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors ${
-                      themeMode === 'dark-gray'
-                        ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Contrast className="w-4 h-4 text-zinc-300" />
-                      <span>Modo Gris</span>
-                    </div>
-                    {themeMode === 'dark-gray' && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => setIsChangingUrl(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3.5 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors shadow-sm"
-            >
-              <Settings2 className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
-              <span>URL de Apps Script</span>
-            </button>
-          </div>
-        </nav>
-
-        <main className="flex-1 flex flex-col overflow-hidden print:overflow-visible">
-          <InventoryDashboard darkMode={darkMode} />
-        </main>
-      </div>
-    </ToastProvider>
+                    <button
+                      onClick={() => setIsChangingUrl(true)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3.5 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors shadow-sm"
+                    >
+                      <Settings2 className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                      <span>URL de Apps Script</span>
+                    </button>
+                  </div>
+                </nav>
+                <main className="flex-1 flex flex-col overflow-hidden print:overflow-visible">
+                  <InventoryDashboard darkMode={darkMode} />
+                </main>
+              </>
+            } />
+            <Route path="/conteo" element={
+              <StockCountView 
+                sheetItems={[]}
+                headers={[]} 
+                masterProducts={[]}
+                activeSheetTitle=""
+                showToast={() => {}}
+              />
+            } />
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </div>
+      </ToastProvider>
+    </Router>
   );
 }
 

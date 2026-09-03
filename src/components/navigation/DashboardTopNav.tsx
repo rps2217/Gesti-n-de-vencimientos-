@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Menu, Search, X, FilterX, Scan, Download, ChevronDown, 
-  Mail, Flame, FileSpreadsheet, Printer, Barcode, RefreshCw, MessageSquare, Sliders, Settings 
+  Mail, Flame, FileSpreadsheet, Printer, Barcode, RefreshCw, MessageSquare, Sliders, Settings, CheckCircle2
 } from 'lucide-react';
 import { InventoryItem, SheetConfig } from '../../types';
 import { VIRTUAL_COLUMNS } from '../../utils/virtualColumns';
@@ -75,6 +76,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
   fetchData,
   loading
 }) => {
+  const navigate = useNavigate();
   const bulkActionCtx = useMemo(() => {
     return buildBulkActionContext(headers, activeView, activeSheetTitle);
   }, [headers, activeView, activeSheetTitle]);
@@ -148,6 +150,14 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
 
       {/* Global Utils (Export/Share Menu, View Menu, Sync, Refresh) */}
       <div className="hidden md:flex items-center gap-2.5 shrink-0">
+        <button
+          onClick={() => navigate('/conteo')}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-colors"
+        >
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          <span>Conteo</span>
+        </button>
+
         {activeView !== 'schema' && (
           <div className="relative">
             <button

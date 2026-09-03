@@ -242,7 +242,6 @@ export const InventoryDashboard: React.FC = () => {
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [whatsAppModalItems, setWhatsAppModalItems] = useState<any[]>([]);
   const [isBulkActionsConfigOpen, setIsBulkActionsConfigOpen] = useState(false);
-  const [isStockCountOpen, setIsStockCountOpen] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
 
@@ -1820,7 +1819,7 @@ export const InventoryDashboard: React.FC = () => {
             setSelectedProduct={setSelectedProduct}
             otherSheets={otherSheets}
             onOpenConfig={() => setIsConfigOpen(true)}
-            onOpenStockCount={() => setIsStockCountOpen(true)}
+            onOpenStockCount={() => navigate('/conteo')}
           />
         </div>
       )}
@@ -1845,7 +1844,7 @@ export const InventoryDashboard: React.FC = () => {
                 setSelectedProduct={setSelectedProduct}
                 otherSheets={otherSheets}
                 onOpenConfig={() => { setIsConfigOpen(true); setIsMobileMenuOpen(false); }}
-                onOpenStockCount={() => { setIsStockCountOpen(true); setIsMobileMenuOpen(false); }}
+                onOpenStockCount={() => { navigate('/conteo'); setIsMobileMenuOpen(false); }}
               />
             </div>
           </div>
@@ -1981,7 +1980,7 @@ export const InventoryDashboard: React.FC = () => {
                 setIsZenMode(next);
                 showToast(next ? 'Modo Zen activado (Presiona Esc para salir)' : 'Modo Zen desactivado', 'info', 'Enfoque');
               }}
-              onOpenStockCount={() => setIsStockCountOpen(true)}
+              onOpenStockCount={() => navigate('/conteo')}
             />
           )}
 

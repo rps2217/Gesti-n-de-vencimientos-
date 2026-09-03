@@ -1350,10 +1350,10 @@ export const InventoryDashboard: React.FC = () => {
           const retVal = data[withdrawalHeader] as string;
           
           if (vcVal && retVal) {
-            const vcDate = new Date(vcVal as string);
-            const retDate = new Date(retVal as string);
+            const vcDate = parseAnyDate(vcVal);
+            const retDate = parseAnyDate(retVal);
             
-            if (!isNaN(vcDate.getTime()) && !isNaN(retDate.getTime()) && retDate > vcDate) {
+            if (vcDate && retDate && retDate > vcDate) {
               ctx.addIssue({
                 code: z.ZodIssueCode.custom,
                 message: 'La fecha de retiro no puede ser posterior al vencimiento.',

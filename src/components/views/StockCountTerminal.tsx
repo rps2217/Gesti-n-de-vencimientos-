@@ -366,6 +366,22 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
     showToast('Lectura eliminada del conteo', 'info');
   };
 
+  // Update adjustment for stock in motion
+  const handleUpdateAdjustment = (itemKey: string, value: number) => {
+    if (!activeSessionId) return;
+    setSessions(prev => prev.map(s => {
+      if (s.id !== activeSessionId) return s;
+      const currentAdjustments = s.ajustesMovimiento || {};
+      return {
+        ...s,
+        ajustesMovimiento: {
+          ...currentAdjustments,
+          [itemKey]: value
+        }
+      };
+    }));
+  };
+
   // Reconciled items for the active session
   const reconciliation = useMemo(() => {
     if (!currentSession) return [];
@@ -390,7 +406,7 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
 
     for (const r of reconciliation) {
       totalContado += r.contado;
-      totalTeorico += r.teorico;
+      totalTeorico += (r.teorico + r.ajusteMovimiento);
       if (r.estado === 'CUADRADO') cuadrados++;
       else if (r.estado === 'FALTANTE') faltantes++;
       else if (r.estado === 'SOBRANTE') sobrantes++;
@@ -1406,7 +1422,15 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                         <th className="p-3 font-bold text-slate-600 dark:text-slate-400">CU_VC</th>
                       </>
                     )}
-                    <th className="p-3 font-bold text-slate-600 dark:text-slate-400 text-right">Teórico</th>
+                    {currentSession.modo !== 'BLIND' ? (
+                      <>
+                        <th className="p-3 font-bold text-slate-600 dark:text-slate-400 text-right" title="Stock teórico capturado al iniciar la sesión">Teórico Base</th>
+                        <th className="p-3 font-bold text-slate-600 dark:text-slate-400 text-center" title="Ajuste por ventas (- unidades) o recepciones (+ unidades) durante el conteo">Ajuste Flujo (Venta/Recep)</th>
+                        <th className="p-3 font-bold text-slate-600 dark:text-slate-400 text-right" title="Teórico Base + Ajuste de Flujo">Teórico Ajustado</th>
+                      </>
+                    ) : (
+                      <th className="p-3 font-bold text-slate-600 dark:text-slate-400 text-right">Teórico</th>
+                    )}
                     <th className="p-3 font-bold text-slate-600 dark:text-slate-400 text-right">Físico</th>
                     <th className="p-3 font-bold text-slate-600 dark:text-slate-400 text-right">Diferencia</th>
                     <th className="p-3 font-bold text-slate-600 dark:text-slate-400 text-center">Estado</th>
@@ -1427,7 +1451,31 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                           </td>
                         </>
                       )}
-                      <td className="p-3 text-right font-semibold text-slate-500">{formatLocaleNumber(item.teorico)}</td>
+                      {currentSession.modo !== 'BLIND' ? (
+                        <>
+                          <td className="p-3 text-right font-semibold text-slate-500">
+                            {formatLocaleNumber(item.teorico)}
+                          </td>
+                          <td className="p-3 text-center">
+                            <input
+                              type="number"
+                              value={item.ajusteMovimiento || ''}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10) || 0;
+                                handleUpdateAdjustment(item.itemKey, val);
+                              }}
+                              placeholder="0"
+                              title="Ajuste por ventas (- unidades) o recepciones (+ unidades) durante el conteo"
+                              className="w-20 px-2 py-1 text-center font-mono font-bold text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 text-slate-800 dark:text-slate-100"
+                            />
+                          </td>
+                          <td className="p-3 text-right font-semibold text-slate-600 dark:text-slate-300">
+                            {formatLocaleNumber(item.teorico + item.ajusteMovimiento)}
+                          </td>
+                        </>
+                      ) : (
+                        <td className="p-3 text-right font-semibold text-slate-500">{formatLocaleNumber(item.teorico)}</td>
+                      )}
                       <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-100">{formatLocaleNumber(item.contado)}</td>
                       <td className={`p-3 text-right font-extrabold ${
                         item.diferencia === 0 ? 'text-emerald-600' :

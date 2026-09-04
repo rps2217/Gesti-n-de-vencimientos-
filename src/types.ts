@@ -223,6 +223,8 @@ export interface StockCountSession {
   conteos: StockCountEntry[];      // Lecturas físicas registradas
   notas?: string;
   rangoAnos?: { desde: number; hasta: number }; // Rango de años de interés para vencimiento
+  snapshotTeorico?: Record<string, number>; // Snapshot congelado del teórico al iniciar/guardar sesión
+  ajustesMovimiento?: Record<string, number>; // Ajustes de movimientos (ventas/entradas) durante el conteo
 }
 
 export interface StockCountReconciliationItem {
@@ -233,9 +235,9 @@ export interface StockCountReconciliationItem {
   mm?: string;
   yyyy?: string;
   fecha_vc?: string;
-  teorico: number;                 // Cantidad teórica según la hoja
+  teorico: number;                 // Cantidad teórica según la hoja (o snapshot congelado)
   contado: number;                 // Cantidad física total contada
-  diferencia: number;              // contado - teorico
+  diferencia: number;              // contado - (teorico + ajusteMovimiento)
   estado: 'CUADRADO' | 'FALTANTE' | 'SOBRANTE' | 'NO_CATALOGADO';
   rutProveedor?: string;
   politica?: string;
@@ -243,4 +245,6 @@ export interface StockCountReconciliationItem {
   mundo?: string;
   pm?: string;
   rowIndexOriginal?: number;       // Fila original en la hoja si ya existía
+  ajusteMovimiento: number;        // Ajuste por stock en movimiento (ventas - recepciones durante el conteo)
+  teoricoOriginal?: number;        // Cantidad teórica en tiempo real de la planilla
 }

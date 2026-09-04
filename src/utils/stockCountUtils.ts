@@ -229,6 +229,35 @@ export function reconcileStockCountSession(
         });
       }
     }
+
+    // Freeze snapshot logic for stock-in-motion safety
+    if (!session.snapshotTeorico) {
+      session.snapshotTeorico = {};
+      for (const [key, theor] of theoreticalMap.entries()) {
+        session.snapshotTeorico[key] = theor.teorico;
+      }
+    } else {
+      // Apply snapshot to current map
+      for (const [key, theor] of theoreticalMap.entries()) {
+        if (session.snapshotTeorico[key] !== undefined) {
+          theor.teorico = session.snapshotTeorico[key];
+        } else {
+          theor.teorico = 0; // New items not in original snapshot
+        }
+      }
+      // Recover snapshot keys not in sheetItems map anymore
+      for (const key of Object.keys(session.snapshotTeorico)) {
+        if (!theoreticalMap.has(key)) {
+          const rawSku = key.length >= 13 ? key.slice(0, 13) : key;
+          theoreticalMap.set(key, {
+            item: { _rowIndex: -1 } as any,
+            teorico: session.snapshotTeorico[key],
+            sku: rawSku,
+            descripcion: 'Producto en Snapshot (Eliminado de planilla)',
+          } as any);
+        }
+      }
+    }
   }
 
   const reconciliationResults: StockCountReconciliationItem[] = [];
@@ -239,10 +268,14 @@ export function reconcileStockCountSession(
     processedKeys.add(key);
     const physical = physicalTotals.get(key);
     const contado = physical ? physical.totalContado : 0;
-    const diferencia = contado - theor.teorico;
+    
+    // Support adjustments for stock in motion
+    const adjustment = session.ajustesMovimiento?.[key] || 0;
+    const effectiveTeorico = theor.teorico + adjustment;
+    const diferencia = contado - effectiveTeorico;
 
     let estado: StockCountReconciliationItem['estado'] = 'CUADRADO';
-    if (contado === 0 && theor.teorico > 0) {
+    if (contado === 0 && effectiveTeorico > 0) {
       estado = 'FALTANTE';
     } else if (diferencia < 0) {
       estado = 'FALTANTE';
@@ -268,6 +301,10 @@ export function reconcileStockCountSession(
       }
     }
 
+    const rawQtyFromSheet = theor.item && theor.item._rowIndex !== -1
+      ? parseLocaleNumber(theor.item[qtyCol] || theor.item.CANTIDAD || theor.item.CANT, 0)
+      : theor.teorico;
+
     reconciliationResults.push({
       itemKey: key,
       sku: theor.sku,
@@ -285,7 +322,9 @@ export function reconcileStockCountSession(
       diasRetiro: finalDias,
       mundo: finalMundo,
       pm: finalPm,
-      rowIndexOriginal: theor.item._rowIndex
+      rowIndexOriginal: theor.item._rowIndex === -1 ? undefined : theor.item._rowIndex,
+      ajusteMovimiento: adjustment,
+      teoricoOriginal: rawQtyFromSheet
     });
   }
 
@@ -310,6 +349,10 @@ export function reconcileStockCountSession(
       }
     }
 
+    const adjustment = session.ajustesMovimiento?.[key] || 0;
+    const effectiveTeorico = 0 + adjustment;
+    const diferencia = physical.totalContado - effectiveTeorico;
+
     reconciliationResults.push({
       itemKey: key,
       sku: physical.sku,
@@ -320,13 +363,15 @@ export function reconcileStockCountSession(
       fecha_vc: physical.fecha_vc,
       teorico: 0,
       contado: physical.totalContado,
-      diferencia: physical.totalContado,
+      diferencia,
       estado: 'NO_CATALOGADO',
       rutProveedor: finalRut,
       politica: finalPol,
       diasRetiro: finalDias,
       mundo: finalMundo,
-      pm: finalPm
+      pm: finalPm,
+      ajusteMovimiento: adjustment,
+      teoricoOriginal: 0
     });
   }
 

@@ -1,7 +1,8 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { 
   FileSpreadsheet, Upload, Clipboard, CheckCircle2, AlertCircle, 
-  ArrowRight, Trash2, RefreshCw, Layers, Check, X, FileText, ChevronRight
+  ArrowRight, Trash2, RefreshCw, Layers, Check, X, FileText, ChevronRight,
+  ShieldCheck, AlertTriangle, Sparkles, Filter
 } from 'lucide-react';
 import { 
   parseExcelBuffer, 
@@ -12,13 +13,21 @@ import {
   ParsedSpreadsheetResult
 } from '../../utils/universalImporter';
 import { findColumnBySemantic } from '../../utils/columnAliases';
+import { InventoryItem } from '../../types';
+import { 
+  reconcileImportWithInventory, 
+  ImportConsolidationMode, 
+  ReconcileResult 
+} from '../../utils/cuVcConsolidator';
 
 interface UniversalImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   targetHeaders: string[];
   activeSheetTitle: string;
-  onImportConfirmed: (mappedRows: Record<string, any>[]) => Promise<void>;
+  existingItems?: InventoryItem[];
+  customAliases?: Record<string, string[]>;
+  onImportConfirmed: (mappedRows: Record<string, any>[], mode?: ImportConsolidationMode) => Promise<void>;
 }
 
 export const UniversalImportModal: React.FC<UniversalImportModalProps> = ({
@@ -26,12 +35,15 @@ export const UniversalImportModal: React.FC<UniversalImportModalProps> = ({
   onClose,
   targetHeaders,
   activeSheetTitle,
+  existingItems = [],
+  customAliases,
   onImportConfirmed
 }) => {
   const [activeTab, setActiveTab] = useState<'paste' | 'file'>('paste');
   const [rawText, setRawText] = useState('');
   const [parsedData, setParsedData] = useState<ParsedSpreadsheetResult | null>(null);
   const [customMappings, setCustomMappings] = useState<Record<string, string>>({});
+  const [consolidationMode, setConsolidationMode] = useState<ImportConsolidationMode>('consolidate_sum');
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'info' | 'error' | 'success' } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -137,7 +149,7 @@ export const UniversalImportModal: React.FC<UniversalImportModalProps> = ({
     setIsProcessing(true);
     try {
       // Map rows according to customMappings
-      const mappedRows = parsedData.rows.map(sourceRow => {
+      const mappedRowsList = parsedData.rows.map(sourceRow => {
         const mappedItem: Record<string, any> = {};
         targetHeaders.forEach(targetCol => {
           const mappedSourceCol = customMappings[targetCol];
@@ -150,7 +162,7 @@ export const UniversalImportModal: React.FC<UniversalImportModalProps> = ({
         return mappedItem;
       });
 
-      await onImportConfirmed(mappedRows);
+      await onImportConfirmed(mappedRowsList, consolidationMode);
       onClose();
     } catch (err: any) {
       setStatusMessage({ text: `Error al guardar los datos: ${err.message}`, type: 'error' });
@@ -158,6 +170,33 @@ export const UniversalImportModal: React.FC<UniversalImportModalProps> = ({
       setIsProcessing(false);
     }
   };
+
+  const mappedRowsPreview = useMemo(() => {
+    if (!parsedData || parsedData.rows.length === 0) return [];
+    return parsedData.rows.map(sourceRow => {
+      const mappedItem: Record<string, any> = {};
+      targetHeaders.forEach(targetCol => {
+        const mappedSourceCol = customMappings[targetCol];
+        if (mappedSourceCol && sourceRow[mappedSourceCol] !== undefined) {
+          mappedItem[targetCol] = sourceRow[mappedSourceCol];
+        } else {
+          mappedItem[targetCol] = '';
+        }
+      });
+      return mappedItem;
+    });
+  }, [parsedData, targetHeaders, customMappings]);
+
+  const reconciliation = useMemo(() => {
+    if (mappedRowsPreview.length === 0) return null;
+    return reconcileImportWithInventory(
+      mappedRowsPreview,
+      existingItems,
+      targetHeaders,
+      customAliases,
+      consolidationMode
+    );
+  }, [mappedRowsPreview, existingItems, targetHeaders, customAliases, consolidationMode]);
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[100] flex items-center justify-center p-4">
@@ -382,6 +421,137 @@ export const UniversalImportModal: React.FC<UniversalImportModalProps> = ({
                 </div>
               </div>
 
+              {/* Feature: Intelligent CU_VC Consolidation & Deduplication Audit (Sin Lotes) */}
+              <div className="bg-slate-50/80 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 flex items-center justify-center">
+                      <Layers className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                        Consolidación por Vencimiento CU_VC (Sin Lotes)
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                          Anti-Duplicados
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Detecta automáticamente si el archivo o la hoja activa ya tienen registros del mismo SKU + MM/YYYY
+                      </p>
+                    </div>
+                  </div>
+
+                  {reconciliation && (
+                    <div className="flex items-center gap-2 text-[11px] font-mono flex-wrap">
+                      {reconciliation.internalDeduplicatedCount > 0 && (
+                        <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800" title="Duplicados dentro del archivo importado fusionados sumando stock">
+                          {reconciliation.internalDeduplicatedCount} fusionados en archivo
+                        </span>
+                      )}
+                      {reconciliation.matchedCount > 0 ? (
+                        <span className="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                          {reconciliation.matchedCount} coincidencias en hoja
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                          0 coincidencias (100% nuevos)
+                        </span>
+                      )}
+                      <span className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold">
+                        {reconciliation.rowsToAppend.length} nuevas filas
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Consolidation Mode Selector */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setConsolidationMode('consolidate_sum')}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      consolidationMode === 'consolidate_sum'
+                        ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 ring-2 ring-indigo-500/20'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                        Sumar Stock
+                      </span>
+                      {consolidationMode === 'consolidate_sum' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+                    </div>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-tight">
+                      Suma la cantidad a la fila existente si coincide SKU + MM/YYYY. Recomendado.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setConsolidationMode('consolidate_overwrite')}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      consolidationMode === 'consolidate_overwrite'
+                        ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 ring-2 ring-indigo-500/20'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                        <RefreshCw className="w-3.5 h-3.5 text-slate-600" />
+                        Sobrescribir
+                      </span>
+                      {consolidationMode === 'consolidate_overwrite' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+                    </div>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-tight">
+                      Reemplaza la cantidad existente con el valor del archivo importado.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setConsolidationMode('skip_existing')}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      consolidationMode === 'skip_existing'
+                        ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 ring-2 ring-indigo-500/20'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                        <Filter className="w-3.5 h-3.5 text-slate-600" />
+                        Omitir Existentes
+                      </span>
+                      {consolidationMode === 'skip_existing' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+                    </div>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-tight">
+                      No altera filas existentes. Solo agrega los SKUs/vencimientos nuevos.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setConsolidationMode('append')}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      consolidationMode === 'append'
+                        ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 ring-2 ring-indigo-500/20'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-slate-600" />
+                        Anexar Todo
+                      </span>
+                      {consolidationMode === 'append' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+                    </div>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-tight">
+                      Modo clásico: inserta todas las filas al final sin consolidar.
+                    </p>
+                  </button>
+                </div>
+              </div>
+
               {/* Data Preview Table */}
               <div className="space-y-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -437,10 +607,12 @@ export const UniversalImportModal: React.FC<UniversalImportModalProps> = ({
             <button
               onClick={handleConfirmImport}
               disabled={isProcessing}
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
             >
               <Check className="w-4 h-4" />
-              Ingestar {parsedData.totalRows} Registros en {activeSheetTitle}
+              {consolidationMode === 'consolidate_sum' && reconciliation && reconciliation.matchedCount > 0
+                ? `Ingestar y Consolidar ${parsedData.totalRows} Registros (${reconciliation.rowsToUpdate.length} sumados + ${reconciliation.rowsToAppend.length} nuevos)`
+                : `Ingestar ${parsedData.totalRows} Registros en ${activeSheetTitle}`}
             </button>
           )}
         </div>

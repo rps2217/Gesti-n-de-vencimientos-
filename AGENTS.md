@@ -138,7 +138,8 @@ Resuelve el problema común de las hojas de cálculo con encabezados inconsisten
 - **Re-resolución Dinámica en Cola Offline (`matchRowIndexByIdentity`)**:
   - Al vaciar mutaciones (`update` o `delete`) en `useOfflineSync.ts`, el sistema re-localiza dinámicamente el `rowIndex` exacto en los datos frescos de Google Sheets mediante la clave de entidad o coincidencia de `CU_VC` / `SKU`+`YYYY`+`MM`, previniendo sobreescrituras o eliminaciones accidentales de filas contiguas.
 
-### I. Módulo de Conteo Masivo de Existencias (`src/utils/stockCountUtils.ts` & `StockCountModal.tsx`)
+### I. Módulo de Conteo Masivo de Existencias y Cuadratura Virtualizada (`src/utils/stockCountUtils.ts` & `StockCountTerminal.tsx`)
+- **Virtualización de Cuadratura**: La tabla de reconciliación y cuadratura física vs. teórica utiliza `@tanstack/react-virtual` (`useVirtualizer`), permitiendo auditar cientos o miles de SKUs sin degradación de memoria ni lag en el scroll.
 - **Dos Modalidades Operativas**:
   - **Conteo a Ciegas (`BLIND`)**: Auditoría limpia donde el operario registra lecturas y cantidades físicas sin ver el stock teórico en pantalla, previniendo sesgos de conteo.
   - **Conteo Contra Documento (`DOCUMENT`)**: Comparación en tiempo real contra la hoja de inventario activa, mostrando cobertura y estado de avance.
@@ -152,9 +153,26 @@ Resuelve el problema común de las hojas de cálculo con encabezados inconsisten
 - **Cuadratura y Sincronización con VENCIMIENTOS**:
   - Comparativa de métricas: Total Físico vs. Teórico, Diferencia Neta, Cuadrados, Faltantes, Sobrantes y No Catalogados.
   - Exportación directa a planilla Excel (`.xlsx`).
-  - Botón de sincronización con la pestaña `VENCIMIENTOS` que estructura automáticamente las 14 columnas canónicas (`ID_VC`, `SKU_VC`, `PRODUCTO_VC`, `MM`, `YYYY`, `FECHA_VC`, `RUT_PROVEEDOR_VC`, `POLITICA`, `DIAS RETIRO_VC`, `MUNDO`, `PM`, `timestamp`, `CU_VC`, `TIPO_EVENTO`) y encola mutaciones offline/online de manera segura.
+  - Botón de sincronización con la pestaña `VENCIMIENTOS` que estructura automáticamente las 14 columnas canónicas y encola mutaciones offline/online de manera segura.
 
-### J. Componentes de UI
+### J. Arquitectura Modular del Dashboard y Espejo de Backend
+- **Modularización de `InventoryDashboard.tsx`**:
+  - **`FloatingBulkActionBar.tsx`**: Barra flotante contextual desacoplada para operaciones masivas (tickets, código de barras, exportación Excel, borrador Gmail, WhatsApp, edición en lote y eliminación).
+  - **`DashboardModalsManager.tsx`**: Administrador centralizado de modales y drawers que libera al dashboard principal de sobrecarga de estado visual.
+- **Espejo de Backend / Multi-Database (`src/services/backendMirrorService.ts` & `BackendMirrorPanel.tsx`)**:
+  - Resuelve las limitaciones de latencia (~2.500ms en Google Apps Script) y la falta de bloqueos de concurrencia a nivel de fila durante conteos masivos en farmacia.
+  - Soporte para proveedores secundarios: Custom REST API, Supabase (PostgreSQL), PostgreSQL directo o Firebase / Firestore.
+  - Estrategias de sincronización: **Escritura Dual (Dual-Write)** en paralelo con Google Sheets, **Espejo Primero (Mirror-First)** para latencia sub-150ms con volcado asíncrono, o **Solo Respaldo (Backup-Only)**.
+  - Telemetría en tiempo real, test de latencia de red, identificador único de terminal/dispositivo (`deviceId`) y resolución de conflictos por timestamp atómico (`last_write_wins`).
+
+### K. Consolidación Inteligente por CU_VC (Control sin Lotes)
+- **Regla Operativa**: No se trabaja con lotes. La unidad de vencimiento es unívocamente `SKU` + `MM/YYYY` (`CU_VC`).
+- **Motor `cuVcConsolidator.ts`**:
+  - `findExistingItemByCuVc`: Detecta colisiones en tiempo real al ingresar o editar items en `ItemFormModal`.
+  - `reconcileImportWithInventory`: En importaciones masivas (Excel/CSV/Portapapeles), previene duplicación consolidando cantidades (`consolidate_sum`), sobrescribiendo, omitiendo o agregando.
+  - En `handleSave` y `handleUniversalImportConfirmed` de `InventoryDashboard.tsx`, actualiza la fila existente (`updateRow`) sumando stock en lugar de generar filas duplicadas.
+
+### L. Componentes de UI
 - **`App.tsx`**: Administra el estado global de los datos de inventario, pestañas activas (Dashboard vs Schema Editor), modales y conectividad con Google Sheets / datos locales.
 - **`InventoryDashboard.tsx`**: Tabla interactiva con filtros avanzados, búsqueda rápida, tarjetas de resumen KPI y botones de acción rápida.
 - **`ItemDetailDrawer.tsx`**: Drawer lateral que agrupa toda la trazabilidad de un SKU (historial de vencimientos, lotes y eventos relacionados).

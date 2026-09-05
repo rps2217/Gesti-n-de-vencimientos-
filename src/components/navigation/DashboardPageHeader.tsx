@@ -88,7 +88,7 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
           )}
         </h1>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-          {activeView === 'main' ? 'Monitoreo de lotes críticos, fechas de retiro comercial y solicitud de precio para PM.' : 
+          {activeView === 'main' ? 'Monitoreo de vencimientos críticos, fechas de retiro comercial y coordinación con PM.' : 
            activeView === 'events' ? 'Deterioros de transporte, diferencias de pedido, averías de almacén y devoluciones.' : 
            activeView === 'products' ? 'Maestro de SKUs con relaciones directas hacia vencimientos e incidencias.' : 
            activeView === 'policies' ? 'Reglas de tiempo de anticipación para retiro preventivo de productos.' : 

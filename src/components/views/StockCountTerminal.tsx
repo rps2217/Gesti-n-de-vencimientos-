@@ -15,6 +15,7 @@ import {
   StockCountReconciliationItem, 
   InventoryItem 
 } from '../../types';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
   generateCuVc, 
   calculateLastDayOfMonthDateString, 
@@ -394,6 +395,22 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
     if (reconciliationFilter === 'DIF') return reconciliation.filter(r => r.estado !== 'CUADRADO');
     return reconciliation.filter(r => r.estado === reconciliationFilter);
   }, [reconciliation, reconciliationFilter]);
+
+  // Virtualization for high-volume reconciliation table (10,000+ items)
+  const reconciliationTableContainerRef = useRef<HTMLDivElement>(null);
+  const reconciliationRowVirtualizer = useVirtualizer({
+    count: filteredReconciliation.length,
+    getScrollElement: () => reconciliationTableContainerRef.current,
+    estimateSize: () => 44,
+    overscan: 12,
+  });
+
+  const virtualReconciliationRows = reconciliationRowVirtualizer.getVirtualItems();
+  const reconciliationPaddingTop = virtualReconciliationRows.length > 0 ? virtualReconciliationRows[0]?.start || 0 : 0;
+  const reconciliationPaddingBottom =
+    virtualReconciliationRows.length > 0
+      ? reconciliationRowVirtualizer.getTotalSize() - (virtualReconciliationRows[virtualReconciliationRows.length - 1]?.end || 0)
+      : 0;
 
   // Reconciliation summary KPIs
   const metrics = useMemo(() => {
@@ -1410,7 +1427,7 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
             </div>
 
             {/* Reconciliation Table */}
-            <div className="flex-1 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900">
+            <div ref={reconciliationTableContainerRef} className="flex-1 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900">
               <table className="w-full text-left text-xs border-collapse">
                 <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0 border-b border-slate-200 dark:border-slate-700 z-10">
                   <tr>
@@ -1437,64 +1454,84 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {filteredReconciliation.map((item, idx) => (
-                    <tr key={item.itemKey + idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                      <td className="p-3 font-mono font-bold text-blue-600 dark:text-blue-400">{item.sku}</td>
-                      <td className="p-3 font-medium text-slate-800 dark:text-slate-200 max-w-xs truncate">{item.descripcion}</td>
-                      {currentSession.requiereVencimiento && (
-                        <>
-                          <td className="p-3 font-semibold text-slate-600 dark:text-slate-400">
-                            {item.mm && item.yyyy ? `${item.mm}/${item.yyyy}` : '-'}
-                          </td>
-                          <td className="p-3 font-mono text-[11px] text-slate-500 dark:text-slate-400">
-                            {item.cu_vc || '-'}
-                          </td>
-                        </>
-                      )}
-                      {currentSession.modo !== 'BLIND' ? (
-                        <>
-                          <td className="p-3 text-right font-semibold text-slate-500">
-                            {formatLocaleNumber(item.teorico)}
-                          </td>
-                          <td className="p-3 text-center">
-                            <input
-                              type="number"
-                              value={item.ajusteMovimiento || ''}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value, 10) || 0;
-                                handleUpdateAdjustment(item.itemKey, val);
-                              }}
-                              placeholder="0"
-                              title="Ajuste por ventas (- unidades) o recepciones (+ unidades) durante el conteo"
-                              className="w-20 px-2 py-1 text-center font-mono font-bold text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 text-slate-800 dark:text-slate-100"
-                            />
-                          </td>
-                          <td className="p-3 text-right font-semibold text-slate-600 dark:text-slate-300">
-                            {formatLocaleNumber(item.teorico + item.ajusteMovimiento)}
-                          </td>
-                        </>
-                      ) : (
-                        <td className="p-3 text-right font-semibold text-slate-500">{formatLocaleNumber(item.teorico)}</td>
-                      )}
-                      <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-100">{formatLocaleNumber(item.contado)}</td>
-                      <td className={`p-3 text-right font-extrabold ${
-                        item.diferencia === 0 ? 'text-emerald-600' :
-                        item.diferencia < 0 ? 'text-rose-600' : 'text-amber-600'
-                      }`}>
-                        {item.diferencia > 0 ? `+${formatLocaleNumber(item.diferencia)}` : formatLocaleNumber(item.diferencia)}
-                      </td>
-                      <td className="p-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                          item.estado === 'CUADRADO' ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300' :
-                          item.estado === 'FALTANTE' ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300' :
-                          item.estado === 'SOBRANTE' ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300' :
-                          'bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300'
-                        }`}>
-                          {item.estado === 'NO_CATALOGADO' ? 'No en Hoja' : item.estado}
-                        </span>
-                      </td>
+                  {reconciliationPaddingTop > 0 && (
+                    <tr>
+                      <td style={{ height: `${reconciliationPaddingTop}px` }} colSpan={currentSession.requiereVencimiento ? 9 : 7} />
                     </tr>
-                  ))}
+                  )}
+                  {virtualReconciliationRows.map((virtualRow) => {
+                    const item = filteredReconciliation[virtualRow.index];
+                    if (!item) return null;
+
+                    return (
+                      <tr 
+                        key={item.itemKey + virtualRow.index} 
+                        ref={reconciliationRowVirtualizer.measureElement}
+                        data-index={virtualRow.index}
+                        className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                      >
+                        <td className="p-3 font-mono font-bold text-blue-600 dark:text-blue-400">{item.sku}</td>
+                        <td className="p-3 font-medium text-slate-800 dark:text-slate-200 max-w-xs truncate">{item.descripcion}</td>
+                        {currentSession.requiereVencimiento && (
+                          <>
+                            <td className="p-3 font-semibold text-slate-600 dark:text-slate-400">
+                              {item.mm && item.yyyy ? `${item.mm}/${item.yyyy}` : '-'}
+                            </td>
+                            <td className="p-3 font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                              {item.cu_vc || '-'}
+                            </td>
+                          </>
+                        )}
+                        {currentSession.modo !== 'BLIND' ? (
+                          <>
+                            <td className="p-3 text-right font-semibold text-slate-500">
+                              {formatLocaleNumber(item.teorico)}
+                            </td>
+                            <td className="p-3 text-center">
+                              <input
+                                type="number"
+                                value={item.ajusteMovimiento || ''}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value, 10) || 0;
+                                  handleUpdateAdjustment(item.itemKey, val);
+                                }}
+                                placeholder="0"
+                                title="Ajuste por ventas (- unidades) o recepciones (+ unidades) durante el conteo"
+                                className="w-20 px-2 py-1 text-center font-mono font-bold text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 text-slate-800 dark:text-slate-100"
+                              />
+                            </td>
+                            <td className="p-3 text-right font-semibold text-slate-600 dark:text-slate-300">
+                              {formatLocaleNumber(item.teorico + item.ajusteMovimiento)}
+                            </td>
+                          </>
+                        ) : (
+                          <td className="p-3 text-right font-semibold text-slate-500">{formatLocaleNumber(item.teorico)}</td>
+                        )}
+                        <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-100">{formatLocaleNumber(item.contado)}</td>
+                        <td className={`p-3 text-right font-extrabold ${
+                          item.diferencia === 0 ? 'text-emerald-600' :
+                          item.diferencia < 0 ? 'text-rose-600' : 'text-amber-600'
+                        }`}>
+                          {item.diferencia > 0 ? `+${formatLocaleNumber(item.diferencia)}` : formatLocaleNumber(item.diferencia)}
+                        </td>
+                        <td className="p-3 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                            item.estado === 'CUADRADO' ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300' :
+                            item.estado === 'FALTANTE' ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300' :
+                            item.estado === 'SOBRANTE' ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300' :
+                            'bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300'
+                          }`}>
+                            {item.estado === 'NO_CATALOGADO' ? 'No en Hoja' : item.estado}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {reconciliationPaddingBottom > 0 && (
+                    <tr>
+                      <td style={{ height: `${reconciliationPaddingBottom}px` }} colSpan={currentSession.requiereVencimiento ? 9 : 7} />
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

@@ -38,11 +38,17 @@ import {
   getEventCategory, 
   getItemStatus,
   getCategoryFromEventValue,
-  getItemResolutionStatus
+  getItemResolutionStatus,
+  parseLocaleNumber
 } from '../utils/dateCalculations';
 import { findColumnBySemantic } from '../utils/columnAliases';
 import { resolveItemIdentity, matchRowIndexByIdentity } from '../utils/entityIdentityResolver';
 import { findMasterProduct, dereferenceMasterProduct } from '../utils/referenceResolver';
+import { 
+  findExistingItemByCuVc, 
+  reconcileImportWithInventory, 
+  ImportConsolidationMode 
+} from '../utils/cuVcConsolidator';
 import { VIRTUAL_COLUMNS } from '../utils/virtualColumns';
 import { useColumnResize } from '../hooks/useColumnResize';
 import { useColumnManager } from '../hooks/useColumnManager';
@@ -80,7 +86,6 @@ const saveStoredDemoItems = (view: string, items: any[]) => {
 };
 
 // Modals & Drawers & Sub-components
-import { BulkImportFRC } from './BulkImportFRC';
 import { InventoryTable } from './InventoryTable';
 import { Sidebar } from './navigation/Sidebar';
 import { DashboardTopNav } from './navigation/DashboardTopNav';
@@ -88,15 +93,8 @@ import { DashboardPageHeader } from './navigation/DashboardPageHeader';
 import { DashboardFilterPanels } from './views/DashboardFilterPanels';
 import { SchemaEditorView } from './views/SchemaEditorView';
 import { AnalyticsDashboard } from './views/AnalyticsDashboard';
-import { ItemDetailDrawer } from './drawers/ItemDetailDrawer';
-import { ItemFormModal } from './modals/ItemFormModal';
-import { PmReportModal } from './modals/PmReportModal';
-import { ScriptCodeModal } from './modals/ScriptCodeModal';
-import { GlobalConfigModal } from './modals/GlobalConfigModal';
-import { BarcodeScannerModal } from './modals/BarcodeScannerModal';
-import { BulkEditModal } from './modals/BulkEditModal';
-import { QuickTransferModal } from './modals/QuickTransferModal';
-import { ColumnManagerModal } from './modals/ColumnManagerModal';
+import { FloatingBulkActionBar } from './dashboard/FloatingBulkActionBar';
+import { DashboardModalsManager } from './dashboard/DashboardModalsManager';
 import { exportToExcel } from '../utils/exportUtils';
 import { EventResolutionCards } from './views/EventResolutionCards';
 import { EventFilterChips } from './views/EventFilterChips';
@@ -105,11 +103,6 @@ import { ColumnFilterMenu } from './views/ColumnFilterMenu';
 import { InventoryTableRow } from './views/InventoryTableRow';
 import { usePrecomputedColumns } from '../hooks/usePrecomputedColumns';
 import { TicketPrintView } from './views/TicketPrintView';
-import { TicketConfigModal } from './modals/TicketConfigModal';
-import { GmailDraftModal } from './modals/GmailDraftModal';
-import { WhatsAppModal } from './modals/WhatsAppModal';
-import { UniversalImportModal } from './modals/UniversalImportModal';
-import { BulkActionsConfigModal } from './modals/BulkActionsConfigModal';
 import { buildBulkActionContext, isActionEnabledForTable } from '../utils/bulkActionsRegistry';
 import { 
   loadTicketConfigFromStorage, 
@@ -128,9 +121,6 @@ import {
   computeSliceCounts 
 } from '../utils/sliceRegistry';
 import { SliceSelectorBar } from './slices/SliceSelectorBar';
-import { SliceEditorModal } from './modals/SliceEditorModal';
-import { SliceManagerModal } from './modals/SliceManagerModal';
-import { StockCountTerminal } from './views/StockCountTerminal';
 
 export const InventoryDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -1110,6 +1100,118 @@ export const InventoryDashboard: React.FC = () => {
     }
   };
 
+  const handleUniversalImportConfirmed = async (
+    mappedData: Record<string, any>[],
+    mode: ImportConsolidationMode = 'consolidate_sum'
+  ) => {
+    if (!activeSheet || headers.length === 0) {
+      showToast('No hay una hoja activa configurada.', 'error', 'Importación');
+      return;
+    }
+    try {
+      setIsSaving(true);
+
+      const isVencimientosTable = activeView === 'main' || /vencimiento|caducidad|stock/i.test(activeSheet.title);
+
+      if (isVencimientosTable && mode !== 'append') {
+        // Run intelligent reconciliation!
+        const reconciliation = reconcileImportWithInventory(
+          mappedData,
+          items,
+          headers,
+          sheetConfig.customAliases,
+          mode
+        );
+
+        const totalUpdates = reconciliation.rowsToUpdate.length;
+        const totalAppends = reconciliation.rowsToAppend.length;
+
+        showToast(
+          `Consolidando importación: ${totalUpdates} a actualizar y ${totalAppends} nuevos registros...`,
+          'info',
+          'Consolidación Inteligente'
+        );
+
+        // 1. Process updates for matched rows
+        for (const updateOp of reconciliation.rowsToUpdate) {
+          const rowValues = headers.map(h => updateOp.updatedItem[h] !== undefined ? String(updateOp.updatedItem[h]) : '');
+          setItems(prev => prev.map(it => it._rowIndex === updateOp.rowIndex ? { ...it, ...updateOp.updatedItem } : it));
+          
+          try {
+            await updateRow(activeSheet.title, updateOp.rowIndex, rowValues);
+          } catch (err) {
+            console.warn(`Error updating row ${updateOp.rowIndex} in cloud, adding to offline queue:`, err);
+            await enqueueMutation({
+              type: 'update',
+              sheetTitle: activeSheet.title,
+              rowIndex: updateOp.rowIndex,
+              entityKey: updateOp.cuVc,
+              entityKeyCol: 'CU_VC',
+              headers,
+              values: rowValues
+            });
+          }
+        }
+
+        // 2. Process appends for new unique rows
+        let nextRowIndex = items.length ? Math.max(...items.map(i => i._rowIndex || 2)) + 1 : 2;
+        for (const newRow of reconciliation.rowsToAppend) {
+          const rowValues = headers.map(h => newRow[h] !== undefined ? String(newRow[h]) : '');
+          const newItem: InventoryItem = { _rowIndex: nextRowIndex++, ...newRow };
+          setItems(prev => [...prev, newItem]);
+
+          try {
+            await appendRow(activeSheet.title, rowValues);
+          } catch (err) {
+            console.warn('Error appending row in cloud, adding to offline queue:', err);
+            await enqueueMutation({
+              type: 'append',
+              sheetTitle: activeSheet.title,
+              headers,
+              values: rowValues
+            });
+          }
+        }
+
+        showToast(
+          `¡Importación completada! ${totalUpdates} registros existentes consolidados y ${totalAppends} nuevos agregados sin duplicados de CU_VC.`,
+          'success',
+          'Importación Inteligente'
+        );
+
+      } else {
+        // Fallback / standard append mode for other views or explicit append
+        let nextRowIndex = items.length ? Math.max(...items.map(i => i._rowIndex || 2)) + 1 : 2;
+        for (const item of mappedData) {
+          const rowValues = headers.map(h => item[h] !== undefined ? String(item[h]) : '');
+          const newItem: InventoryItem = { _rowIndex: nextRowIndex++ };
+          headers.forEach((h, i) => newItem[h] = rowValues[i]);
+
+          setItems(prev => [...prev, newItem]);
+
+          try {
+            await appendRow(activeSheet.title, rowValues);
+          } catch (saveErr) {
+            console.warn('Network error during bulk import append, adding to offline queue:', saveErr);
+            await enqueueMutation({
+              type: 'append',
+              sheetTitle: activeSheet.title,
+              values: rowValues
+            });
+          }
+        }
+
+        showToast(`Se importaron ${mappedData.length} registros exitosamente en "${activeSheet.title}".`, 'success', 'Importación Exitosa');
+      }
+
+      await fetchData(sheetConfig, activeView, true);
+    } catch (err: any) {
+      showToast(`Error al importar registros: ${err.message}`, 'error', 'Error de Importación');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   useEffect(() => {
     fetchData(sheetConfig, activeView, false);
     setSelectedRowIds([]);
@@ -1533,8 +1635,31 @@ export const InventoryDashboard: React.FC = () => {
       const now = new Date();
       const currentFormattedDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 19).replace('T', ' ');
 
+      // Intelligent CU_VC Collision Detection: If creating a new record in main/vencimientos table, check if SKU + MM/YYYY already exists
+      let targetExistingItem = editingItem;
+      let isConsolidatingWithExisting = false;
+
+      if (!targetExistingItem && (activeView === 'main' || /vencimiento|caducidad|stock/i.test(activeSheet.title))) {
+        const matched = findExistingItemByCuVc(formData, items, headers, sheetConfig.customAliases);
+        if (matched) {
+          targetExistingItem = matched;
+          isConsolidatingWithExisting = true;
+        }
+      }
+
+      // If consolidating with an existing row, sum up the quantities!
+      const mergedFormData = { ...formData };
+      if (isConsolidatingWithExisting && targetExistingItem) {
+        const qtyCol = findColumnBySemantic(headers, 'cantidad') || headers.find(h => /cant|stock|unidades/i.test(h));
+        if (qtyCol) {
+          const currentQty = parseLocaleNumber(targetExistingItem[qtyCol]);
+          const addQty = parseLocaleNumber(formData[qtyCol]);
+          mergedFormData[qtyCol] = String(currentQty + addQty);
+        }
+      }
+
       const rowValues = headers.map(h => {
-        const val = formData[h] || '';
+        const val = mergedFormData[h] || '';
         const colSchema = sheetConfig.schema?.[activeSheet.title]?.[h];
         if (!val && (colSchema?.type === 'datetime' || /timestamp|created_at|fecha_creaci[oó]n|fecha_registro/i.test(h))) {
           return currentFormattedDateTime;
@@ -1543,39 +1668,44 @@ export const InventoryDashboard: React.FC = () => {
       });
       
       // Optimistic update
-      const newItem: InventoryItem = { _rowIndex: editingItem ? editingItem._rowIndex : (items.length ? Math.max(...items.map(i => i._rowIndex)) + 1 : 2) };
+      const newItem: InventoryItem = { 
+        _rowIndex: targetExistingItem ? targetExistingItem._rowIndex : (items.length ? Math.max(...items.map(i => i._rowIndex || 0)) + 1 : 2) 
+      };
       headers.forEach((h, i) => newItem[h] = rowValues[i]);
       
-      if (editingItem) {
-        setItems(prev => prev.map(item => item._rowIndex === editingItem._rowIndex ? newItem : item));
-        if (activeView === 'main') setAllMainItems(prev => prev.map(item => item._rowIndex === editingItem._rowIndex ? newItem : item));
+      if (targetExistingItem) {
+        setItems(prev => prev.map(item => item._rowIndex === targetExistingItem!._rowIndex ? newItem : item));
+        if (activeView === 'main') setAllMainItems(prev => prev.map(item => item._rowIndex === targetExistingItem!._rowIndex ? newItem : item));
       } else {
         setItems(prev => [...prev, newItem]);
         if (activeView === 'main') setAllMainItems(prev => [...prev, newItem]);
       }
       handleCloseModal();
 
-      const nowIso = new Date().toISOString();
       try {
-        if (editingItem) {
-          await updateRow(activeSheet.title, editingItem._rowIndex, rowValues);
+        if (targetExistingItem && targetExistingItem._rowIndex) {
+          await updateRow(activeSheet.title, targetExistingItem._rowIndex, rowValues);
         } else {
           await appendRow(activeSheet.title, rowValues);
         }
       } catch (saveErr) {
         console.warn('Network error during save, adding to offline queue:', saveErr);
         await enqueueMutation({
-          type: editingItem ? 'update' : 'append',
+          type: targetExistingItem ? 'update' : 'append',
           sheetTitle: activeSheet.title,
-          rowIndex: editingItem ? editingItem._rowIndex : undefined,
-          entityKey: editingItem?._entityKey,
-          entityKeyCol: editingItem?._entityKeyCol,
-          keyValue: editingItem?._entityKey,
-          keyColumn: editingItem?._entityKeyCol,
+          rowIndex: targetExistingItem ? targetExistingItem._rowIndex : undefined,
+          entityKey: targetExistingItem?._entityKey,
+          entityKeyCol: targetExistingItem?._entityKeyCol,
+          keyValue: targetExistingItem?._entityKey,
+          keyColumn: targetExistingItem?._entityKeyCol,
           headers,
           values: rowValues
         });
-        alert('Sin conexión con Google Sheets. Los cambios se guardaron localmente en IndexedDB y se sincronizarán en la cola offline.');
+        showToast('Sin conexión con Google Sheets. Los cambios se guardaron localmente en la cola offline.', 'info', 'Modo Offline');
+      }
+
+      if (isConsolidatingWithExisting) {
+        showToast('Registro consolidado con éxito: Se sumó la cantidad a la fila existente con el mismo vencimiento (CU_VC).', 'success', 'Consolidación Inteligente');
       }
       
       await fetchData(sheetConfig, activeView, true);
@@ -1583,7 +1713,7 @@ export const InventoryDashboard: React.FC = () => {
       // Rollback
       setItems(originalItems);
       setAllMainItems(originalMainItems);
-      alert(`Error guardando datos (rollback aplicado): ${err.message}`);
+      showToast(`Error guardando datos (rollback aplicado): ${err.message}`, 'error', 'Error');
     } finally {
       setIsSaving(false);
     }
@@ -1945,7 +2075,7 @@ export const InventoryDashboard: React.FC = () => {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar SKU, producto, lote, proveedor..."
+                placeholder="Buscar SKU, producto, vencimiento, proveedor..."
                 className="w-full pl-9 pr-8 py-1.5 text-xs rounded-xl bg-slate-800/90 text-white placeholder:text-slate-400 border border-slate-700 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-all shadow-inner"
                 autoFocus
               />
@@ -2262,155 +2392,28 @@ export const InventoryDashboard: React.FC = () => {
           )}
 
           {/* FLOATING ACTION BAR (BULK ACTIONS) */}
-          {selectedRowIds.length > 0 && activeView !== 'schema' && activeView !== 'analytics' && (
-            <div className="hidden md:flex absolute bottom-8 left-1/2 -translate-x-1/2 z-50 bg-slate-800 text-white px-4 py-3 rounded-2xl shadow-2xl items-center gap-4 animate-in slide-in-from-bottom-10 fade-in duration-300 border border-slate-700">
-              <div className="flex items-center gap-2 border-r border-slate-600 pr-4">
-                <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-lg shadow-inner">{selectedRowIds.length}</span>
-                <span className="text-sm font-medium whitespace-nowrap">seleccionados</span>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                {isActionEnabledForTable('ticket', bulkActionCtx, sheetConfig) && (
-                  <div className="flex items-center bg-slate-700/80 rounded-xl p-0.5">
-                    <button 
-                      onClick={() => {
-                        const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
-                        handlePrintTicket(selectedItems, 'standard');
-                      }}
-                      className="text-xs hover:bg-slate-600 px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 text-white"
-                    >
-                      <Printer className="w-3.5 h-3.5 text-indigo-400" /> Imprimir Ticket
-                    </button>
-                    <button
-                      onClick={() => setIsTicketConfigOpen(true)}
-                      className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-600 rounded-lg transition-colors"
-                      title="Configurar columnas y formato del ticket"
-                    >
-                      <Settings className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-
-                {isActionEnabledForTable('barcode_ticket', bulkActionCtx, sheetConfig) && (
-                  <button 
-                    onClick={() => {
-                      const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
-                      handlePrintTicket(selectedItems, 'barcode');
-                    }}
-                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 bg-indigo-600/40 text-indigo-200 border border-indigo-500/40 shadow-sm"
-                    title="Imprimir etiquetas térmicas con código de barras 1D (Code128) del SKU"
-                  >
-                    <Barcode className="w-3.5 h-3.5 text-indigo-300" /> Código Barras ({selectedRowIds.length})
-                  </button>
-                )}
-                
-                {isActionEnabledForTable('gmail', bulkActionCtx, sheetConfig) && (
-                  <button 
-                    onClick={() => setIsGmailModalOpen(true)}
-                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 bg-red-600/40 text-red-200 border border-red-500/40 shadow-sm"
-                  >
-                    <Mail className="w-3.5 h-3.5 text-red-400" /> Borrador Gmail
-                  </button>
-                )}
-
-                {isActionEnabledForTable('whatsapp', bulkActionCtx, sheetConfig) && (
-                  <button 
-                    onClick={() => {
-                      const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
-                      setWhatsAppModalItems(selectedItems);
-                      setIsWhatsAppModalOpen(true);
-                    }}
-                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-bold transition-colors flex items-center gap-1.5 bg-emerald-600/40 text-emerald-200 border border-emerald-500/40 shadow-sm"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5 text-emerald-400" /> WhatsApp ({selectedRowIds.length})
-                  </button>
-                )}
-                
-                {isActionEnabledForTable('excel', bulkActionCtx, sheetConfig) && (
-                  <button 
-                    onClick={() => {
-                      const selectedItems = filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number));
-                      
-                      // Prepare all virtual columns (system + user)
-                      const activeVirtual = [
-                        ...VIRTUAL_COLUMNS.filter(vc => sheetConfig.activeVirtualColumns?.includes(vc.id)),
-                        ...(sheetConfig.userVirtualColumns || []).map(uvc => ({
-                          id: uvc.id,
-                          label: uvc.label,
-                          calculate: (item: any) => {
-                            const values = uvc.sourceColumns.map(sc => item[sc] || '');
-                            if (uvc.operation === 'concatenate') return values.join(' ');
-                            if (uvc.operation === 'sum') return values.reduce((acc, v) => acc + (parseFloat(v) || 0), 0);
-                            if (uvc.operation === 'diff_days') {
-                               const d1 = parseAnyDate(values[0]);
-                               const d2 = parseAnyDate(values[1]);
-                               if (d1 && d2) return Math.round(Math.abs(d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24));
-                               return '-';
-                            }
-                            return '-';
-                          }
-                        }))
-                      ];
-                      
-                      const allData = { products, policies, events: [] };
-                      const exportHeaders = (visibleHeaders && visibleHeaders.length > 0) ? visibleHeaders : headers;
-                      exportToExcel(`Seleccion_${new Date().toISOString().split('T')[0]}`, exportHeaders, selectedItems, 'Selección', activeVirtual, allData, columnLabelsMap);
-                    }}
-                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
-                  >
-                    <Download className="w-3.5 h-3.5 text-blue-400" /> Exportar a Excel
-                  </button>
-                )}
-                
-                {isActionEnabledForTable('pm_report', bulkActionCtx, sheetConfig) && (
-                  <button 
-                    onClick={() => { 
-                      setIsPmReportOpen(true); 
-                    }}
-                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5"
-                  >
-                    <Flame className="w-3.5 h-3.5 text-orange-400" /> Acción PM
-                  </button>
-                )}
-
-                {isActionEnabledForTable('bulk_edit', bulkActionCtx, sheetConfig) && (
-                  <button 
-                    onClick={() => setIsBulkEditOpen(true)}
-                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5 bg-blue-600/40 text-blue-200 border border-blue-500/40"
-                  >
-                    <Edit2 className="w-3.5 h-3.5 text-blue-400" /> Edición Masiva FRC
-                  </button>
-                )}
-                
-                {isActionEnabledForTable('delete', bulkActionCtx, sheetConfig) && (
-                  <button 
-                    onClick={handleBulkDelete}
-                    className="text-xs hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium transition-colors flex items-center gap-1.5 bg-rose-600/40 text-rose-200 border border-rose-500/40 hover:bg-rose-600/60"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-400" /> Eliminar ({selectedRowIds.length})
-                  </button>
-                )}
-
-                <div className="h-4 w-px bg-slate-600 my-auto mx-0.5"></div>
-
-                <button 
-                  onClick={() => setIsBulkActionsConfigOpen(true)}
-                  className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-700 transition-colors flex items-center justify-center shrink-0"
-                  title="Configurar acciones visibles para esta tabla"
-                >
-                  <Sliders className="w-4 h-4" />
-                </button>
-                
-                <button 
-                  onClick={() => setSelectedRowIds([])}
-                  className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-700 transition-colors flex items-center justify-center shrink-0"
-                  title="Deseleccionar todo"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
+          <FloatingBulkActionBar
+            selectedRowIds={selectedRowIds}
+            filteredItems={filteredItems}
+            activeView={activeView}
+            bulkActionCtx={bulkActionCtx}
+            sheetConfig={sheetConfig}
+            headers={headers}
+            visibleHeaders={visibleHeaders}
+            columnLabelsMap={columnLabelsMap}
+            products={products}
+            policies={policies}
+            handlePrintTicket={handlePrintTicket}
+            setIsTicketConfigOpen={setIsTicketConfigOpen}
+            setIsGmailModalOpen={setIsGmailModalOpen}
+            setWhatsAppModalItems={setWhatsAppModalItems}
+            setIsWhatsAppModalOpen={setIsWhatsAppModalOpen}
+            setIsPmReportOpen={setIsPmReportOpen}
+            setIsBulkEditOpen={setIsBulkEditOpen}
+            handleBulkDelete={handleBulkDelete}
+            setIsBulkActionsConfigOpen={setIsBulkActionsConfigOpen}
+            setSelectedRowIds={setSelectedRowIds}
+          />
 
           {/* MOBILE ONLY FAB (Floating Action Button) for New Record */}
           {!isZenMode && activeView !== 'schema' && activeView !== 'analytics' && activeSheet && (
@@ -2425,244 +2428,96 @@ export const InventoryDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* 1. MASTER-DETAIL PRODUCT DRAWER */}
-      <ItemDetailDrawer
-        product={selectedProduct}
-        onClose={() => setSelectedProduct(null)}
-        onEdit={(prod) => {
-          setSelectedProduct(null);
-          handleOpenModal(prod);
-        }}
-        onDeleteRow={handleDelete}
-        onPrintBarcode={(prod) => handlePrintTicket([prod], 'barcode')}
-        onNewEventForProduct={(sku, category) => {
-          handleOpenModal(undefined, sku, category);
-        }}
+      {/* CENTRALIZED DASHBOARD MODALS AND DRAWERS */}
+      <DashboardModalsManager
+        selectedProduct={selectedProduct}
+        setSelectedProduct={setSelectedProduct}
+        handleOpenModal={handleOpenModal}
+        handleDelete={handleDelete}
+        handlePrintTicket={handlePrintTicket}
         allMainItems={allMainItems}
         policies={policies}
         products={products}
-        customAliases={sheetConfig.customAliases}
-      />
-
-      {/* 2. PM DRAINAGE REPORT MODAL */}
-      <PmReportModal
-        isOpen={isPmReportOpen}
-        onClose={() => setIsPmReportOpen(false)}
+        sheetConfig={sheetConfig}
+        setSheetConfig={setSheetConfig}
+        saveConfig={saveConfig}
+        isPmReportOpen={isPmReportOpen}
+        setIsPmReportOpen={setIsPmReportOpen}
         drainageReportItems={drainageReportItems}
-      />
-
-      {/* 3. GOOGLE APPS SCRIPT CODE MODAL */}
-      <ScriptCodeModal
-        isOpen={isScriptModalOpen}
-        onClose={() => setIsScriptModalOpen(false)}
-      />
-
-      {/* 4. MAIN FORM MODAL */}
-      <ItemFormModal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
+        isScriptModalOpen={isScriptModalOpen}
+        setIsScriptModalOpen={setIsScriptModalOpen}
+        isModalOpen={isModalOpen}
+        handleCloseModal={handleCloseModal}
         editingItem={editingItem}
+        setEditingItem={setEditingItem}
         activeSheet={activeSheet}
         activeView={activeView}
         headers={headers}
         formData={formData}
         formErrors={formErrors}
         selectedEventCategory={selectedEventCategory}
-        onSelectEventCategory={handleSelectEventCategory}
-        onChange={handleFormChange}
-        onSave={handleSave}
+        handleSelectEventCategory={handleSelectEventCategory}
+        handleFormChange={handleFormChange}
+        handleSave={handleSave}
         isSaving={isSaving}
-        sheetConfig={sheetConfig}
-        products={products}
-        onBatchUpdateFormData={handleBatchFormUpdate}
-        policies={policies}
-      />
-
-      {/* 5. GLOBAL CONFIG MODAL */}
-      <GlobalConfigModal
-        isOpen={isConfigOpen}
-        onClose={() => setIsConfigOpen(false)}
-        sheetConfig={sheetConfig}
-        setSheetConfig={setSheetConfig}
-        saveConfig={saveConfig}
+        handleBatchFormUpdate={handleBatchFormUpdate}
+        isConfigOpen={isConfigOpen}
+        setIsConfigOpen={setIsConfigOpen}
         metadata={metadata}
         fetchData={fetchData}
-        activeView={activeView}
-        activeSheetTitle={activeSheet?.title || activeView}
-        headers={headers}
-      />
-
-      {/* BARCODE SCANNER MODAL */}
-      <BarcodeScannerModal
-        isOpen={isScannerOpen}
-        onClose={() => setIsScannerOpen(false)}
-        onScanSuccess={(code) => setSearchTerm(code)}
-      />
-
-      {/* BULK EDIT MODAL */}
-      <BulkEditModal
-        isOpen={isBulkEditOpen}
-        onClose={() => setIsBulkEditOpen(false)}
-        selectedCount={selectedRowIds.length}
-        onApply={handleApplyBulkEdit}
-      />
-
-      {/* GMAIL DRAFT MODAL */}
-      <GmailDraftModal
-        isOpen={isGmailModalOpen}
-        onClose={() => {
-          setIsGmailModalOpen(false);
-          setGmailModalItems([]);
-        }}
-        selectedItems={gmailModalItems.length > 0 ? gmailModalItems : (selectedRowIds.length > 0 ? filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number)) : filteredItems)}
-        headers={visibleHeaders.length > 0 ? visibleHeaders : headers}
-        customAliases={sheetConfig.customAliases}
-        activeViewTitle={
-          activeView === 'main' ? 'Vencimientos y Drenaje' :
-          activeView === 'events' ? 'Incidencias FRC' :
-          activeView === 'products' ? 'Productos' : 'Inventario'
-        }
-        allMainItems={allMainItems}
-        products={products}
-        policies={policies}
-      />
-
-      {/* WHATSAPP MODAL */}
-      <WhatsAppModal
-        isOpen={isWhatsAppModalOpen}
-        onClose={() => {
-          setIsWhatsAppModalOpen(false);
-          setWhatsAppModalItems([]);
-        }}
-        selectedItems={whatsAppModalItems.length > 0 ? whatsAppModalItems : (selectedRowIds.length > 0 ? filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number)) : filteredItems)}
-        headers={headers}
-        customAliases={sheetConfig.customAliases}
-      />
-
-      {/* 6. COLUMN MANAGER MODAL */}
-      <ColumnManagerModal
-        isOpen={isColumnManagerOpen}
-        onClose={() => setIsColumnManagerOpen(false)}
-        columns={allManageableColumns}
+        isScannerOpen={isScannerOpen}
+        setIsScannerOpen={setIsScannerOpen}
+        setSearchTerm={setSearchTerm}
+        isBulkEditOpen={isBulkEditOpen}
+        setIsBulkEditOpen={setIsBulkEditOpen}
+        selectedRowIds={selectedRowIds}
+        handleApplyBulkEdit={handleApplyBulkEdit}
+        isGmailModalOpen={isGmailModalOpen}
+        setIsGmailModalOpen={setIsGmailModalOpen}
+        gmailModalItems={gmailModalItems}
+        setGmailModalItems={setGmailModalItems}
+        filteredItems={filteredItems}
+        visibleHeaders={visibleHeaders}
+        isWhatsAppModalOpen={isWhatsAppModalOpen}
+        setIsWhatsAppModalOpen={setIsWhatsAppModalOpen}
+        whatsAppModalItems={whatsAppModalItems}
+        setWhatsAppModalItems={setWhatsAppModalItems}
+        isColumnManagerOpen={isColumnManagerOpen}
+        setIsColumnManagerOpen={setIsColumnManagerOpen}
+        allManageableColumns={allManageableColumns}
         toggleVisibility={toggleVisibility}
         moveColumn={moveColumn}
         showAllColumns={showAllColumns}
         resetColumnOrder={resetColumnOrder}
         handleColumnDrop={handleColumnDrop}
-      />
-
-      {/* QUICK TRANSFER MODAL */}
-      <QuickTransferModal
-        isOpen={isQuickTraspasoOpen}
-        onClose={() => {
-          setIsQuickTraspasoOpen(false);
-          setQuickTraspasoItem(null);
-        }}
-        item={quickTraspasoItem}
-        headers={headers}
-        onSave={handleSaveQuickTraspaso}
-      />
-      
-      {/* TICKET CONFIG MODAL */}
-      <TicketConfigModal
-        isOpen={isTicketConfigOpen}
-        onClose={() => setIsTicketConfigOpen(false)}
-        headers={headers}
-        activeView={activeView}
-        config={globalTicketConfig[activeView] || sheetConfig.ticketPrintConfig?.[activeView] || {}}
-        onSave={handleSaveTicketConfig}
-        sampleItems={filteredItems}
-      />
-
-      {/* UNIVERSAL IMPORT MODAL (EXCEL / CSV / TSV / CLIPBOARD) */}
-      <UniversalImportModal
-        isOpen={isBulkImportOpen}
-        onClose={() => setIsBulkImportOpen(false)}
-        targetHeaders={headers}
-        activeSheetTitle={activeSheet?.title || 'Hoja Activa'}
-        onImportConfirmed={async (mappedData) => {
-          if (!activeSheet || headers.length === 0) {
-            alert('No hay una hoja activa configurada.');
-            return;
-          }
-          try {
-            setIsSaving(true);
-            let nextRowIndex = items.length ? Math.max(...items.map(i => i._rowIndex || 2)) + 1 : 2;
-
-            for (const item of mappedData) {
-              const rowValues = headers.map(h => item[h] !== undefined ? String(item[h]) : '');
-              const newItem: InventoryItem = { _rowIndex: nextRowIndex++ };
-              headers.forEach((h, i) => newItem[h] = rowValues[i]);
-
-              setItems(prev => [...prev, newItem]);
-
-              try {
-                await appendRow(activeSheet.title, rowValues);
-              } catch (saveErr) {
-                console.warn('Network error during bulk import append, adding to offline queue:', saveErr);
-                await enqueueMutation({
-                  type: 'append',
-                  sheetTitle: activeSheet.title,
-                  values: rowValues
-                });
-              }
-            }
-
-            alert(`Se importaron e integraron ${mappedData.length} registros exitosamente en "${activeSheet.title}".`);
-            await fetchData(sheetConfig, activeView, true);
-          } catch (err: any) {
-            alert(`Error al importar registros: ${err.message}`);
-          } finally {
-            setIsSaving(false);
-          }
-        }}
-      />
-
-      {/* BULK ACTIONS CONFIGURATION MODAL */}
-      <BulkActionsConfigModal
-        isOpen={isBulkActionsConfigOpen}
-        onClose={() => setIsBulkActionsConfigOpen(false)}
-        sheetConfig={sheetConfig}
-        setSheetConfig={setSheetConfig}
-        saveConfig={saveConfig}
-        activeSheetTitle={activeSheet?.title || ''}
-        activeView={activeView}
-        headers={headers}
-        metadata={metadata}
-      />
-
-      {/* SLICE MANAGER MODAL */}
-      <SliceManagerModal
-        isOpen={isSliceManagerOpen}
-        onClose={() => setIsSliceManagerOpen(false)}
-        tableKey={activeView}
-        slices={currentTableSlices}
+        isQuickTraspasoOpen={isQuickTraspasoOpen}
+        setIsQuickTraspasoOpen={setIsQuickTraspasoOpen}
+        quickTraspasoItem={quickTraspasoItem}
+        setQuickTraspasoItem={setQuickTraspasoItem}
+        handleSaveQuickTraspaso={handleSaveQuickTraspaso}
+        isTicketConfigOpen={isTicketConfigOpen}
+        setIsTicketConfigOpen={setIsTicketConfigOpen}
+        globalTicketConfig={globalTicketConfig}
+        handleSaveTicketConfig={handleSaveTicketConfig}
+        isBulkImportOpen={isBulkImportOpen}
+        setIsBulkImportOpen={setIsBulkImportOpen}
+        handleUniversalImportConfirmed={handleUniversalImportConfirmed}
+        isBulkActionsConfigOpen={isBulkActionsConfigOpen}
+        setIsBulkActionsConfigOpen={setIsBulkActionsConfigOpen}
+        isSliceManagerOpen={isSliceManagerOpen}
+        setIsSliceManagerOpen={setIsSliceManagerOpen}
+        currentTableSlices={currentTableSlices}
         sliceCounts={sliceCounts}
         activeSliceId={activeSliceId}
         hiddenSliceIds={hiddenSliceIds}
-        onSelectSlice={handleSelectSlice}
-        onEditSlice={(slice) => {
-          setEditingSliceModalItem(slice);
-          setIsSliceModalOpen(true);
-        }}
-        onCreateSlice={() => {
-          setEditingSliceModalItem(null);
-          setIsSliceModalOpen(true);
-        }}
-        onDeleteSlice={handleDeleteSlice}
-        onToggleSliceVisibility={handleToggleSliceVisibility}
-        onSetBulkVisibility={handleSetBulkVisibility}
-      />
-
-      {/* SLICE EDITOR MODAL (AppSheet Slices) */}
-      <SliceEditorModal
-        isOpen={isSliceModalOpen}
-        onClose={() => {
-          setIsSliceModalOpen(false);
-          setEditingSliceModalItem(null);
-        }}
-        tableKey={activeView}
-        headers={headers}
+        handleSelectSlice={handleSelectSlice}
+        setEditingSliceModalItem={setEditingSliceModalItem}
+        handleDeleteSlice={handleDeleteSlice}
+        handleToggleSliceVisibility={handleToggleSliceVisibility}
+        handleSetBulkVisibility={handleSetBulkVisibility}
+        isSliceModalOpen={isSliceModalOpen}
+        setIsSliceModalOpen={setIsSliceModalOpen}
+        editingSliceModalItem={editingSliceModalItem}
         currentFilters={{
           searchTerm,
           quickChip: activeQuickChip,
@@ -2674,31 +2529,16 @@ export const InventoryDashboard: React.FC = () => {
           dynamicMonthFilter,
           dynamicMonthRange
         }}
-        currentSort={sortConfig}
-        currentGroupBy={groupByColumn}
-        currentGroupByDirection={groupByDirection}
-        currentVisibleHeaders={visibleHeaders}
-        editingSlice={editingSliceModalItem}
-        onSaveSlice={handleSaveSlice}
-        onDeleteSlice={handleDeleteSlice}
+        sortConfig={sortConfig}
+        groupByColumn={groupByColumn}
+        groupByDirection={groupByDirection}
+        handleSaveSlice={handleSaveSlice}
+        isStockCountOpen={isStockCountOpen}
+        setIsStockCountOpen={setIsStockCountOpen}
+        items={items}
+        handleSyncRowsToVencimientos={handleSyncRowsToVencimientos}
+        showToast={showToast}
       />
-
-      {/* STOCK COUNT TERMINAL OVERLAY */}
-      {isStockCountOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-150">
-          <div className="w-full h-full max-w-7xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col">
-            <StockCountTerminal
-              sheetItems={items}
-              headers={headers}
-              masterProducts={products}
-              activeSheetTitle={activeSheet?.title || 'VENCIMIENTOS'}
-              onSyncRowsToVencimientos={handleSyncRowsToVencimientos}
-              showToast={showToast}
-              onClose={() => setIsStockCountOpen(false)}
-            />
-          </div>
-        </div>
-      )}
 
     </div>
 

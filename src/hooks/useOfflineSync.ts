@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { indexedDbService, OfflineMutation } from '../db/indexedDbService';
 import { appendRow, updateRow, deleteRow, getSheetData } from '../lib/sheets';
 import { matchRowIndexByIdentity } from '../utils/entityIdentityResolver';
+import { backendMirrorService } from '../services/backendMirrorService';
 
 export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
   const [offlineQueue, setOfflineQueue] = useState<OfflineMutation[]>([]);
@@ -27,7 +28,7 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
   }, []);
 
   // Enqueue a mutation to IndexedDB and state
-  const enqueueMutation = useCallback(
+    const enqueueMutation = useCallback(
     async (mutation: {
       type: 'append' | 'update' | 'delete';
       sheetTitle: string;
@@ -41,6 +42,22 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
       values?: any;
     }) => {
       const created = await indexedDbService.enqueueMutation(mutation);
+      
+      // Real-time mirror replication if enabled
+      try {
+        const savedConfigStr = localStorage.getItem('appsheet_config');
+        if (savedConfigStr) {
+          const parsed = JSON.parse(savedConfigStr);
+          if (parsed?.backendMirror?.enabled) {
+            backendMirrorService.mirrorMutation(parsed.backendMirror, created).catch(mErr => {
+              console.warn('[OfflineSync] Immediate mirror replication warning:', mErr);
+            });
+          }
+        }
+      } catch (e) {
+        // Non-blocking mirror operation
+      }
+
       await refreshQueue();
       return created;
     },

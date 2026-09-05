@@ -345,7 +345,7 @@ export const ItemDetailDrawer: React.FC<ItemDetailDrawerProps> = ({
 
             {expirations.length === 0 ? (
               <div className="p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-center text-xs text-slate-400 dark:text-slate-500">
-                No hay lotes con fecha de vencimiento registrados para este SKU.
+                No hay fechas de vencimiento registradas para este SKU.
               </div>
             ) : (
               <div className="space-y-2">

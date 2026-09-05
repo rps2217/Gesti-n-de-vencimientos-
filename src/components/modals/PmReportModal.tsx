@@ -78,7 +78,7 @@ export const PmReportModal: React.FC<PmReportModalProps> = ({
             <div>
               <h3 className="font-bold text-slate-900 dark:text-slate-100 text-lg">Reporte de Drenaje para Product Manager (PM)</h3>
               <p className="text-xs text-orange-800 dark:text-orange-400">
-                Productos con vencimiento próximo para solicitar precio especial o descuento de liquidación.
+                Productos con vencimiento próximo para coordinar canje con proveedor o drenaje comercial prioritario.
               </p>
             </div>
           </div>

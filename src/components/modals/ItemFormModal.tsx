@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   X, Loader2, Sparkles, AlertCircle, Link2, Info, Search, 
-  Check, RotateCcw, Eye, EyeOff, Sliders, Plus, CheckCircle2, ChevronDown, Calendar
+  Check, RotateCcw, Eye, EyeOff, Sliders, Plus, CheckCircle2, ChevronDown, Calendar,
+  AlertTriangle, ArrowRight, Layers
 } from 'lucide-react';
 import { SheetProperties, InventoryItem, EventCategory, SheetConfig } from '../../types';
 import { 
@@ -10,7 +11,8 @@ import {
   formatInputDate, 
   formatInputDateTime, 
   formatDisplayDate, 
-  parseAnyDate 
+  parseAnyDate,
+  parseLocaleNumber
 } from '../../utils/dateCalculations';
 import { evaluateShowIf, getOperationalSuggestions, QUICK_QUANTITY_PRESETS } from '../../utils/dynamicFormRules';
 import { 
@@ -21,11 +23,14 @@ import {
   MasterProductSummary
 } from '../../utils/referenceResolver';
 import { findColumnBySemantic } from '../../utils/columnAliases';
+import { findExistingItemByCuVc, extractCuVcFromRow } from '../../utils/cuVcConsolidator';
 
 interface ItemFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   editingItem: InventoryItem | null;
+  onSetEditingItem?: (item: InventoryItem | null) => void;
+  existingItems?: InventoryItem[];
   activeSheet: SheetProperties | null;
   activeView: string;
   headers: string[];
@@ -46,6 +51,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   isOpen,
   onClose,
   editingItem,
+  onSetEditingItem,
+  existingItems = [],
   activeSheet,
   activeView,
   headers,
@@ -88,6 +95,64 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   // Identify key semantic columns in current headers
   const skuHeader = findColumnBySemantic(headers, 'sku', sheetConfig.customAliases) || headers.find(h => /sku|código|codigo/i.test(h));
   const currentSkuVal = skuHeader ? (formData[skuHeader] || '').trim() : '';
+
+  // Business Rule: No lotes. Unique item by SKU + MM/YYYY (CU_VC).
+  // Check if candidate draft matches an existing item by CU_VC when creating a new item.
+  const candidateCuVc = useMemo(() => {
+    return extractCuVcFromRow(formData, headers, sheetConfig.customAliases);
+  }, [formData, headers, sheetConfig.customAliases]);
+
+  const existingCuVcMatch = useMemo(() => {
+    if (editingItem || !existingItems || existingItems.length === 0 || !candidateCuVc.isValidComposite) {
+      return null;
+    }
+    const match = findExistingItemByCuVc(formData, existingItems, headers, sheetConfig.customAliases);
+    return match.exists ? match : null;
+  }, [editingItem, existingItems, formData, headers, sheetConfig.customAliases, candidateCuVc]);
+
+  const cantHeader = findColumnBySemantic(headers, 'cantidad', sheetConfig.customAliases) || 
+                     headers.find(h => /^(cant|cantidad|stock|unidades)$/i.test(h.trim()));
+
+  const currentEnteredQty = cantHeader && formData[cantHeader] 
+    ? parseLocaleNumber(formData[cantHeader]) 
+    : 0;
+
+  const handleConsolidateWithExisting = () => {
+    if (!existingCuVcMatch || !existingCuVcMatch.existingItem) return;
+    const existing = existingCuVcMatch.existingItem;
+    const newSummedQty = existingCuVcMatch.currentQuantity + currentEnteredQty;
+
+    const updates: Record<string, string> = {};
+    headers.forEach(h => {
+      updates[h] = existing[h] !== undefined && existing[h] !== null ? String(existing[h]) : (formData[h] || '');
+    });
+
+    if (cantHeader) {
+      updates[cantHeader] = String(newSummedQty);
+    }
+
+    if (onBatchUpdateFormData) {
+      onBatchUpdateFormData(updates);
+    }
+    if (onSetEditingItem) {
+      onSetEditingItem(existing);
+    }
+  };
+
+  const handleLoadExistingRow = () => {
+    if (!existingCuVcMatch || !existingCuVcMatch.existingItem) return;
+    const existing = existingCuVcMatch.existingItem;
+    const updates: Record<string, string> = {};
+    headers.forEach(h => {
+      updates[h] = existing[h] !== undefined && existing[h] !== null ? String(existing[h]) : '';
+    });
+    if (onBatchUpdateFormData) {
+      onBatchUpdateFormData(updates);
+    }
+    if (onSetEditingItem) {
+      onSetEditingItem(existing);
+    }
+  };
 
   // Look up linked master product
   const linkedMasterProduct = currentSkuVal && products.length > 0 
@@ -306,6 +371,59 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                   <RotateCcw className="w-3 h-3" />
                   <span>Sincronizar Ref</span>
                 </button>
+              </div>
+            )}
+
+            {/* Business Rule Banner: CU_VC Expiration Match (No Lotes - Consolidación Inteligente) */}
+            {existingCuVcMatch && (
+              <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/40 border-2 border-amber-300 dark:border-amber-700/80 rounded-2xl shadow-xs animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                    <AlertTriangle className="w-4.5 h-4.5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/60 px-2 py-0.5 rounded font-mono border border-amber-200 dark:border-amber-800">
+                        Vencimiento ya existente ({candidateCuVc.mm}/{candidateCuVc.yyyy})
+                      </span>
+                      <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-300 font-mono">
+                        CU_VC: {existingCuVcMatch.cuVc} • Fila #{existingCuVcMatch.rowIndex}
+                      </span>
+                    </div>
+
+                    <h4 className="text-xs font-bold text-amber-900 dark:text-amber-100 mt-1">
+                      El SKU {candidateCuVc.sku} ya cuenta con existencias en este mismo vencimiento
+                    </h4>
+
+                    <p className="text-[11px] text-amber-800/90 dark:text-amber-300/90 mt-0.5 leading-relaxed">
+                      Al <strong>no trabajar con lotes</strong>, las existencias del mismo mes y año se consolidan en una sola fila.
+                      Stock actual registrado: <strong>{existingCuVcMatch.currentQuantity} un</strong>.
+                      {currentEnteredQty > 0 && (
+                        <span> Al sumar este ingreso ({currentEnteredQty} un), el nuevo stock consolidado será de <strong>{existingCuVcMatch.currentQuantity + currentEnteredQty} un</strong>.</span>
+                      )}
+                    </p>
+
+                    <div className="flex items-center gap-2.5 mt-2.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={handleConsolidateWithExisting}
+                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 active:scale-98 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>{currentEnteredQty > 0 ? `Sumar a fila existente (+${currentEnteredQty} un → Total ${existingCuVcMatch.currentQuantity + currentEnteredQty})` : 'Consolidar en fila existente'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleLoadExistingRow}
+                        className="px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-amber-50 dark:hover:bg-slate-700 text-amber-800 dark:text-amber-200 text-xs font-semibold rounded-xl border border-amber-300 dark:border-amber-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <ArrowRight className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                        <span>Cargar fila #{existingCuVcMatch.rowIndex}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 

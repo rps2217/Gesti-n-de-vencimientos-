@@ -37,6 +37,17 @@ export interface TableGroupingSetting {
   groupByDirection?: 'asc' | 'desc';
 }
 
+export interface BackendMirrorConfig {
+  enabled: boolean;
+  provider: 'custom_rest' | 'supabase' | 'firebase' | 'postgresql';
+  endpointUrl: string;
+  apiKey?: string;
+  syncMode: 'dual_write' | 'mirror_first' | 'backup_only';
+  conflictStrategy: 'last_write_wins' | 'server_wins' | 'client_wins';
+  lastSyncTimestamp?: string;
+  autoSyncIntervalSec?: number;
+}
+
 export interface SheetConfig {
   main?: string;
   events?: string;
@@ -51,6 +62,7 @@ export interface SheetConfig {
   slices?: TableSlice[];
   hiddenSliceIds?: string[];
   ticketPrintConfig?: GlobalTicketConfig;
+  backendMirror?: BackendMirrorConfig;
 }
 
 export type ColumnType = 'text' | 'longtext' | 'number' | 'date' | 'datetime' | 'enum' | 'enumlist' | 'ref' | 'calculated' | 'virtual';

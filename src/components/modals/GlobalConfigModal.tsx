@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Settings, X, Database, FileSpreadsheet, Package, FileText, CheckCircle2, Sliders, BookOpen, Plus, Trash2 } from 'lucide-react';
+import { Settings, X, Database, FileSpreadsheet, Package, FileText, CheckCircle2, Sliders, BookOpen, Plus, Trash2, Server } from 'lucide-react';
 import { SheetConfig, SpreadsheetMetadata } from '../../types';
 import { TableBulkActionsPanel } from '../settings/TableBulkActionsPanel';
+import { BackendMirrorPanel } from '../settings/BackendMirrorPanel';
 
 interface GlobalConfigModalProps {
   isOpen: boolean;
@@ -14,7 +15,7 @@ interface GlobalConfigModalProps {
   activeView: string;
   activeSheetTitle?: string;
   headers?: string[];
-  initialTab?: 'sheets' | 'dictionary' | 'bulkActions';
+  initialTab?: 'sheets' | 'dictionary' | 'bulkActions' | 'backendMirror';
 }
 
 const SEMANTIC_FIELDS = [
@@ -48,7 +49,7 @@ export const GlobalConfigModal: React.FC<GlobalConfigModalProps> = ({
   headers = [],
   initialTab = 'sheets'
 }) => {
-  const [activeTab, setActiveTab] = useState<'sheets' | 'dictionary' | 'bulkActions'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'sheets' | 'dictionary' | 'bulkActions' | 'backendMirror'>(initialTab);
   const [selectedField, setSelectedField] = useState<string>('sku');
   const [newAliasInput, setNewAliasInput] = useState<string>('');
 
@@ -137,7 +138,18 @@ export const GlobalConfigModal: React.FC<GlobalConfigModalProps> = ({
             }`}
           >
             <Sliders className="w-4 h-4" />
-            <span>Acciones Masivas por Tabla</span>
+            <span>Acciones Masivas</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('backendMirror')}
+            className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === 'backendMirror'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            <Server className="w-4 h-4" />
+            <span>Espejo Backend</span>
           </button>
         </div>
 
@@ -150,7 +162,7 @@ export const GlobalConfigModal: React.FC<GlobalConfigModalProps> = ({
                   <Database className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                   <span>1. Vencimientos & Radar Principal</span>
                 </label>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Pestaña con las fechas de caducidad, MM/YYYY, lotes y retiro preventivo.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Pestaña con las fechas de caducidad, MM/YYYY y retiro preventivo.</p>
                 <select
                   value={sheetConfig.main || ''}
                   onChange={(e) => {
@@ -312,7 +324,7 @@ export const GlobalConfigModal: React.FC<GlobalConfigModalProps> = ({
                 )}
               </div>
             </div>
-          ) : (
+          ) : activeTab === 'bulkActions' ? (
             <TableBulkActionsPanel
               sheetConfig={sheetConfig}
               setSheetConfig={setSheetConfig}
@@ -321,6 +333,14 @@ export const GlobalConfigModal: React.FC<GlobalConfigModalProps> = ({
               activeView={activeView}
               headers={headers}
               metadata={metadata}
+            />
+          ) : (
+            <BackendMirrorPanel
+              sheetConfig={sheetConfig}
+              setSheetConfig={setSheetConfig}
+              saveConfig={saveConfig}
+              activeSheetTitle={activeSheetTitle}
+              headers={headers}
             />
           )}
         </div>

@@ -9,7 +9,8 @@ import {
   getItemResolutionStatus, 
   getCategoryFromEventValue, 
   EVENT_CATEGORIES, 
-  renderEventIcon 
+  renderEventIcon,
+  formatDisplayDate
 } from '../../utils/dateCalculations';
 import { ColumnMetadata } from '../../hooks/usePrecomputedColumns';
 import { findPhoneColumn, findEmailColumn, findColumnBySemantic } from '../../utils/columnAliases';
@@ -149,7 +150,9 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
             {dateCol && item[dateCol] && (
               <div className="flex flex-col">
                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">FECHA</span>
-                <span className="font-mono text-sm font-semibold text-slate-700 dark:text-slate-300">{String(item[dateCol])}</span>
+                <span className="font-mono text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  {formatDisplayDate(item[dateCol])}
+                </span>
               </div>
             )}
             {activeView === 'events' && eventResStatus && (
@@ -297,7 +300,7 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
       )}
 
       {/* Cell Values using Precomputed Column Metadata */}
-      {visibleColumnMeta.map(({ header, isSku, isEventCol, isTraspasoCol, isBodCol }) => {
+      {visibleColumnMeta.map(({ header, isSku, isEventCol, isTraspasoCol, isBodCol, isDateCol }) => {
         const val = item[header];
         const eventCat = isEventCol && val ? getCategoryFromEventValue(val) : null;
         const colWidth = getColWidth(header, header);
@@ -385,7 +388,11 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
                 )
               ) : (
                 <span className="truncate block text-left w-full">
-                  {val !== undefined && val !== null && String(val).trim() !== '' ? String(val) : '-'}
+                  {val !== undefined && val !== null && String(val).trim() !== ''
+                    ? (isDateCol || (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}(T|\s)\d{2}:\d{2}/i.test(val.trim())) || val instanceof Date)
+                      ? formatDisplayDate(val)
+                      : String(val)
+                    : '-'}
                 </span>
               )}
             </div>

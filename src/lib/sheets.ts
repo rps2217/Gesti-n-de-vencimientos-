@@ -339,7 +339,20 @@ function doPost(e) {
         if (hasVal) break;
         lastRowIdx--;
       }
-      return raw.slice(0, lastRowIdx + 1);
+      var clean = raw.slice(0, lastRowIdx + 1);
+      // Formatear fechas nativas de Google Sheets a formato legible DD/MM/YYYY
+      for (var r = 1; r < clean.length; r++) {
+        for (var c = 0; c < clean[r].length; c++) {
+          var cell = clean[r][c];
+          if (cell instanceof Date && !isNaN(cell.getTime())) {
+            var dd = ('0' + cell.getDate()).slice(-2);
+            var mm = ('0' + (cell.getMonth() + 1)).slice(-2);
+            var yyyy = cell.getFullYear();
+            clean[r][c] = dd + '/' + mm + '/' + yyyy;
+          }
+        }
+      }
+      return clean;
     }
 
     // 1. METADATOS DE HOJAS

@@ -7,6 +7,7 @@ export interface ColumnMetadata {
   isEventCol: boolean;
   isTraspasoCol: boolean;
   isBodCol: boolean;
+  isDateCol: boolean;
 }
 
 export function usePrecomputedColumns(
@@ -31,13 +32,18 @@ export function usePrecomputedColumns(
       const isEventCol = header === eventCol || /^frc(_|\s)?even/i.test(header.trim());
       const isTraspasoCol = header === traspasoCol || /traspaso/i.test(header);
       const isBodCol = header === bodCol || header === frcBodCol || /^frc(_|\s)?bod/i.test(header.trim()) || /bodega/i.test(header.trim());
+      const isDateCol = 
+        findColumnBySemantic([header], 'fecha_vc') === header ||
+        findColumnBySemantic([header], 'fecha_retiro') === header ||
+        /fecha|vencimiento|caducidad|f_vto|f_venc|f\.vto|f\.venc|exp_date/i.test(header.trim());
 
       return {
         header,
         isSku,
         isEventCol,
         isTraspasoCol,
-        isBodCol
+        isBodCol,
+        isDateCol
       };
     });
 

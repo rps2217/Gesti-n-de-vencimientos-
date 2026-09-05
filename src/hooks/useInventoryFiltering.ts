@@ -6,7 +6,7 @@ import {
   getItemResolutionStatus 
 } from '../utils/dateCalculations';
 import { findColumnBySemantic } from '../utils/columnAliases';
-import { parseAnyDate } from '../utils/pureCalculations';
+import { parseAnyDate, formatDisplayDate } from '../utils/pureCalculations';
 import { VIRTUAL_COLUMNS } from '../utils/virtualColumns';
 import { sortInventoryItems, compareItemValues } from '../utils/sortUtils';
 import { useInventoryWorker } from './useInventoryWorker';
@@ -464,14 +464,27 @@ export function useInventoryFiltering({
   ]);
 
   // Grouping logic
+  const isGroupByDateCol = useMemo(() => {
+    return groupByColumn !== 'none' && (
+      findColumnBySemantic([groupByColumn], 'fecha_vc') === groupByColumn ||
+      findColumnBySemantic([groupByColumn], 'fecha_retiro') === groupByColumn ||
+      /fecha|vencimiento|caducidad|f_vto|f_venc|f\.vto|f\.venc|exp_date/i.test(groupByColumn)
+    );
+  }, [groupByColumn]);
+
   const groupedItems = useMemo(() => {
     if (groupByColumn === 'none') return null;
     const map = new Map<string, InventoryItem[]>();
     for (const item of filteredItems) {
       const rawVal = item[groupByColumn];
-      const val = rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '' 
-        ? String(rawVal).trim() 
-        : '(Sin asignar / Vacío)';
+      let val = '(Sin asignar / Vacío)';
+      if (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '') {
+        if (isGroupByDateCol || (typeof rawVal === 'string' && /^\d{4}-\d{2}-\d{2}(T|\s)\d{2}:\d{2}/i.test(rawVal.trim())) || rawVal instanceof Date) {
+          val = formatDisplayDate(rawVal);
+        } else {
+          val = String(rawVal).trim();
+        }
+      }
       if (!map.has(val)) {
         map.set(val, []);
       }
@@ -480,7 +493,7 @@ export function useInventoryFiltering({
     return Array.from(map.entries()).sort((a, b) => {
       return compareItemValues(a[0], b[0], groupByDirection);
     });
-  }, [filteredItems, groupByColumn, groupByDirection]);
+  }, [filteredItems, groupByColumn, groupByDirection, isGroupByDateCol]);
 
   // Virtualization display row structure
   const displayRows = useMemo<DisplayRow[]>(() => {

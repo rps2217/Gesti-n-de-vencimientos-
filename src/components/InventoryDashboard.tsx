@@ -2216,12 +2216,18 @@ export const InventoryDashboard: React.FC = () => {
             handleSyncOfflineQueue={handleSyncOfflineQueue}
             fetchData={fetchData}
             loading={loading}
+            isRelationalActive={isRelationalActive}
+            activeSheet={activeSheet}
+            isModalOpen={isModalOpen}
+            handleOpenModal={handleOpenModal}
+            setIsBulkImportOpen={setIsBulkImportOpen}
+            setIsScriptModalOpen={setIsScriptModalOpen}
           />
         )}
 
         {/* DESKTOP ONLY CONTEXTUAL TOOLS */}
         <div className="hidden md:flex flex-col">
-          {/* CONTEXTUAL PAGE HEADER */}
+          {/* CONTEXTUAL PAGE HEADER (Unified Command & Slices Toolbar) */}
           {!isZenMode && (
             <DashboardPageHeader
               activeView={activeView}
@@ -2263,25 +2269,11 @@ export const InventoryDashboard: React.FC = () => {
                 showToast(next ? 'Modo Zen activado (Presiona Esc para salir)' : 'Modo Zen desactivado', 'info', 'Enfoque');
               }}
               onOpenStockCount={() => setIsStockCountOpen(true)}
-            />
-          )}
-
-          {/* SLICES & CUSTOM VIEWS BAR (AppSheet Pattern) */}
-          {!isZenMode && activeView !== 'schema' && activeView !== 'analytics' && activeSheet && (
-            <SliceSelectorBar
               slices={visibleTableSlices}
               activeSliceId={activeSliceId}
               onSelectSlice={handleSelectSlice}
               sliceCounts={sliceCounts}
               totalItemsCount={items.length}
-              hasActiveFilters={hasActiveFilters}
-              onOpenCreateSlice={() => {
-                setEditingSliceModalItem(null);
-                setIsSliceModalOpen(true);
-              }}
-              onOpenSliceManager={() => setIsSliceManagerOpen(true)}
-              activeSlice={activeSlice}
-              hiddenSlicesCount={currentTableSlices.length - visibleTableSlices.length}
             />
           )}
 

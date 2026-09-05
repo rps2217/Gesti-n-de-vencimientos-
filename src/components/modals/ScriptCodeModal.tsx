@@ -93,6 +93,13 @@ export const ScriptCodeModal: React.FC<ScriptCodeModalProps> = ({
             </div>
           )}
 
+          <div className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200 dark:border-blue-800/80 rounded-2xl p-3 text-xs text-blue-900 dark:text-blue-200">
+            <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+            <p>
+              <strong>Conector v2 de Alto Rendimiento:</strong> Incluye <strong>Carga en Lote (Batch Fetching)</strong> para traer múltiples hojas en un solo viaje HTTP, lectura nativa ultraveloz con <code className="font-mono bg-blue-100 dark:bg-blue-900/60 px-1 py-0.5 rounded">getValues()</code> y <strong>desbloqueo de lecturas concurrentes</strong>.
+            </p>
+          </div>
+
           <div className="relative">
             <pre className="bg-slate-950 dark:bg-slate-950 border border-slate-800 text-slate-100 p-4 rounded-2xl text-xs font-mono overflow-x-auto max-h-[350px] leading-relaxed select-all">
               {scriptTab === 'properties' ? APPS_SCRIPT_ADVANCED_PROPERTIES_CODE : APPS_SCRIPT_RECOMMENDED_CODE}

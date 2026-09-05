@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useRef, useDeferredValue, useCallb
 import { 
   getSpreadsheetMetadata, 
   getSheetData, 
+  getAllSheetsData,
   appendRow, 
   updateRow, 
   deleteRow,
@@ -164,6 +165,9 @@ export const InventoryDashboard: React.FC = () => {
   } = useOfflineSync(async () => {
     await fetchData(sheetConfig, activeView, true);
   });
+
+  // Background Stale-While-Revalidate Sync Indicator
+  const [isBackgroundSyncing, setIsBackgroundSyncing] = useState<boolean>(false);
 
   const handleSyncOfflineQueue = async () => {
     if (offlineQueue.length === 0) return;
@@ -842,22 +846,95 @@ export const InventoryDashboard: React.FC = () => {
 
   const fetchData = async (currentConfig = sheetConfig, currentView = activeView, forceRefresh = false) => {
     try {
-      // Only trigger full blocking skeleton on very first initial load without metadata, or explicit forced refresh
-      if (!metadata || forceRefresh) {
-        setLoading(true);
-      }
-      setError(null);
-      
       const scriptUrl = localStorage.getItem('appsheet_clone_scriptUrl');
       if (!scriptUrl || !scriptUrl.trim()) {
         throw new Error('No script URL configured, loading demo mode');
       }
 
+      setError(null);
+
+      // =========================================================================
+      // FASE 1: STALE-WHILE-REVALIDATE (Renderizado Instantáneo desde IndexedDB - 0ms)
+      // =========================================================================
+      let hasRenderedCache = false;
+      const expectedTargetSheet = 
+        (currentView === 'main' || currentView === 'analytics') ? (currentConfig.main || 'Vencimientos_Inventario') :
+        currentView === 'events' ? (currentConfig.events || 'FRC') :
+        currentView === 'products' ? (currentConfig.products || 'Catalogo_Productos') :
+        currentView === 'policies' ? (currentConfig.policies || 'Politicas_Canje') :
+        currentView;
+
+      if (!forceRefresh) {
+        try {
+          const cachedTarget = await indexedDbService.getCachedSheet(expectedTargetSheet);
+          if (cachedTarget && cachedTarget.rows && cachedTarget.rows.length > 0) {
+            const h = cachedTarget.rows[0];
+            setHeaders(h);
+            const schemaKeys = Object.entries(currentConfig.schema?.[expectedTargetSheet] || {})
+              .filter(([_, conf]) => Boolean((conf as any)?.isKey))
+              .map(([colName]) => colName);
+
+            const parsed = cachedTarget.rows.slice(1).map((row: string[], idx: number) => {
+              const it: InventoryItem = { _rowIndex: idx + 2 };
+              h.forEach((header: string, ci: number) => {
+                it[header] = row[ci] || '';
+              });
+              const identity = resolveItemIdentity(it, h, expectedTargetSheet, schemaKeys);
+              it._entityKey = identity.keyValue;
+              it._entityKeyCol = identity.keyColumn || undefined;
+              it._isSyntheticKey = identity.isSynthetic;
+              return it;
+            });
+
+            setItems(parsed);
+            if (currentView === 'main') setAllMainItems(parsed);
+            setLastCachedAt(cachedTarget.timestamp);
+            hasRenderedCache = true;
+            setLoading(false); // Cero espera visual para el usuario
+          }
+
+          // Cargar productos y políticas relacionales cacheados en 0ms
+          const prodTitle = currentConfig.products || 'Catalogo_Productos';
+          const cachedProds = await indexedDbService.getCachedSheet(prodTitle);
+          if (cachedProds && cachedProds.rows && cachedProds.rows.length > 1) {
+            const ph = cachedProds.rows[0];
+            setProducts(cachedProds.rows.slice(1).map((r: string[]) => {
+              const obj: any = {};
+              ph.forEach((header: string, i: number) => obj[header] = r[i] || '');
+              return obj;
+            }));
+            setIsRelationalActive(true);
+          }
+
+          const polTitle = currentConfig.policies || 'Politicas_Canje';
+          const cachedPols = await indexedDbService.getCachedSheet(polTitle);
+          if (cachedPols && cachedPols.rows && cachedPols.rows.length > 1) {
+            const polH = cachedPols.rows[0];
+            setPolicies(cachedPols.rows.slice(1).map((r: string[]) => {
+              const obj: any = {};
+              polH.forEach((header: string, i: number) => obj[header] = r[i] || '');
+              return obj;
+            }));
+            setIsRelationalActive(true);
+          }
+        } catch (cacheErr) {
+          console.warn('[Cache] Error al leer caché inicial IndexedDB:', cacheErr);
+        }
+      }
+
+      if (!hasRenderedCache) {
+        setLoading(true);
+      }
+      setIsBackgroundSyncing(true);
+
+      // =========================================================================
+      // FASE 2: REVALIDACIÓN CON GOOGLE SHEETS (Batch Fetching en 1 Solo Viaje)
+      // =========================================================================
       const meta = await getSpreadsheetMetadata(forceRefresh);
       setMetadata(meta);
       const allSheets = meta.sheets.map((s: any) => s.properties.title);
       
-      // 1. Try Opción 2: Script Properties (PropertiesService)
+      // 1. Opción 2: Script Properties (PropertiesService)
       let foundRemoteConfig = false;
       try {
         const propConfig = await getScriptPropertiesConfig(forceRefresh);
@@ -874,7 +951,7 @@ export const InventoryDashboard: React.FC = () => {
         console.warn('PropertiesService config check:', e);
       }
 
-      // 2. If not found in PropertiesService, check for technical config sheet (_CONFIG_APP or _APP_CONFIG)
+      // 2. Si no está en Script Properties, verificar pestaña técnica _CONFIG_APP
       const configSheet = allSheets.find((t: string) => /^_CONFIG(_APP)?$|^_APP_CONFIG$/i.test(t.trim()));
       if (configSheet) {
         setHasCloudConfigSheet(true);
@@ -916,56 +993,7 @@ export const InventoryDashboard: React.FC = () => {
         localStorage.setItem('appsheet_clone_config', JSON.stringify(currentConfig));
       }
       
-      let hasRelational = false;
-      
-      // Fetch Relational Data in Parallel (skip if already cached unless forceRefresh)
-      const promises = [];
-      if (prodSheetTitle && (forceRefresh || products.length === 0)) {
-        promises.push(getSheetData(prodSheetTitle, forceRefresh).then(rows => {
-          if (rows.length > 0) {
-            const h = rows[0];
-            setProducts(rows.slice(1).map((row: string[]) => {
-              const obj: any = {};
-              h.forEach((header: string, i: number) => obj[header] = row[i] || '');
-              return obj;
-            }));
-            hasRelational = true;
-          }
-        }).catch(e => console.error(e)));
-      } else if (products.length > 0) {
-        hasRelational = true;
-      }
-
-      if (polSheetTitle && (forceRefresh || policies.length === 0)) {
-        promises.push(getSheetData(polSheetTitle, forceRefresh).then(rows => {
-          if (rows.length > 0) {
-            const h = rows[0];
-            setPolicies(rows.slice(1).map((row: string[]) => {
-              const obj: any = {};
-              h.forEach((header: string, i: number) => obj[header] = row[i] || '');
-              return obj;
-            }));
-            hasRelational = true;
-          }
-        }).catch(e => console.error(e)));
-      } else if (policies.length > 0) {
-        hasRelational = true;
-      }
-
-      if (mainSheetTitle && currentView !== 'main' && (forceRefresh || allMainItems.length === 0)) {
-        promises.push(getSheetData(mainSheetTitle, forceRefresh).then(rows => {
-          if (rows.length > 0) {
-            const h = rows[0];
-            setAllMainItems(rows.slice(1).map((row: string[], index: number) => {
-              const obj: any = { _rowIndex: index + 2 };
-              h.forEach((header: string, i: number) => obj[header] = row[i] || '');
-              return obj;
-            }));
-          }
-        }).catch(e => console.error(e)));
-      }
-      
-      // Determine target sheet for current view
+      // Determinar hoja objetivo para la vista activa
       let targetSheetTitle = '';
       if (currentView === 'main' || currentView === 'analytics') targetSheetTitle = currentConfig.main || allSheets[0];
       else if (currentView === 'events') targetSheetTitle = currentConfig.events || eventsSheetTitle || '';
@@ -974,67 +1002,114 @@ export const InventoryDashboard: React.FC = () => {
       else targetSheetTitle = currentView;
 
       const targetSheetProp = meta.sheets.find((s: any) => s.properties.title === targetSheetTitle)?.properties;
-      
       if (targetSheetProp) {
         setActiveSheet(targetSheetProp);
-        promises.push((async () => {
-          let rows = [];
-          try {
-            rows = await getSheetData(targetSheetProp.title, forceRefresh);
-            await indexedDbService.saveCachedSheet(targetSheetProp.title, rows);
-            setLastCachedAt(new Date().toISOString());
-            setIsOffline(false);
-          } catch (netErr) {
-            console.warn('Network error loading sheet data, attempting IndexedDB cache fallback:', netErr);
-            const cached = await indexedDbService.getCachedSheet(targetSheetProp.title);
-            if (cached && cached.rows && cached.rows.length > 0) {
-              rows = cached.rows;
-              setLastCachedAt(cached.timestamp);
-              setIsOffline(true);
-            } else {
-              throw netErr;
-            }
-          }
-          
-          if (rows.length > 0) {
-            const headerRow = rows[0];
-            setHeaders(headerRow);
-            const schemaKeys = Object.entries(sheetConfig.schema?.[targetSheetProp.title] || {})
-              .filter(([_, conf]) => Boolean((conf as any)?.isKey))
-              .map(([colName]) => colName);
-
-            const parsedItems: InventoryItem[] = rows.slice(1).map((row: string[], index: number) => {
-              const item: InventoryItem = { _rowIndex: index + 2 };
-              headerRow.forEach((header: string, colIndex: number) => {
-                item[header] = row[colIndex] || '';
-              });
-
-              // Resolve robust primary identity
-              const identity = resolveItemIdentity(item, headerRow, targetSheetProp.title, schemaKeys);
-              item._entityKey = identity.keyValue;
-              item._entityKeyCol = identity.keyColumn || undefined;
-              item._isSyntheticKey = identity.isSynthetic;
-
-              return item;
-            });
-            setItems(parsedItems);
-            if (currentView === 'main') setAllMainItems(parsedItems);
-          } else {
-            setHeaders([]);
-            setItems([]);
-          }
-        })());
       } else {
         setActiveSheet(null);
-        setHeaders([]);
-        setItems([]);
       }
 
-      await Promise.all(promises);
+      // Preparar lista unificada de hojas para descargar en UN SOLO VIAJE (Batch Fetching)
+      const sheetsToFetch = Array.from(new Set([
+        targetSheetProp?.title,
+        prodSheetTitle,
+        polSheetTitle,
+        (mainSheetTitle && currentView !== 'main') ? mainSheetTitle : null
+      ].filter(Boolean) as string[]));
+
+      // 🚀 Batch Fetching: Reduce llamadas HTTP secuenciales a 1 sola petición paralela o agregada
+      const batchData = await getAllSheetsData(sheetsToFetch, forceRefresh);
+
+      let hasRelational = false;
+
+      // Procesar Catálogo de Productos
+      if (prodSheetTitle && batchData[prodSheetTitle] && batchData[prodSheetTitle].length > 0) {
+        const prodRows = batchData[prodSheetTitle];
+        const h = prodRows[0];
+        setProducts(prodRows.slice(1).map((row: string[]) => {
+          const obj: any = {};
+          h.forEach((header: string, i: number) => obj[header] = row[i] || '');
+          return obj;
+        }));
+        await indexedDbService.saveCachedSheet(prodSheetTitle, prodRows);
+        hasRelational = true;
+      } else if (products.length > 0) {
+        hasRelational = true;
+      }
+
+      // Procesar Políticas de Canje
+      if (polSheetTitle && batchData[polSheetTitle] && batchData[polSheetTitle].length > 0) {
+        const polRows = batchData[polSheetTitle];
+        const h = polRows[0];
+        setPolicies(polRows.slice(1).map((row: string[]) => {
+          const obj: any = {};
+          h.forEach((header: string, i: number) => obj[header] = row[i] || '');
+          return obj;
+        }));
+        await indexedDbService.saveCachedSheet(polSheetTitle, polRows);
+        hasRelational = true;
+      } else if (policies.length > 0) {
+        hasRelational = true;
+      }
+
+      // Procesar Datos de Vencimientos (si la vista actual es otra)
+      if (mainSheetTitle && currentView !== 'main' && batchData[mainSheetTitle] && batchData[mainSheetTitle].length > 0) {
+        const mainRows = batchData[mainSheetTitle];
+        const h = mainRows[0];
+        setAllMainItems(mainRows.slice(1).map((row: string[], index: number) => {
+          const obj: any = { _rowIndex: index + 2 };
+          h.forEach((header: string, i: number) => obj[header] = row[i] || '');
+          return obj;
+        }));
+        await indexedDbService.saveCachedSheet(mainSheetTitle, mainRows);
+      }
+
+      // Procesar la Hoja Activa
+      if (targetSheetProp && batchData[targetSheetProp.title]) {
+        const rows = batchData[targetSheetProp.title];
+        await indexedDbService.saveCachedSheet(targetSheetProp.title, rows);
+        setLastCachedAt(new Date().toISOString());
+        setIsOffline(false);
+
+        if (rows.length > 0) {
+          const headerRow = rows[0];
+          setHeaders(headerRow);
+          const schemaKeys = Object.entries(sheetConfig.schema?.[targetSheetProp.title] || {})
+            .filter(([_, conf]) => Boolean((conf as any)?.isKey))
+            .map(([colName]) => colName);
+
+          const parsedItems: InventoryItem[] = rows.slice(1).map((row: string[], index: number) => {
+            const item: InventoryItem = { _rowIndex: index + 2 };
+            headerRow.forEach((header: string, colIndex: number) => {
+              item[header] = row[colIndex] || '';
+            });
+
+            // Resolver clave primaria robusta
+            const identity = resolveItemIdentity(item, headerRow, targetSheetProp.title, schemaKeys);
+            item._entityKey = identity.keyValue;
+            item._entityKeyCol = identity.keyColumn || undefined;
+            item._isSyntheticKey = identity.isSynthetic;
+
+            return item;
+          });
+          setItems(parsedItems);
+          if (currentView === 'main') setAllMainItems(parsedItems);
+        } else {
+          setHeaders([]);
+          setItems([]);
+        }
+      }
+
       setIsRelationalActive(hasRelational);
     } catch (err: any) {
-      console.warn('Network or Apps Script error, loading sample demo inventory:', err);
-      // Fallback to sample data so app is fully testable out-of-the-box
+      console.warn('Network or Apps Script error:', err);
+
+      // Si ya tenemos items renderizados desde caché, conservarlos y marcar estado offline
+      if (items.length > 0) {
+        setIsOffline(true);
+        return;
+      }
+
+      // Fallback a modo demo solo si no hay datos ni caché
       setMetadata({
         sheets: [
           { properties: { sheetId: 1, title: 'Vencimientos_Inventario', hidden: false, gridProperties: { rowCount: 10, columnCount: 10 } } },
@@ -1073,6 +1148,7 @@ export const InventoryDashboard: React.FC = () => {
       setError('Modo Demostración / Sin conexión: Mostrando datos de ejemplo de logística y vencimientos. Puede configurar su URL de Google Apps Script en Ajustes.');
     } finally {
       setLoading(false);
+      setIsBackgroundSyncing(false);
     }
   };
 
@@ -2135,6 +2211,7 @@ export const InventoryDashboard: React.FC = () => {
             handlePrintTicket={handlePrintTicket}
             isOffline={isOffline}
             lastCachedAt={lastCachedAt}
+            isSyncing={isBackgroundSyncing || isSyncingCloud}
             offlineQueue={offlineQueue}
             handleSyncOfflineQueue={handleSyncOfflineQueue}
             fetchData={fetchData}

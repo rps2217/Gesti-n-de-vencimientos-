@@ -38,6 +38,7 @@ interface DashboardTopNavProps {
   handlePrintTicket: (items: InventoryItem[], mode?: 'standard' | 'barcode') => void;
   isOffline: boolean;
   lastCachedAt: number | null;
+  isSyncing?: boolean;
   offlineQueue: any[];
   handleSyncOfflineQueue: () => void;
   fetchData: (config: SheetConfig, view: string, force?: boolean) => void;
@@ -71,6 +72,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
   handlePrintTicket,
   isOffline,
   lastCachedAt,
+  isSyncing,
   offlineQueue,
   handleSyncOfflineQueue,
   fetchData,
@@ -379,10 +381,26 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
 
         {/* Status & Sync Indicator */}
         <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-xl text-xs font-semibold shadow-sm">
-          <span className={`w-2 h-2 rounded-full ${isOffline ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
-          <span className="text-slate-700 dark:text-slate-200 hidden md:inline">{isOffline ? 'Offline' : 'Conectado'}</span>
+          {isSyncing && !isOffline ? (
+            <>
+              <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
+              <span className="text-blue-600 dark:text-blue-400 hidden md:inline font-medium">Sincronizando...</span>
+            </>
+          ) : isOffline ? (
+            <>
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              <span className="text-amber-600 dark:text-amber-400 hidden md:inline">Offline (Caché)</span>
+            </>
+          ) : (
+            <>
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="text-slate-700 dark:text-slate-200 hidden md:inline">Conectado</span>
+            </>
+          )}
           {lastCachedAt && (
-            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono hidden lg:inline">({new Date(lastCachedAt).toLocaleTimeString()})</span>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono hidden lg:inline">
+              ({new Date(lastCachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
+            </span>
           )}
           {offlineQueue.length > 0 && (
             <button 

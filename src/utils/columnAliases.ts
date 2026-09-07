@@ -283,6 +283,9 @@ export function normalizeHeaderString(str: string): string {
     .toLowerCase();
 }
 
+// Lightweight memoization cache for header semantics resolution (O(1) after first lookup)
+const headerSemanticsCache = new WeakMap<string[], Partial<Record<KnownFieldSemantic, string>>>();
+
 /**
  * Finds the first column in the provided headers array that matches a semantic field
  */
@@ -292,6 +295,14 @@ export function findColumnBySemantic(
   customAliases?: Record<string, string[]>
 ): string | undefined {
   if (!headers || headers.length === 0) return undefined;
+
+  // Check cache for headers array reference when no customAliases are passed (most common case)
+  if (!customAliases) {
+    let cachedMap = headerSemanticsCache.get(headers);
+    if (cachedMap && semantic in cachedMap) {
+      return cachedMap[semantic];
+    }
+  }
   
   const patterns = [...(FIELD_PATTERNS[semantic] || [])];
   
@@ -307,27 +318,45 @@ export function findColumnBySemantic(
     }
   }
 
+  let matched: string | undefined = undefined;
+
   // 1. Direct regex match
   for (const header of headers) {
     const cleanHeader = header.trim();
     for (const pattern of patterns) {
       if (pattern.test(cleanHeader)) {
-        return header;
+        matched = header;
+        break;
       }
+    }
+    if (matched) break;
+  }
+
+  // 2. Normalized fallback check if not matched
+  if (!matched) {
+    for (const header of headers) {
+      const norm = normalizeHeaderString(header);
+      for (const pattern of patterns) {
+        if (pattern.test(norm)) {
+          matched = header;
+          break;
+        }
+      }
+      if (matched) break;
     }
   }
 
-  // 2. Normalized fallback check
-  for (const header of headers) {
-    const norm = normalizeHeaderString(header);
-    for (const pattern of patterns) {
-      if (pattern.test(norm)) {
-        return header;
-      }
+  // Store in cache for subsequent O(1) lookups
+  if (!customAliases && typeof headers === 'object') {
+    let cachedMap = headerSemanticsCache.get(headers);
+    if (!cachedMap) {
+      cachedMap = {};
+      headerSemanticsCache.set(headers, cachedMap);
     }
+    cachedMap[semantic] = matched;
   }
 
-  return undefined;
+  return matched;
 }
 
 /**
@@ -337,11 +366,20 @@ export function detectAllColumnSemantics(
   headers: string[], 
   customAliases?: Record<string, string[]>
 ): Partial<Record<KnownFieldSemantic, string>> {
+  if (!headers || headers.length === 0) return {};
+
+  if (!customAliases) {
+    const cached = headerSemanticsCache.get(headers);
+    if (cached && Object.keys(cached).length >= 10) {
+      return cached;
+    }
+  }
+
   const map: Partial<Record<KnownFieldSemantic, string>> = {};
   const semantics: KnownFieldSemantic[] = [
     'id', 'sku', 'descripcion', 'fecha_vc', 'fecha_retiro', 'mes', 'anio', 
     'cantidad', 'lote', 'politica', 'dias_anticipacion', 'dias_retiro', 'tipo_evento', 
-    'frc_bod', 'precio', 'observacion', 'proveedor', 'n_traspaso', 'telefono', 'email', 'categoria', 'mundo', 'pm'
+    'frc_bod', 'precio', 'observacion', 'proveedor', 'n_traspaso', 'telefono', 'email', 'categoria', 'mundo', 'pm', 'ubicacion'
   ];
 
   semantics.forEach(semantic => {
@@ -350,6 +388,10 @@ export function detectAllColumnSemantics(
       map[semantic] = matched;
     }
   });
+
+  if (!customAliases && typeof headers === 'object') {
+    headerSemanticsCache.set(headers, map);
+  }
 
   return map;
 }

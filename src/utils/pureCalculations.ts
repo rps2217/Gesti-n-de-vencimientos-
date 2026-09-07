@@ -353,6 +353,32 @@ export function detectPolicyActionType(
   return 'MERMA_DIRECTA';
 }
 
+// Date reference cache (refreshed every minute or day for O(1) timestamp calculations)
+let cachedDateBucket = 0;
+let cachedEndOfMonthTime = 0;
+let cachedRealTodayYear = 0;
+let cachedRealTodayMonth = 0;
+
+function getCachedDateInfo() {
+  const now = Date.now();
+  // Refresh cache if older than 1 minute (60,000ms)
+  if (now - cachedDateBucket > 60000) {
+    cachedDateBucket = now;
+    const realToday = new Date(now);
+    cachedRealTodayYear = realToday.getFullYear();
+    cachedRealTodayMonth = realToday.getMonth();
+    
+    const endOfMonth = new Date(cachedRealTodayYear, cachedRealTodayMonth + 1, 0);
+    endOfMonth.setHours(0, 0, 0, 0);
+    cachedEndOfMonthTime = endOfMonth.getTime();
+  }
+  return {
+    todayTime: cachedEndOfMonthTime,
+    realTodayYear: cachedRealTodayYear,
+    realTodayMonth: cachedRealTodayMonth
+  };
+}
+
 export function computeItemRawStatus(item: InventoryItem, headers: string[]): {
   code: ItemStatusCode;
   actionType: ItemActionType;
@@ -363,10 +389,7 @@ export function computeItemRawStatus(item: InventoryItem, headers: string[]): {
   const retCol = findColumnBySemantic(headers, 'fecha_retiro');
   const vcCol = findColumnBySemantic(headers, 'fecha_vc');
   
-  const today = getEndOfMonthDate();
-  today.setHours(0, 0, 0, 0);
-
-  const realToday = new Date();
+  const { todayTime, realTodayYear, realTodayMonth } = getCachedDateInfo();
 
   let daysToRetire: number | null = null;
   let daysToExpiry: number | null = null;
@@ -375,7 +398,7 @@ export function computeItemRawStatus(item: InventoryItem, headers: string[]): {
   if (retCol && item[retCol]) {
     const dRet = parseAnyDate(item[retCol]);
     if (dRet) {
-      daysToRetire = Math.ceil((dRet.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      daysToRetire = Math.ceil((dRet.getTime() - todayTime) / 86400000);
     }
   }
 
@@ -387,13 +410,13 @@ export function computeItemRawStatus(item: InventoryItem, headers: string[]): {
   }
 
   if (dVc) {
-    daysToExpiry = Math.ceil((dVc.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    expiryMonthOffset = (dVc.getFullYear() - realToday.getFullYear()) * 12 + dVc.getMonth() - realToday.getMonth();
+    daysToExpiry = Math.ceil((dVc.getTime() - todayTime) / 86400000);
+    expiryMonthOffset = (dVc.getFullYear() - realTodayYear) * 12 + dVc.getMonth() - realTodayMonth;
     
     if (!daysToRetire && daysToExpiry !== null) {
       const dRet = new Date(dVc);
       dRet.setDate(dRet.getDate() - 30);
-      daysToRetire = Math.ceil((dRet.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      daysToRetire = Math.ceil((dRet.getTime() - todayTime) / 86400000);
     }
   }
 

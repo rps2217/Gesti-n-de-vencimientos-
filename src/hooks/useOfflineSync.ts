@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { indexedDbService, OfflineMutation } from '../db/indexedDbService';
 import { appendRow, updateRow, deleteRow, getSheetData } from '../lib/sheets';
-import { matchRowIndexByIdentity } from '../utils/entityIdentityResolver';
+import { matchRowIndexByIdentity, buildRowIdentityIndex } from '../utils/entityIdentityResolver';
 import { backendMirrorService } from '../services/backendMirrorService';
 
 export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
@@ -80,6 +80,7 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
     let successCount = 0;
     const errors: string[] = [];
     const freshSheetsCache = new Map<string, any[][]>();
+    const freshIndexesCache = new Map<string, Map<string, number>>();
 
     try {
       for (const mutation of currentQueue) {
@@ -100,10 +101,14 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
             if (mutation.keyValue && mutation.headers && mutation.headers.length > 0) {
               try {
                 let currentRows = freshSheetsCache.get(mutation.sheetTitle);
+                let currentIndex = freshIndexesCache.get(mutation.sheetTitle);
+
                 if (!currentRows) {
                   currentRows = await getSheetData(mutation.sheetTitle, true);
                   if (currentRows && currentRows.length > 0) {
                     freshSheetsCache.set(mutation.sheetTitle, currentRows);
+                    currentIndex = buildRowIdentityIndex(currentRows, mutation.headers);
+                    freshIndexesCache.set(mutation.sheetTitle, currentIndex);
                   }
                 }
 
@@ -116,7 +121,8 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
                       rowIndex: mutation.rowIndex || 0
                     },
                     currentRows,
-                    mutation.headers
+                    mutation.headers,
+                    currentIndex
                   );
                   if (resolvedRowIndex && resolvedRowIndex > 1) {
                     targetRowIndex = resolvedRowIndex;
@@ -131,6 +137,7 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
               await updateRow(mutation.sheetTitle, targetRowIndex, mutation.values);
               // Invalidate cached sheet so next mutation fetches updated state
               freshSheetsCache.delete(mutation.sheetTitle);
+              freshIndexesCache.delete(mutation.sheetTitle);
             } else {
               throw new Error(`Índice de fila inválido para actualización (${targetRowIndex})`);
             }
@@ -141,10 +148,14 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
             if (mutation.keyValue && mutation.headers && mutation.headers.length > 0) {
               try {
                 let currentRows = freshSheetsCache.get(mutation.sheetTitle);
+                let currentIndex = freshIndexesCache.get(mutation.sheetTitle);
+
                 if (!currentRows) {
                   currentRows = await getSheetData(mutation.sheetTitle, true);
                   if (currentRows && currentRows.length > 0) {
                     freshSheetsCache.set(mutation.sheetTitle, currentRows);
+                    currentIndex = buildRowIdentityIndex(currentRows, mutation.headers);
+                    freshIndexesCache.set(mutation.sheetTitle, currentIndex);
                   }
                 }
 
@@ -157,7 +168,8 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
                       rowIndex: mutation.rowIndex || 0
                     },
                     currentRows,
-                    mutation.headers
+                    mutation.headers,
+                    currentIndex
                   );
                   if (resolvedRowIndex && resolvedRowIndex > 1) {
                     targetRowIndex = resolvedRowIndex;
@@ -172,6 +184,7 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
               await deleteRow(mutation.sheetId || 0, targetRowIndex, mutation.sheetTitle);
               // Invalidate cached sheet
               freshSheetsCache.delete(mutation.sheetTitle);
+              freshIndexesCache.delete(mutation.sheetTitle);
             } else {
               throw new Error(`Índice de fila inválido para eliminación (${targetRowIndex})`);
             }

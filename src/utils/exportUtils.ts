@@ -108,6 +108,44 @@ export function copyItemsToClipboardTSV(headers: string[], items: any[], columnL
   );
 
   const fullText = [headerRow, ...dataRows].join('\n');
-  navigator.clipboard.writeText(fullText);
-  return true;
+  return copyTextToClipboard(fullText);
 }
+
+/**
+ * Clean, native Blob download utility (Paso 4 Ponytail: Native Web API)
+ */
+export function downloadBlob(content: BlobPart, filename: string, mimeType = 'text/plain;charset=utf-8;'): void {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Universal safe clipboard copy with fallback
+ */
+export function copyTextToClipboard(text: string): boolean {
+  if (navigator?.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).catch(() => {
+      // Fallback
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+      } catch {}
+      document.body.removeChild(textarea);
+    });
+    return true;
+  }
+  return false;
+}
+

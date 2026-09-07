@@ -538,29 +538,35 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
         <div 
           onClick={onOpenSyncAudit}
           className="hidden lg:flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 px-2.5 py-1.5 rounded-xl text-xs font-semibold shadow-2xs shrink-0 cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 hover:bg-slate-50 dark:hover:bg-slate-750 transition-all group"
-          title="Ver salud de conexión, latencia y registro de auditoría"
+          title={
+            isSyncing 
+              ? 'Sincronizando cambios con Google Sheets...' 
+              : isOffline 
+                ? 'Modo sin conexión' 
+                : `En línea${latencyMs ? ` · Latencia: ${latencyMs}ms` : ''} · Clic para ver auditoría`
+          }
         >
           {isSyncing ? (
             <>
-              <RefreshCw className="w-3 h-3 text-blue-600 animate-spin" />
-              <span className="text-blue-600 dark:text-blue-400 text-[11px] font-medium">Sincronizando...</span>
+              <RefreshCw className="w-3 h-3 text-blue-600 animate-spin shrink-0" />
+              <span className="text-blue-600 dark:text-blue-400 text-[11px] font-medium whitespace-nowrap">Sincronizando...</span>
             </>
           ) : isOffline ? (
             <>
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-              <span className="text-amber-600 dark:text-amber-400 text-[11px]">Offline</span>
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+              <span className="text-amber-600 dark:text-amber-400 text-[11px] font-medium whitespace-nowrap">Offline</span>
             </>
           ) : (
             <>
               <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-              <span className="text-slate-600 dark:text-slate-300 text-[11px] group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                {latencyMs !== null && latencyMs !== undefined ? `${latencyMs}ms` : 'En línea'}
+              <span className="text-slate-600 dark:text-slate-300 text-[11px] font-medium group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors whitespace-nowrap">
+                En línea
               </span>
             </>
           )}
 
           {lastCachedAt && (
-            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono hidden xl:inline">
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono hidden xl:inline whitespace-nowrap">
               ({new Date(lastCachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
             </span>
           )}
@@ -571,7 +577,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
                 e.stopPropagation();
                 handleSyncOfflineQueue();
               }}
-              className="ml-1 bg-amber-500 hover:bg-amber-600 text-white px-1.5 py-0.5 rounded-md text-[10px] font-bold transition-colors cursor-pointer"
+              className="ml-1 bg-amber-500 hover:bg-amber-600 text-white px-1.5 py-0.5 rounded-md text-[10px] font-bold transition-colors cursor-pointer whitespace-nowrap"
               title="Sincronizar mutaciones pendientes"
             >
               Sync ({offlineQueue.length})

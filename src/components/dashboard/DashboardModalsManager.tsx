@@ -16,8 +16,11 @@ import { UniversalImportModal } from '../modals/UniversalImportModal';
 import { BulkActionsConfigModal } from '../modals/BulkActionsConfigModal';
 import { SliceManagerModal } from '../modals/SliceManagerModal';
 import { SliceEditorModal } from '../modals/SliceEditorModal';
+import { SyncAuditModal } from '../modals/SyncAuditModal';
 import { StockCountTerminal } from '../views/StockCountTerminal';
 import { ImportConsolidationMode } from '../../utils/cuVcConsolidator';
+import { OfflineMutation, AuditLogEntry } from '../../db/indexedDbService';
+import { ConnectionHealthStatus } from '../../hooks/useOfflineSync';
 
 export interface DashboardModalsManagerProps {
   // Master-Detail Drawer
@@ -151,6 +154,23 @@ export interface DashboardModalsManagerProps {
   items: InventoryItem[];
   handleSyncRowsToVencimientos: (rows: Record<string, any>[]) => Promise<void>;
   showToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info', title?: string) => void;
+
+  // Sync & Audit Modal
+  isSyncAuditOpen: boolean;
+  setIsSyncAuditOpen: (open: boolean) => void;
+  offlineQueue: OfflineMutation[];
+  auditLog: AuditLogEntry[];
+  isOffline: boolean;
+  isSyncing: boolean;
+  latencyMs: number | null;
+  connectionStatus: ConnectionHealthStatus;
+  lastHealthCheck: Date | null;
+  healthErrorMessage: string | null;
+  testConnectionHealth: () => Promise<any>;
+  syncQueue: () => Promise<any>;
+  removeMutation: (id: string) => Promise<void>;
+  clearQueue: () => Promise<void>;
+  clearAuditLog: () => Promise<void>;
 }
 
 export const DashboardModalsManager: React.FC<DashboardModalsManagerProps> = ({
@@ -251,7 +271,22 @@ export const DashboardModalsManager: React.FC<DashboardModalsManagerProps> = ({
   setIsStockCountOpen,
   items,
   handleSyncRowsToVencimientos,
-  showToast
+  showToast,
+  isSyncAuditOpen,
+  setIsSyncAuditOpen,
+  offlineQueue,
+  auditLog,
+  isOffline,
+  isSyncing,
+  latencyMs,
+  connectionStatus,
+  lastHealthCheck,
+  healthErrorMessage,
+  testConnectionHealth,
+  syncQueue,
+  removeMutation,
+  clearQueue,
+  clearAuditLog,
 }) => {
   return (
     <>
@@ -488,6 +523,25 @@ export const DashboardModalsManager: React.FC<DashboardModalsManagerProps> = ({
           </div>
         </div>
       )}
+      {/* SYNC & AUDIT MODAL */}
+      <SyncAuditModal
+        isOpen={isSyncAuditOpen}
+        onClose={() => setIsSyncAuditOpen(false)}
+        offlineQueue={offlineQueue}
+        auditLog={auditLog}
+        isOffline={isOffline}
+        isSyncing={isSyncing}
+        latencyMs={latencyMs}
+        connectionStatus={connectionStatus}
+        lastHealthCheck={lastHealthCheck}
+        healthErrorMessage={healthErrorMessage}
+        testConnectionHealth={testConnectionHealth}
+        syncQueue={syncQueue}
+        removeMutation={removeMutation}
+        clearQueue={clearQueue}
+        clearAuditLog={clearAuditLog}
+        showToast={showToast}
+      />
     </>
   );
 };

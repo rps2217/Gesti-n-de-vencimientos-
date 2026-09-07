@@ -240,6 +240,53 @@ export async function deleteRows(sheetId: number, rowIndexes: number[], sheetNam
   return fetchFromScript({ action: 'deleteRows', sheetId, rowIndexes, sheetName, spreadsheetId: SPREADSHEET_ID });
 }
 
+/**
+ * Realiza un test de latencia en milisegundos y salud de conexión hacia Google Apps Script
+ */
+export async function pingGoogleSheets(): Promise<{ 
+  success: boolean; 
+  latencyMs: number; 
+  error?: string; 
+  urlConfigured: boolean 
+}> {
+  const url = getScriptUrl();
+  if (!url) {
+    return { success: false, latencyMs: 0, urlConfigured: false, error: 'URL no configurada (Modo Local)' };
+  }
+
+  const tStart = performance.now();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'getAppProperties' }),
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    const tEnd = performance.now();
+    const latencyMs = Math.round(tEnd - tStart);
+
+    if (!response.ok) {
+      return { success: false, latencyMs, urlConfigured: true, error: `HTTP ${response.status}` };
+    }
+
+    return { success: true, latencyMs, urlConfigured: true };
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    const tEnd = performance.now();
+    const latencyMs = Math.round(tEnd - tStart);
+    return {
+      success: false,
+      latencyMs,
+      urlConfigured: true,
+      error: err.name === 'AbortError' ? 'Tiempo de espera agotado (>6s)' : (err.message || 'Error de conexión')
+    };
+  }
+}
+
 // PropertiesService storage (zero extra sheets needed)
 export async function getScriptPropertiesConfig(forceRefresh = false) {
   const now = Date.now();

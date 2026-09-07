@@ -6,7 +6,7 @@ import {
   Package, Search, Eye, EyeOff, Sparkles, Layers, FileSpreadsheet, 
   Tag, Barcode, Hash, MapPin, Sliders, ShieldCheck, Database,
   ArrowUpRight, ArrowDownRight, ChevronRight, HelpCircle,
-  Lock, Unlock, ListTodo
+  Lock, Unlock, ListTodo, Zap, Copy, MessageSquare, CheckCheck, Share2, FileWarning
 } from 'lucide-react';
 import { 
   StockCountSession, 
@@ -29,6 +29,7 @@ import {
 } from '../../utils/stockCountUtils';
 import { searchMasterProducts, findMasterProduct, getMasterProductSummary } from '../../utils/referenceResolver';
 import { formatLocaleNumber, parseLocaleNumber } from '../../utils/pureCalculations';
+import { copyTextToClipboard } from '../../utils/exportUtils';
 
 interface StockCountTerminalProps {
   sheetItems: InventoryItem[];
@@ -87,6 +88,8 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
   const [countQuantity, setCountQuantity] = useState<number>(1);
   const [countLocation, setCountLocation] = useState<string>('');
   const [isLocationLocked, setIsLocationLocked] = useState<boolean>(false);
+  const [isBurstScanMode, setIsBurstScanMode] = useState<boolean>(true); // Fast burst scanning (+1 auto)
+  const [isSummaryCopied, setIsSummaryCopied] = useState<boolean>(false);
 
   // Expiry prompt states for sequential 2-step flow
   const [expiryPromptSku, setExpiryPromptSku] = useState<string | null>(null);
@@ -523,6 +526,94 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
     }
   };
 
+  // Build executive summary text for supervisor / WhatsApp
+  const buildReconciliationSummaryText = () => {
+    if (!currentSession) return '';
+    const dateStr = new Date().toLocaleDateString('es-CL');
+    const timeStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+    const coveragePct = metrics.totalTeorico > 0 
+      ? Math.round((metrics.cuadrados / Math.max(1, reconciliation.length)) * 100) 
+      : 100;
+
+    let text = `📋 *RESUMEN DE CUADRATURA DE INVENTARIO*\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━\n`;
+    text += `🏷️ *Sesión:* ${currentSession.nombre}\n`;
+    text += `📍 *Ubicación:* ${currentSession.ubicacion || 'General / Sala'}\n`;
+    text += `📅 *Fecha:* ${dateStr} ${timeStr}\n`;
+    text += `⚙️ *Modalidad:* ${currentSession.modo === 'BLIND' ? 'Conteo a Ciegas' : 'Contra Documento'}\n\n`;
+
+    text += `📊 *MÉTRICAS CLAVE*\n`;
+    text += `• Total Físico: ${formatLocaleNumber(metrics.totalContado)} unids\n`;
+    text += `• Total Teórico: ${formatLocaleNumber(metrics.totalTeorico)} unids\n`;
+    text += `• Dif. Neta: ${metrics.diferenciaNeta > 0 ? '+' : ''}${formatLocaleNumber(metrics.diferenciaNeta)} unids\n`;
+    text += `• Exactitud (SKUs Cuadrados): ${metrics.cuadrados} (${coveragePct}%)\n`;
+    text += `• SKUs con Faltante: ${metrics.faltantes}\n`;
+    text += `• SKUs con Sobrante: ${metrics.sobrantes}\n`;
+    if (metrics.noCatalogados > 0) {
+      text += `• SKUs No Catalogados: ${metrics.noCatalogados}\n`;
+    }
+
+    const discrepantItems = reconciliation.filter(r => r.diferencia !== 0);
+    if (discrepantItems.length > 0) {
+      text += `\n⚠️ *PRINCIPALES DIFERENCIAS (${discrepantItems.length} ítems)*\n`;
+      discrepantItems.slice(0, 15).forEach((item, idx) => {
+        const sign = item.diferencia > 0 ? '+' : '';
+        const mmYyyy = item.mm && item.yyyy ? ` [${item.mm}/${item.yyyy}]` : '';
+        text += `${idx + 1}. *SKU ${item.sku}*${mmYyyy}: ${item.descripcion.slice(0, 30)}... | Físico: ${item.contado} vs Teo: ${item.teorico} (*${sign}${item.diferencia}*)\n`;
+      });
+      if (discrepantItems.length > 15) {
+        text += `...y ${discrepantItems.length - 15} ítems más con diferencias.\n`;
+      }
+    }
+
+    text += `\n_Generado automáticamente desde Gestor de Vencimientos e Incidencias_`;
+    return text;
+  };
+
+  const handleCopyReconciliationSummary = async () => {
+    const text = buildReconciliationSummaryText();
+    const success = await copyTextToClipboard(text);
+    if (success) {
+      setIsSummaryCopied(true);
+      playBeep('success');
+      showToast('Resumen de cuadratura copiado al portapapeles', 'success');
+      setTimeout(() => setIsSummaryCopied(false), 2500);
+    } else {
+      showToast('No se pudo copiar el resumen al portapapeles', 'error');
+    }
+  };
+
+  const handleShareReconciliationWhatsApp = () => {
+    const text = buildReconciliationSummaryText();
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  };
+
+  const handleCopyDiscrepanciesReport = async () => {
+    const discrepancies = reconciliation.filter(r => r.diferencia !== 0);
+    if (discrepancies.length === 0) {
+      showToast('No hay diferencias registradas en esta sesión. Todo está 100% cuadrado.', 'info');
+      return;
+    }
+
+    let report = `ACTA DE DIFERENCIAS DE INVENTARIO - ${currentSession?.nombre.toUpperCase()}\n`;
+    report += `Fecha: ${new Date().toLocaleDateString('es-CL')} | Total Ítems con Diferencia: ${discrepancies.length}\n`;
+    report += `--------------------------------------------------------------------------------\n`;
+    report += `SKU\tDESCRIPCION\tMES_ANO\tTEORICO\tFISICO\tDIFERENCIA\tTIPO_INCIDENCIA\n`;
+    
+    discrepancies.forEach(d => {
+      const mesAno = d.mm && d.yyyy ? `${d.mm}/${d.yyyy}` : '';
+      const tipo = d.diferencia < 0 ? 'FALTANTE_STOCK' : 'SOBRANTE_STOCK';
+      report += `${d.sku}\t${d.descripcion}\t${mesAno}\t${d.teorico}\t${d.contado}\t${d.diferencia}\t${tipo}\n`;
+    });
+
+    const success = await copyTextToClipboard(report);
+    if (success) {
+      playBeep('success');
+      showToast(`Acta con ${discrepancies.length} diferencias copiada al portapapeles`, 'success');
+    }
+  };
+
   return (
     <div className="flex-1 w-full h-full bg-white dark:bg-slate-900 flex flex-col overflow-hidden text-slate-800 dark:text-slate-100">
         
@@ -858,7 +949,7 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                     </div>
                   </div>
 
-                  {/* Active Location / Pasillo with Lock Toggle */}
+                  {/* Active Location / Pasillo with Lock Toggle & Burst Mode */}
                   <div className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
                     <input
@@ -866,7 +957,7 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                       value={countLocation}
                       onChange={(e) => setCountLocation(e.target.value)}
                       placeholder="Ubicación / Pasillo..."
-                      className="w-32 sm:w-40 bg-white dark:bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-28 sm:w-36 bg-white dark:bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:ring-1 focus:ring-blue-500"
                     />
                     <button
                       type="button"
@@ -884,6 +975,27 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                       title={isLocationLocked ? 'Ubicación FIJA (se mantiene en cada escaneo)' : 'Ubicación LIBRE (se borra en cada escaneo)'}
                     >
                       {isLocationLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                    </button>
+
+                    <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-0.5" />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextBurst = !isBurstScanMode;
+                        setIsBurstScanMode(nextBurst);
+                        playBeep('success');
+                        showToast(nextBurst ? 'Modo Ráfaga activado (+1 continuo)' : 'Modo Manual activado', 'info');
+                      }}
+                      className={`px-2 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                        isBurstScanMode
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
+                      }`}
+                      title={isBurstScanMode ? 'Modo Ráfaga: escaneo continuo con +1 automático' : 'Modo Manual: ajuste de cantidad previo'}
+                    >
+                      <Zap className={`w-3.5 h-3.5 ${isBurstScanMode ? 'fill-current' : ''}`} />
+                      <span className="hidden sm:inline">{isBurstScanMode ? 'Ráfaga' : 'Manual'}</span>
                     </button>
                   </div>
                 </div>
@@ -1380,7 +1492,39 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+                {/* Executive Summary & WhatsApp Share */}
+                <div className="flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={handleCopyReconciliationSummary}
+                    title="Copiar resumen ejecutivo de auditoría al portapapeles"
+                    className="px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {isSummaryCopied ? <CheckCheck className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-blue-600" />}
+                    <span className="hidden md:inline">{isSummaryCopied ? '¡Copiado!' : 'Resumen'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleShareReconciliationWhatsApp}
+                    title="Enviar resumen de cuadratura por WhatsApp a supervisores o equipo"
+                    className="p-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-lg transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyDiscrepanciesReport}
+                    title="Copiar tabla de diferencias (faltantes y sobrantes) para reportar en EVENTS"
+                    className="px-2 py-1.5 text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 flex items-center gap-1"
+                  >
+                    <FileWarning className="w-3.5 h-3.5" />
+                    <span className="hidden lg:inline">Acta Diferencias</span>
+                  </button>
+                </div>
+
                 <div className="flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 shadow-sm">
                   <button
                     type="button"

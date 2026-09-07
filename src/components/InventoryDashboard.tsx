@@ -150,18 +150,28 @@ export const InventoryDashboard: React.FC = () => {
   // Advanced features: Pagination, Offline Cache & Concurrency
   const [pageSize, setPageSize] = useState<number | 'all'>(100);
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [isSyncAuditOpen, setIsSyncAuditOpen] = useState<boolean>(false);
 
   // Local-First IndexedDB Offline Sync Hook
   const {
     offlineQueue,
+    auditLog,
     isOffline,
     setIsOffline,
     isSyncing: isSyncingCloud,
     setIsSyncing: setIsSyncingCloud,
     lastCachedAt,
     setLastCachedAt,
+    latencyMs,
+    connectionStatus,
+    lastHealthCheck,
+    healthErrorMessage,
+    testConnectionHealth,
     enqueueMutation,
-    syncQueue
+    syncQueue,
+    removeMutation,
+    clearQueue,
+    clearAuditLog
   } = useOfflineSync(async () => {
     await fetchData(sheetConfig, activeView, true);
   });
@@ -2216,6 +2226,9 @@ export const InventoryDashboard: React.FC = () => {
             handleSyncOfflineQueue={handleSyncOfflineQueue}
             fetchData={fetchData}
             loading={loading}
+            latencyMs={latencyMs}
+            connectionStatus={connectionStatus}
+            onOpenSyncAudit={() => setIsSyncAuditOpen(true)}
             isRelationalActive={isRelationalActive}
             activeSheet={activeSheet}
             isModalOpen={isModalOpen}
@@ -2607,6 +2620,21 @@ export const InventoryDashboard: React.FC = () => {
         items={items}
         handleSyncRowsToVencimientos={handleSyncRowsToVencimientos}
         showToast={showToast}
+        isSyncAuditOpen={isSyncAuditOpen}
+        setIsSyncAuditOpen={setIsSyncAuditOpen}
+        offlineQueue={offlineQueue}
+        auditLog={auditLog}
+        isOffline={isOffline}
+        isSyncing={isBackgroundSyncing || isSyncingCloud}
+        latencyMs={latencyMs}
+        connectionStatus={connectionStatus}
+        lastHealthCheck={lastHealthCheck}
+        healthErrorMessage={healthErrorMessage}
+        testConnectionHealth={testConnectionHealth}
+        syncQueue={syncQueue}
+        removeMutation={removeMutation}
+        clearQueue={clearQueue}
+        clearAuditLog={clearAuditLog}
       />
 
     </div>

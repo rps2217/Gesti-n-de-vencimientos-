@@ -29,13 +29,27 @@ export interface OfflineMutation {
   lastError?: string;
 }
 
+export interface AuditLogEntry {
+  id: string;
+  action: 'append' | 'update' | 'delete' | 'sync' | 'count' | 'import' | 'bulk_edit';
+  sheetTitle: string;
+  entityKey?: string;
+  description: string;
+  timestamp: string;
+  status: 'synced' | 'pending' | 'syncing' | 'failed';
+  mutationId?: string;
+  details?: Record<string, any>;
+  errorMessage?: string;
+}
+
 const DB_NAME = 'InventoryLogisticsDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const STORES = {
   SHEETS: 'sheets',
   MUTATION_QUEUE: 'mutation_queue',
-  SETTINGS: 'settings'
+  SETTINGS: 'settings',
+  AUDIT_LOG: 'audit_log'
 } as const;
 
 class IndexedDbService {
@@ -73,6 +87,14 @@ class IndexedDbService {
           // 3. Almacén de configuraciones y esquemas
           if (!db.objectStoreNames.contains(STORES.SETTINGS)) {
             db.createObjectStore(STORES.SETTINGS, { keyPath: 'key' });
+          }
+
+          // 4. Almacén de registro de auditoría / historial local
+          if (!db.objectStoreNames.contains(STORES.AUDIT_LOG)) {
+            const auditStore = db.createObjectStore(STORES.AUDIT_LOG, { keyPath: 'id' });
+            auditStore.createIndex('timestamp', 'timestamp', { unique: false });
+            auditStore.createIndex('status', 'status', { unique: false });
+            auditStore.createIndex('sheetTitle', 'sheetTitle', { unique: false });
           }
         };
 
@@ -418,7 +440,163 @@ class IndexedDbService {
   }
 
   // ==========================================
-  // 3. GESTIÓN DE CONFIGURACIONES Y PREFERENCIAS
+  // 3. REGISTRO DE AUDITORÍA / HISTORIAL LOCAL
+  // ==========================================
+
+  /**
+   * Agrega una entrada al registro de auditoría local
+   */
+  async addAuditLogEntry(entry: Partial<AuditLogEntry> & { sheetTitle: string; description: string }): Promise<AuditLogEntry> {
+    const fullEntry: AuditLogEntry = {
+      id: entry.id || `aud_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      action: entry.action || 'update',
+      sheetTitle: entry.sheetTitle,
+      entityKey: entry.entityKey,
+      description: entry.description,
+      timestamp: entry.timestamp || new Date().toISOString(),
+      status: entry.status || 'synced',
+      mutationId: entry.mutationId,
+      details: entry.details,
+      errorMessage: entry.errorMessage
+    };
+
+    try {
+      if (this.isSupported) {
+        const db = await this.getDB();
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction(STORES.AUDIT_LOG, 'readwrite');
+          const store = tx.objectStore(STORES.AUDIT_LOG);
+          const req = store.put(fullEntry);
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+        });
+      }
+    } catch (err) {
+      console.warn('Error saving audit log entry to IndexedDB:', err);
+    }
+
+    // Mantener backup en localStorage (máximo 100 registros para evitar sobrecarga)
+    try {
+      const current = this.getLocalStorageAuditLog();
+      current.unshift(fullEntry);
+      const capped = current.slice(0, 100);
+      localStorage.setItem('appsheet_audit_log', JSON.stringify(capped));
+    } catch {
+      // Ignore
+    }
+
+    return fullEntry;
+  }
+
+  /**
+   * Obtiene las entradas más recientes del historial de auditoría
+   */
+  async getAuditLog(limit = 100): Promise<AuditLogEntry[]> {
+    try {
+      if (this.isSupported) {
+        const db = await this.getDB();
+        return new Promise((resolve) => {
+          const tx = db.transaction(STORES.AUDIT_LOG, 'readonly');
+          const store = tx.objectStore(STORES.AUDIT_LOG);
+          const req = store.getAll();
+
+          req.onsuccess = () => {
+            const list: AuditLogEntry[] = req.result || [];
+            list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+            resolve(list.slice(0, limit));
+          };
+
+          req.onerror = () => resolve(this.getLocalStorageAuditLog().slice(0, limit));
+        });
+      }
+    } catch (err) {
+      console.warn('Error reading audit log from IndexedDB:', err);
+    }
+
+    return this.getLocalStorageAuditLog().slice(0, limit);
+  }
+
+  /**
+   * Actualiza el estado de una entrada de auditoría asociada a una mutación
+   */
+  async updateAuditLogStatus(mutationId: string, status: AuditLogEntry['status'], errorMessage?: string): Promise<void> {
+    if (!mutationId) return;
+
+    try {
+      if (this.isSupported) {
+        const db = await this.getDB();
+        await new Promise<void>((resolve) => {
+          const tx = db.transaction(STORES.AUDIT_LOG, 'readwrite');
+          const store = tx.objectStore(STORES.AUDIT_LOG);
+          const req = store.getAll();
+
+          req.onsuccess = () => {
+            const items: AuditLogEntry[] = req.result || [];
+            const matching = items.find(it => it.mutationId === mutationId || it.id === mutationId);
+            if (matching) {
+              matching.status = status;
+              if (errorMessage) matching.errorMessage = errorMessage;
+              store.put(matching);
+            }
+            resolve();
+          };
+          req.onerror = () => resolve();
+        });
+      }
+    } catch (e) {
+      console.warn('Error updating audit log status:', e);
+    }
+
+    try {
+      const current = this.getLocalStorageAuditLog();
+      const match = current.find(it => it.mutationId === mutationId || it.id === mutationId);
+      if (match) {
+        match.status = status;
+        if (errorMessage) match.errorMessage = errorMessage;
+        localStorage.setItem('appsheet_audit_log', JSON.stringify(current));
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  /**
+   * Limpia todo el historial de auditoría
+   */
+  async clearAuditLog(): Promise<void> {
+    try {
+      if (this.isSupported) {
+        const db = await this.getDB();
+        await new Promise<void>((resolve) => {
+          const tx = db.transaction(STORES.AUDIT_LOG, 'readwrite');
+          const store = tx.objectStore(STORES.AUDIT_LOG);
+          const req = store.clear();
+          req.onsuccess = () => resolve();
+          req.onerror = () => resolve();
+        });
+      }
+    } catch (err) {
+      console.warn('Error clearing audit log from IndexedDB:', err);
+    }
+
+    try {
+      localStorage.removeItem('appsheet_audit_log');
+    } catch {
+      // Ignore
+    }
+  }
+
+  private getLocalStorageAuditLog(): AuditLogEntry[] {
+    try {
+      const saved = localStorage.getItem('appsheet_audit_log');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  // ==========================================
+  // 4. GESTIÓN DE CONFIGURACIONES Y PREFERENCIAS
   // ==========================================
 
   async getSetting<T>(key: string, defaultValue: T): Promise<T> {

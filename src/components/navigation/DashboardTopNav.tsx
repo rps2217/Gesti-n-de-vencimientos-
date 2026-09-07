@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Menu, Search, X, FilterX, Scan, Download, ChevronDown, 
   Mail, Flame, FileSpreadsheet, Printer, Barcode, RefreshCw, MessageSquare, Sliders, Settings, CheckCircle2,
-  Database, Package, FileText, Sparkles, Plus, PieChart
+  Database, Package, FileText, Sparkles, Plus, PieChart, Activity, Wifi, WifiOff
 } from 'lucide-react';
 import { InventoryItem, SheetConfig, SheetProperties } from '../../types';
 import { VIRTUAL_COLUMNS } from '../../utils/virtualColumns';
@@ -44,6 +44,9 @@ interface DashboardTopNavProps {
   handleSyncOfflineQueue: () => void;
   fetchData: (config: SheetConfig, view: string, force?: boolean) => void;
   loading: boolean;
+  latencyMs?: number | null;
+  connectionStatus?: string;
+  onOpenSyncAudit?: () => void;
   // Executive Context & Actions props
   isRelationalActive?: boolean;
   activeSheet?: SheetProperties | null;
@@ -85,6 +88,9 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
   handleSyncOfflineQueue,
   fetchData,
   loading,
+  latencyMs,
+  connectionStatus = 'connected',
+  onOpenSyncAudit,
   isRelationalActive = false,
   activeSheet,
   isModalOpen = false,
@@ -528,11 +534,15 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
           </div>
         )}
 
-        {/* Compact Status & Sync Indicator */}
-        <div className="hidden lg:flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 px-2.5 py-1.5 rounded-xl text-xs font-semibold shadow-2xs shrink-0">
-          {isSyncing && !isOffline ? (
+        {/* Compact Status, Ping & Sync Indicator */}
+        <div 
+          onClick={onOpenSyncAudit}
+          className="hidden lg:flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 px-2.5 py-1.5 rounded-xl text-xs font-semibold shadow-2xs shrink-0 cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 hover:bg-slate-50 dark:hover:bg-slate-750 transition-all group"
+          title="Ver salud de conexión, latencia y registro de auditoría"
+        >
+          {isSyncing ? (
             <>
-              <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
+              <RefreshCw className="w-3 h-3 text-blue-600 animate-spin" />
               <span className="text-blue-600 dark:text-blue-400 text-[11px] font-medium">Sincronizando...</span>
             </>
           ) : isOffline ? (
@@ -542,22 +552,32 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
             </>
           ) : (
             <>
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span className="text-slate-600 dark:text-slate-300 text-[11px]">En línea</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+              <span className="text-slate-600 dark:text-slate-300 text-[11px] group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                {latencyMs !== null && latencyMs !== undefined ? `${latencyMs}ms` : 'En línea'}
+              </span>
             </>
           )}
+
           {lastCachedAt && (
             <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono hidden xl:inline">
               ({new Date(lastCachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
             </span>
           )}
-          {offlineQueue.length > 0 && (
+
+          {offlineQueue.length > 0 ? (
             <button 
-              onClick={handleSyncOfflineQueue}
-              className="ml-1 bg-blue-600 text-white px-1.5 py-0.5 rounded-md text-[10px] font-bold hover:bg-blue-700 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSyncOfflineQueue();
+              }}
+              className="ml-1 bg-amber-500 hover:bg-amber-600 text-white px-1.5 py-0.5 rounded-md text-[10px] font-bold transition-colors cursor-pointer"
+              title="Sincronizar mutaciones pendientes"
             >
               Sync ({offlineQueue.length})
             </button>
+          ) : (
+            <Activity className="w-3 h-3 text-slate-400 group-hover:text-blue-500 transition-colors shrink-0 ml-0.5 hidden xl:block" />
           )}
         </div>
 

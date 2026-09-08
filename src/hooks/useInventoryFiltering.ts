@@ -3,7 +3,8 @@ import { InventoryItem, SheetConfig, SortConfig, DynamicMonthRange } from '../ty
 import { 
   getItemStatus, 
   getEventCategory, 
-  getItemResolutionStatus 
+  getItemResolutionStatus,
+  createColumnsContext 
 } from '../utils/dateCalculations';
 import { findColumnBySemantic } from '../utils/columnAliases';
 import { parseAnyDate, formatDisplayDate } from '../utils/pureCalculations';
@@ -104,12 +105,19 @@ export function useInventoryFiltering({
     });
   }, []);
 
-  // Virtual columns augmentation
+  // Virtual columns augmentation (avoid cloning objects when no virtual columns active)
   const augmentedItems = useMemo(() => {
+    const activeVCs = sheetConfig.activeVirtualColumns || [];
+    if (!activeVCs || activeVCs.length === 0) {
+      return items;
+    }
+    const targetVCs = VIRTUAL_COLUMNS.filter(col => activeVCs.includes(col.id));
+    if (targetVCs.length === 0) {
+      return items;
+    }
     return items.map(item => {
       const virtualData: Record<string, any> = {};
-      const activeVCs = sheetConfig.activeVirtualColumns || [];
-      VIRTUAL_COLUMNS.filter(col => activeVCs.includes(col.id)).forEach(col => {
+      targetVCs.forEach(col => {
         virtualData[col.id] = col.calculate(item, headers, { products, policies });
       });
       return { ...item, ...virtualData };
@@ -159,6 +167,8 @@ export function useInventoryFiltering({
     const bodSet = new Set<string>();
 
     const len = items.length;
+    const colContext = createColumnsContext(headers);
+
     for (let i = 0; i < len; i++) {
       const item = items[i];
 
@@ -171,7 +181,7 @@ export function useInventoryFiltering({
         }
       }
 
-      const cat = getEventCategory(item, headers);
+      const cat = getEventCategory(item, headers, colContext);
       if (cat === 'TRANSPORTE') {
         transporte++;
       } else if (cat === 'DIFERENCIA') {
@@ -191,7 +201,7 @@ export function useInventoryFiltering({
           vencimientoCercano++;
         }
         vencimientos++;
-        const st = getItemStatus(item, headers);
+        const st = getItemStatus(item, headers, colContext);
         if (st.code === 'DRAINAGE_PM') drainagePm++;
         else if (st.code === 'UPCOMING') upcoming++;
         else if (st.code === 'RETIRE_NOW' || st.code === 'EXPIRED') retireNow++;
@@ -200,7 +210,7 @@ export function useInventoryFiltering({
         else if (st.actionType === 'MERMA_DIRECTA') mermaDirectaCount++;
       }
 
-      const res = getItemResolutionStatus(item, headers);
+      const res = getItemResolutionStatus(item, headers, colContext);
       if (res.isResolved) completed++;
       else pending++;
     }
@@ -250,9 +260,11 @@ export function useInventoryFiltering({
     if (metrics?.columnOptionsMap && Object.keys(metrics.columnOptionsMap).length > 0) {
       Object.assign(map, metrics.columnOptionsMap);
     } else {
+      // Lightweight sampling fallback while worker is processing to prevent main-thread freeze
+      const sample = augmentedItems.length > 200 ? augmentedItems.slice(0, 200) : augmentedItems;
       headers.forEach(h => {
         const uniqueVals = new Set<string>();
-        augmentedItems.forEach(item => {
+        sample.forEach(item => {
           const val = item[h];
           if (val !== undefined && val !== null && String(val).trim() !== '') {
             uniqueVals.add(String(val).trim());
@@ -320,7 +332,9 @@ export function useInventoryFiltering({
         .map(([colName, vals]) => [colName, new Set(vals)] as [string, Set<string>]);
       const hasColFilters = activeColFilterEntries.length > 0;
 
-      const traspasoCol = hasEventResFilter ? (findColumnBySemantic(headers, 'n_traspaso') || 'N_TRASPASO') : '';
+      const fallbackColContext = createColumnsContext(headers);
+      const traspasoCol = hasEventResFilter ? (fallbackColContext.traspasoCol || findColumnBySemantic(headers, 'n_traspaso') || 'N_TRASPASO') : '';
+      const vcCol = fallbackColContext.vcCol;
       const term = (deferredSearchTerm.trim() || activeQuickChip || '').toLowerCase();
       const hasSearch = term.length > 0;
 
@@ -331,7 +345,7 @@ export function useInventoryFiltering({
 
         // View constraints
         if (activeView === 'main') {
-          const cat = getEventCategory(item, headers);
+          const cat = getEventCategory(item, headers, fallbackColContext);
           if (cat !== 'VENCIMIENTO' && cat !== 'VENCIMIENTO_CERCANO') {
             continue;
           }
@@ -341,7 +355,7 @@ export function useInventoryFiltering({
             if (!frcBodFilterSet.has(valStr)) continue;
           }
           if (pmRadarFilterSet) {
-            const st = getItemStatus(item, headers);
+            const st = getItemStatus(item, headers, fallbackColContext);
             let matchPm = false;
             if (pmRadarFilterSet.has('drainage') && st.code === 'DRAINAGE_PM') matchPm = true;
             else if (pmRadarFilterSet.has('upcoming') && st.code === 'UPCOMING') matchPm = true;
@@ -354,7 +368,6 @@ export function useInventoryFiltering({
           if (dynamicMonthRange) {
             const today = new Date();
             let dVc = null;
-            const vcCol = findColumnBySemantic(headers, 'fecha_vc');
             if (vcCol && item[vcCol]) {
               dVc = parseAnyDate(item[vcCol]);
             }
@@ -369,7 +382,6 @@ export function useInventoryFiltering({
           } else if (dynamicMonthFilter && dynamicMonthFilter.length > 0) {
             const today = new Date();
             let dVc = null;
-            const vcCol = findColumnBySemantic(headers, 'fecha_vc');
             if (vcCol && item[vcCol]) {
               dVc = parseAnyDate(item[vcCol]);
             }
@@ -384,7 +396,7 @@ export function useInventoryFiltering({
           }
         } else if (activeView === 'events') {
           if (eventFilterSet) {
-            const cat = getEventCategory(item, headers);
+            const cat = getEventCategory(item, headers, fallbackColContext);
             if (!cat || !eventFilterSet.has(cat)) continue;
           }
           if (frcBodFilterSet && frcBodCol) {
@@ -393,7 +405,7 @@ export function useInventoryFiltering({
             if (!frcBodFilterSet.has(valStr)) continue;
           }
           if (eventResFilterSet) {
-            const isResolved = getItemResolutionStatus(item, headers).isResolved;
+            const isResolved = getItemResolutionStatus(item, headers, fallbackColContext).isResolved;
             const status = isResolved ? 'completed' : 'pending';
             const traspasoVal = item[traspasoCol];
             const matchRes = eventResFilterSet.has(status) || (traspasoVal && eventResFilterSet.has(String(traspasoVal)));

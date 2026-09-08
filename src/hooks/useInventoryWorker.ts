@@ -1,11 +1,6 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { InventoryItem, SheetConfig } from '../types';
+import { useState, useEffect, useRef } from 'react';
+import { InventoryItem } from '../types';
 import { WorkerMetricsResult, WorkerOutMessage } from '../workers/inventoryWorker';
-import { 
-  getEventCategory, 
-  computeItemRawStatus, 
-  getItemResolutionStatus 
-} from '../utils/pureCalculations';
 
 export interface UseInventoryWorkerProps {
   items: InventoryItem[];
@@ -139,7 +134,6 @@ export function useInventoryWorker({
       });
     }
   }, [
-    items,
     activeView,
     searchTerm,
     activeQuickChip,
@@ -154,101 +148,10 @@ export function useInventoryWorker({
     isWorkerReady
   ]);
 
-  // Main-thread fallback calculation if Web Worker is not supported or still initializing
-  const fallbackResult = useMemo(() => {
-    if (isWorkerReady && metrics) return null;
-
-    let vencimientos = 0;
-    let transporte = 0;
-    let diferencia = 0;
-    let calInterna = 0;
-    let calExterna = 0;
-    let canjes = 0;
-    let averia = 0;
-    let devolucion = 0;
-    let vencimientoCercano = 0;
-    let drainagePm = 0;
-    let upcoming = 0;
-    let retireNow = 0;
-    let pending = 0;
-    let completed = 0;
-
-    const bodCounts: Record<string, number> = {};
-    const bodSet = new Set<string>();
-    const len = items.length;
-
-    for (let i = 0; i < len; i++) {
-      const item = items[i];
-      if (frcBodCol) {
-        const val = item[frcBodCol];
-        if (val !== undefined && val !== null && String(val).trim() !== '') {
-          const trimmed = String(val).trim();
-          bodSet.add(trimmed);
-          bodCounts[trimmed] = (bodCounts[trimmed] || 0) + 1;
-        }
-      }
-
-      const cat = getEventCategory(item, headers);
-      const statusRaw = computeItemRawStatus(item, headers);
-      const res = getItemResolutionStatus(item, headers);
-
-      if (cat === 'TRANSPORTE') transporte++;
-      else if (cat === 'DIFERENCIA') diferencia++;
-      else if (cat === 'CAL_INTERNA') calInterna++;
-      else if (cat === 'CAL_EXTERNA') calExterna++;
-      else if (cat === 'CANJES') canjes++;
-      else if (cat === 'AVERIA') averia++;
-      else if (cat === 'DEVOLUCION') devolucion++;
-      else if (cat === 'VENCIMIENTO_CERCANO') vencimientoCercano++;
-      else {
-        vencimientos++;
-        if (statusRaw.code === 'DRAINAGE_PM') drainagePm++;
-        else if (statusRaw.code === 'UPCOMING') upcoming++;
-        else if (statusRaw.code === 'RETIRE_NOW' || statusRaw.code === 'EXPIRED') retireNow++;
-      }
-
-      if (res.isResolved) completed++;
-      else pending++;
-    }
-
-    return {
-      eventMetrics: {
-        total: len,
-        vencimientos,
-        transporte,
-        diferencia,
-        calInterna,
-        calExterna,
-        canjes,
-        averia,
-        devolucion,
-        vencimientoCercano,
-        drainagePm,
-        upcoming,
-        retireNow
-      },
-      pmMetrics: {
-        total: vencimientos,
-        drainage: drainagePm,
-        upcoming,
-        retireNow,
-        enRegla: Math.max(0, vencimientos - drainagePm - upcoming - retireNow)
-      },
-      eventResolutionMetrics: {
-        total: len,
-        pending,
-        completed
-      },
-      frcBodValues: Array.from(bodSet).sort((a, b) => a.localeCompare(b)),
-      frcBodCounts: bodCounts,
-      columnOptionsMap: {}
-    };
-  }, [items, headers, frcBodCol, isWorkerReady, metrics]);
-
   return {
     isWorkerReady,
     isProcessing,
-    metrics: metrics || fallbackResult,
+    metrics,
     matchingIndices
   };
 }

@@ -62,6 +62,11 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
   const isSyncingRef = useRef<boolean>(false);
   isSyncingRef.current = isSyncing;
 
+  const onSyncSuccessRef = useRef(onSyncSuccess);
+  useEffect(() => {
+    onSyncSuccessRef.current = onSyncSuccess;
+  }, [onSyncSuccess]);
+
   // Refresh audit log from IndexedDB
   const refreshAuditLog = useCallback(async () => {
     try {
@@ -359,8 +364,8 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
       setIsOffline(!navigator.onLine || remaining.length > 0);
       setConnectionStatus(!navigator.onLine ? 'offline' : (errors.length === 0 ? 'connected' : 'error'));
 
-      if (successCount > 0 && onSyncSuccess) {
-        await onSyncSuccess();
+      if (successCount > 0 && onSyncSuccessRef.current) {
+        await onSyncSuccessRef.current();
       }
 
       return {
@@ -371,7 +376,7 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
     } finally {
       setIsSyncing(false);
     }
-  }, [refreshQueue, refreshAuditLog, onSyncSuccess]);
+  }, [refreshQueue, refreshAuditLog]);
 
   // Remove an individual mutation from the queue
   const removeMutation = useCallback(async (id: string) => {
@@ -386,22 +391,28 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
     setOfflineQueue([]);
   }, []);
 
+  const syncQueueRef = useRef(syncQueue);
+  syncQueueRef.current = syncQueue;
+
+  const testConnectionHealthRef = useRef(testConnectionHealth);
+  testConnectionHealthRef.current = testConnectionHealth;
+
   // Initial load and event listeners for network changes
   useEffect(() => {
     refreshQueue();
     refreshAuditLog();
 
     // Initial ping
-    testConnectionHealth();
+    testConnectionHealthRef.current();
 
     const handleOnline = () => {
       setIsOffline(false);
-      testConnectionHealth();
+      testConnectionHealthRef.current();
       // Auto-trigger reconciliation on internet restoration if queue has items
       indexedDbService.getOfflineQueue().then((q) => {
         if (q.length > 0 && !isSyncingRef.current) {
           console.log('[OfflineSync] Conexión restablecida. Auto-sincronizando cola offline...');
-          syncQueue();
+          syncQueueRef.current();
         }
       });
     };
@@ -418,10 +429,10 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
     // Periodic check every 60s for health and queue sync
     const intervalId = setInterval(() => {
       if (navigator.onLine && !isSyncingRef.current) {
-        testConnectionHealth();
+        testConnectionHealthRef.current();
         indexedDbService.getOfflineQueue().then((q) => {
           if (q.some(m => m.status === 'pending')) {
-            syncQueue();
+            syncQueueRef.current();
           }
         });
       }
@@ -432,7 +443,7 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
       window.removeEventListener('offline', handleOffline);
       clearInterval(intervalId);
     };
-  }, [refreshQueue, refreshAuditLog, syncQueue, testConnectionHealth]);
+  }, [refreshQueue, refreshAuditLog]);
 
   return {
     offlineQueue,

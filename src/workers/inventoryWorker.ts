@@ -3,6 +3,7 @@ import {
   getEventCategory, 
   computeItemRawStatus, 
   getItemResolutionStatus, 
+  createColumnsContext,
   ItemStatusCode,
   ItemActionType 
 } from '../utils/pureCalculations';
@@ -147,6 +148,8 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
       columnUniqueSets[h] = new Set<string>();
     });
 
+    const colContext = createColumnsContext(headers);
+
     for (let i = 0; i < len; i++) {
       const item = items[i];
 
@@ -172,10 +175,10 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
         }
       }
 
-      // Status and Categories
-      const cat = getEventCategory(item, headers);
-      const statusRaw = computeItemRawStatus(item, headers);
-      const res = getItemResolutionStatus(item, headers);
+      // Status and Categories with pre-resolved columns
+      const cat = getEventCategory(item, headers, colContext);
+      const statusRaw = computeItemRawStatus(item, headers, colContext);
+      const res = getItemResolutionStatus(item, headers, colContext);
 
       if (cat === 'TRANSPORTE') {
         transporte++;

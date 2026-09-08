@@ -240,15 +240,42 @@ export function formatLocaleNumber(numVal: any, decimals = 0): string {
 }
 
 // Helper to determine the event category of any item using smart column detection
-export function getEventCategory(item: InventoryItem, headers: string[]): EventCategory {
-  const eventHeader = findColumnBySemantic(headers, 'tipo_evento') || headers.find(h => /^frc(_|\s)?even/i.test(h.trim()));
+export interface CalculationColumnsContext {
+  eventHeader: string | null;
+  vcCol: string | null;
+  retCol: string | null;
+  yCol: string | null;
+  mCol: string | null;
+  idCol: string | null;
+  polCol: string | null;
+  traspasoCol: string | null;
+}
+
+export function createColumnsContext(headers: string[]): CalculationColumnsContext {
+  return {
+    eventHeader: findColumnBySemantic(headers, 'tipo_evento') || headers.find(h => /^frc(_|\s)?even/i.test(h.trim())) || null,
+    vcCol: findColumnBySemantic(headers, 'fecha_vc') || null,
+    retCol: findColumnBySemantic(headers, 'fecha_retiro') || null,
+    yCol: findColumnBySemantic(headers, 'anio') || 'E',
+    mCol: findColumnBySemantic(headers, 'mes') || 'D',
+    idCol: findColumnBySemantic(headers, 'id') || null,
+    polCol: findColumnBySemantic(headers, 'politica') || null,
+    traspasoCol: findColumnBySemantic(headers, 'n_traspaso') 
+      || headers.find(h => /^n(_|\s)?traspaso/i.test(h.trim()))
+      || headers.find(h => /traspaso/i.test(h.trim())) 
+      || null
+  };
+}
+
+export function getEventCategory(item: InventoryItem, headers: string[], colContext?: CalculationColumnsContext): EventCategory {
+  const eventHeader = colContext ? colContext.eventHeader : (findColumnBySemantic(headers, 'tipo_evento') || headers.find(h => /^frc(_|\s)?even/i.test(h.trim())));
   if (eventHeader && item[eventHeader]) {
     const parsed = getCategoryFromEventValue(item[eventHeader]);
     if (parsed) return parsed;
   }
   
   // Check if item has FECHA_VC or MM/YYYY
-  const vcCol = findColumnBySemantic(headers, 'fecha_vc');
+  const vcCol = colContext ? colContext.vcCol : findColumnBySemantic(headers, 'fecha_vc');
   if (vcCol && item[vcCol]) return 'VENCIMIENTO';
 
   return 'VENCIMIENTO';
@@ -259,9 +286,9 @@ export function getEndOfMonthDate(): Date {
   return new Date(now.getFullYear(), now.getMonth() + 1, 0);
 }
 
-export function getExpiryDateFromYm(item: InventoryItem, headers: string[]): Date | null {
-  const yCol = findColumnBySemantic(headers, 'anio') || 'E';
-  const mCol = findColumnBySemantic(headers, 'mes') || 'D';
+export function getExpiryDateFromYm(item: InventoryItem, headers: string[], colContext?: CalculationColumnsContext): Date | null {
+  const yCol = (colContext ? colContext.yCol : findColumnBySemantic(headers, 'anio')) || 'E';
+  const mCol = (colContext ? colContext.mCol : findColumnBySemantic(headers, 'mes')) || 'D';
   
   const year = item[yCol];
   const month = item[mCol];
@@ -275,7 +302,7 @@ export function getExpiryDateFromYm(item: InventoryItem, headers: string[]): Dat
   }
 
   // Check if item has CU_VC (e.g., 2000210218569202712 -> ends with YYYYMM: 2027 + 12)
-  const idCol = findColumnBySemantic(headers, 'id');
+  const idCol = colContext ? colContext.idCol : findColumnBySemantic(headers, 'id');
   const cuVal = idCol && item[idCol] ? String(item[idCol]).trim() : '';
   if (cuVal && cuVal.length >= 6) {
     const match = cuVal.match(/(\d{4})(0[1-9]|1[0-2])$/);
@@ -300,13 +327,14 @@ export type ItemActionType = 'CANJE_PROVEEDOR' | 'MERMA_DIRECTA' | 'VENTA_DRENAJ
 export function detectPolicyActionType(
   item: InventoryItem, 
   headers: string[], 
-  statusCode: ItemStatusCode
+  statusCode: ItemStatusCode,
+  colContext?: CalculationColumnsContext
 ): ItemActionType {
   if (statusCode === 'NORMAL') return 'SIN_ACCION';
   if (statusCode === 'DRAINAGE_PM') return 'VENTA_DRENAJE';
 
   // Find the exact policy column from headers
-  const polCol = findColumnBySemantic(headers, 'politica');
+  const polCol = colContext ? colContext.polCol : findColumnBySemantic(headers, 'politica');
   let polStr = polCol && item[polCol] !== undefined && item[polCol] !== null ? String(item[polCol]).trim() : '';
 
   if (!polStr) {
@@ -379,15 +407,15 @@ function getCachedDateInfo() {
   };
 }
 
-export function computeItemRawStatus(item: InventoryItem, headers: string[]): {
+export function computeItemRawStatus(item: InventoryItem, headers: string[], colContext?: CalculationColumnsContext): {
   code: ItemStatusCode;
   actionType: ItemActionType;
   daysToRetire: number | null;
   daysToExpiry: number | null;
   expiryMonthOffset: number | null;
 } {
-  const retCol = findColumnBySemantic(headers, 'fecha_retiro');
-  const vcCol = findColumnBySemantic(headers, 'fecha_vc');
+  const retCol = colContext ? colContext.retCol : findColumnBySemantic(headers, 'fecha_retiro');
+  const vcCol = colContext ? colContext.vcCol : findColumnBySemantic(headers, 'fecha_vc');
   
   const { todayTime, realTodayYear, realTodayMonth } = getCachedDateInfo();
 
@@ -406,7 +434,7 @@ export function computeItemRawStatus(item: InventoryItem, headers: string[]): {
   if (vcCol && item[vcCol]) {
     dVc = parseAnyDate(item[vcCol]);
   } else {
-    dVc = getExpiryDateFromYm(item, headers);
+    dVc = getExpiryDateFromYm(item, headers, colContext);
   }
 
   if (dVc) {
@@ -432,15 +460,17 @@ export function computeItemRawStatus(item: InventoryItem, headers: string[]): {
     code = 'DRAINAGE_PM';
   }
 
-  const actionType = detectPolicyActionType(item, headers, code);
+  const actionType = detectPolicyActionType(item, headers, code, colContext);
 
   return { code, actionType, daysToRetire, daysToExpiry, expiryMonthOffset };
 }
 
-export function getItemResolutionStatus(item: InventoryItem, headers: string[]): EventResolutionStatus {
-  const traspasoCol = findColumnBySemantic(headers, 'n_traspaso') 
+export function getItemResolutionStatus(item: InventoryItem, headers: string[], colContext?: CalculationColumnsContext): EventResolutionStatus {
+  const traspasoCol = colContext ? colContext.traspasoCol : (
+    findColumnBySemantic(headers, 'n_traspaso') 
     || headers.find(h => /^n(_|\s)?traspaso/i.test(h.trim()))
-    || headers.find(h => /traspaso/i.test(h.trim()));
+    || headers.find(h => /traspaso/i.test(h.trim()))
+  );
 
   const val = traspasoCol 
     ? item[traspasoCol] 

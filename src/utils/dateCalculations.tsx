@@ -19,6 +19,8 @@ import {
   calculateWithdrawalDate,
   getEventReason,
   detectPolicyActionType,
+  createColumnsContext,
+  CalculationColumnsContext,
   ItemStatusCode,
   ItemActionType
 } from './pureCalculations';
@@ -39,8 +41,10 @@ export {
   getItemResolutionStatus,
   calculateWithdrawalDate,
   getEventReason,
-  detectPolicyActionType
+  detectPolicyActionType,
+  createColumnsContext
 };
+export type { CalculationColumnsContext };
 
 export const EVENT_CATEGORIES: Record<EventCategory, EventTypeDefinition> = {
   VENCIMIENTO_CERCANO: {
@@ -199,8 +203,8 @@ export interface ItemStatusResult {
 }
 
 // Helper to compute expiration, retirement and drainage status for an item with React UI components
-export function getItemStatus(item: InventoryItem, headers: string[]): ItemStatusResult {
-  const { code, actionType, daysToRetire, daysToExpiry } = computeItemRawStatus(item, headers);
+export function getItemStatus(item: InventoryItem, headers: string[], colContext?: CalculationColumnsContext): ItemStatusResult {
+  const { code, actionType, daysToRetire, daysToExpiry } = computeItemRawStatus(item, headers, colContext);
 
   let label = 'En Tiempo';
   let color = 'bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700';

@@ -62,11 +62,11 @@ export const UniversalImportModal: React.FC<UniversalImportModalProps> = ({
     }
   }, [activeSheetTitle, isFrcSheet]);
 
-  // Initialize auto-mappings whenever parsedData changes
+  // Initialize auto-mappings whenever parsedData changes using synonyms dictionary
   const mappingSuggestions = useMemo(() => {
     if (!parsedData || parsedData.headers.length === 0) return [];
-    return generateSmartColumnMappings(targetHeaders, parsedData.headers);
-  }, [parsedData, targetHeaders]);
+    return generateSmartColumnMappings(targetHeaders, parsedData.headers, customAliases);
+  }, [parsedData, targetHeaders, customAliases]);
 
   // Sync initial mapping suggestions to editable mapping dictionary
   React.useEffect(() => {

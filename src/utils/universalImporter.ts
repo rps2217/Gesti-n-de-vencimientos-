@@ -225,17 +225,25 @@ export interface ColumnMappingSuggestion {
 
 export function generateSmartColumnMappings(
   targetHeaders: string[],
-  sourceHeaders: string[]
+  sourceHeaders: string[],
+  customAliases?: Record<string, string[]>
 ): ColumnMappingSuggestion[] {
   const suggestions: ColumnMappingSuggestion[] = [];
   const assignedSource = new Set<string>();
 
+  const allSemantics: KnownFieldSemantic[] = [
+    'id', 'sku', 'descripcion', 'fecha_vc', 'fecha_retiro', 'mes', 'anio',
+    'cantidad', 'lote', 'politica', 'tipo_evento', 'frc_bod', 'precio',
+    'observacion', 'proveedor', 'dias_anticipacion', 'dias_retiro',
+    'n_traspaso', 'telefono', 'email', 'categoria', 'mundo', 'pm', 'ubicacion'
+  ];
+
   for (const target of targetHeaders) {
     const cleanTarget = target.trim().toUpperCase();
 
-    // 1. Exact match
+    // 1. Exact match (case-insensitive & trimmed)
     const exactMatch = sourceHeaders.find(s => s.trim().toUpperCase() === cleanTarget);
-    if (exactMatch) {
+    if (exactMatch && !assignedSource.has(exactMatch)) {
       suggestions.push({
         targetHeader: target,
         sourceHeader: exactMatch,
@@ -246,27 +254,38 @@ export function generateSmartColumnMappings(
       continue;
     }
 
-    // 2. Semantic lookup match
+    // 2. Normalized match (ignores accents, symbols, spaces and underscores)
+    const normTarget = target.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s\-_]+/g, '_').toLowerCase();
+    const normalizedMatch = sourceHeaders.find(s => {
+      if (assignedSource.has(s)) return false;
+      const normSource = s.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s\-_]+/g, '_').toLowerCase();
+      return normSource === normTarget;
+    });
+
+    if (normalizedMatch) {
+      suggestions.push({
+        targetHeader: target,
+        sourceHeader: normalizedMatch,
+        confidence: 0.95,
+        semanticMatch: null
+      });
+      assignedSource.add(normalizedMatch);
+      continue;
+    }
+
+    // 3. Mature Synonyms Dictionary Match via findColumnBySemantic & customAliases
     let matchedSource: string | null = null;
     let matchConfidence = 0;
     let matchSemantic: KnownFieldSemantic | null = null;
 
-    const semantics: KnownFieldSemantic[] = [
-      'id', 'sku', 'descripcion', 'fecha_vc', 'fecha_retiro', 'cantidad', 
-      'lote', 'tipo_evento', 'frc_bod', 'n_traspaso', 'observacion', 'precio',
-      'proveedor', 'categoria', 'mundo', 'pm', 'telefono', 'email'
-    ];
-
-    for (const sem of semantics) {
-      const targetMatchesSem = findColumnBySemantic([target], sem);
+    for (const sem of allSemantics) {
+      const targetMatchesSem = findColumnBySemantic([target], sem, customAliases);
       if (targetMatchesSem) {
-        const foundSource = findColumnBySemantic(
-          sourceHeaders.filter(s => !assignedSource.has(s)),
-          sem
-        );
+        const availableSources = sourceHeaders.filter(s => !assignedSource.has(s));
+        const foundSource = findColumnBySemantic(availableSources, sem, customAliases);
         if (foundSource) {
           matchedSource = foundSource;
-          matchConfidence = 0.85;
+          matchConfidence = 0.90;
           matchSemantic = sem;
           break;
         }

@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   Columns, ChevronDown, Tag, Sliders, Settings, 
   RotateCcw, Plus, Layers, Edit2, SlidersHorizontal, Eye, EyeOff, LayoutGrid, Maximize2,
-  ArrowUpAZ, ArrowDownZA
+  ArrowUpAZ, ArrowDownZA, Upload
 } from 'lucide-react';
 import { SheetProperties, TableSlice } from '../../types';
 import { SLICE_COLOR_CLASSES } from '../../utils/sliceRegistry';
@@ -61,6 +61,7 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
   setIsTicketConfigOpen,
   hasCustomColWidths,
   handleResetColWidths,
+  setIsBulkImportOpen,
   onOpenCreateSlice,
   onOpenSliceManager,
   activeSlice,
@@ -289,6 +290,18 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
               </div>
             )}
           </div>
+        )}
+
+        {/* Bulk Import FRC Quick Access */}
+        {activeView === 'events' && setIsBulkImportOpen && (
+          <button
+            onClick={() => setIsBulkImportOpen(true)}
+            className="px-2.5 py-1 rounded-xl font-bold border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-98"
+            title="Importar masivamente Incidencias FRC desde Excel o Portapapeles"
+          >
+            <Upload className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <span className="hidden sm:inline">Importar FRC</span>
+          </button>
         )}
 
         {/* Toggle Summary View Preset */}

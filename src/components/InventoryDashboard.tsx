@@ -2314,6 +2314,8 @@ export const InventoryDashboard: React.FC = () => {
               pmRadarFilter={pmRadarFilter}
               setPmRadarFilter={setPmRadarFilter}
               pmMetrics={pmMetrics}
+              onOpenBulkImport={() => setIsBulkImportOpen(true)}
+              onOpenNewItemModal={() => handleOpenModal()}
             />
           )}
         </div>

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Menu, Search, X, FilterX, Scan, Download, ChevronDown, 
   Mail, Flame, FileSpreadsheet, Printer, Barcode, RefreshCw, MessageSquare, Sliders, Settings, CheckCircle2,
-  Database, Package, FileText, Sparkles, Plus, PieChart, Activity, Wifi, WifiOff
+  Database, Package, FileText, Sparkles, Plus, PieChart, Activity, Wifi, WifiOff, Upload
 } from 'lucide-react';
 import { InventoryItem, SheetConfig, SheetProperties } from '../../types';
 import { VIRTUAL_COLUMNS } from '../../utils/virtualColumns';
@@ -272,10 +272,10 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
         {activeView === 'events' && setIsBulkImportOpen && (
           <button
             onClick={() => setIsBulkImportOpen(true)}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer"
-            title="Importar masivamente desde Excel o Portapapeles"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-98"
+            title="Importar masivamente Incidencias FRC desde Excel o Portapapeles"
           >
-            <Plus className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <Upload className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
             <span>Importar FRC</span>
           </button>
         )}

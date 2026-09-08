@@ -252,9 +252,9 @@ export function generateSmartColumnMappings(
     let matchSemantic: KnownFieldSemantic | null = null;
 
     const semantics: KnownFieldSemantic[] = [
-      'sku', 'descripcion', 'fecha_vc', 'fecha_retiro', 'cantidad', 
+      'id', 'sku', 'descripcion', 'fecha_vc', 'fecha_retiro', 'cantidad', 
       'lote', 'tipo_evento', 'frc_bod', 'n_traspaso', 'observacion', 'precio',
-      'telefono', 'email'
+      'proveedor', 'categoria', 'mundo', 'pm', 'telefono', 'email'
     ];
 
     for (const sem of semantics) {

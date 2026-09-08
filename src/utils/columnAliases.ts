@@ -51,7 +51,14 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
     /^registro_id$/i,
     /^id_registro$/i,
     /^folio$/i,
-    /^nro_registro$/i
+    /^nro_registro$/i,
+    /^frc(_|\/|\s)?n(ro)?$/i,
+    /^frc$/i,
+    /^n(_|\s)?frc$/i,
+    /^nro(_|\s)?frc$/i,
+    /^folio(_|\s)?frc$/i,
+    /^frc(_|\s)?folio$/i,
+    /^numero(_|\s)?frc$/i
   ],
   sku: [
     /^sku(_|\s)?(vc|calculado)?$/i,
@@ -60,9 +67,9 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
     /^item(_|\s)?(code|id|num)?(_|\s)?(vc|calculado)?$/i,
     /^product(_|\s)?(id|code)?(_|\s)?(vc|calculado)?$/i,
     /^clave(_|\s)?(prod|producto)?(_|\s)?(vc|calculado)?$/i,
-    /^frc(_|\/|\s)?n(ro)?$/i,
-    /^frc$/i,
-    /^nro(_|\s)?(de)?(_|\s)?(registro|articulo|prod)$/i
+    /^cod_art$/i,
+    /^codigo_articulo$/i,
+    /^nro(_|\s)?(de)?(_|\s)?(articulo|prod)$/i
   ],
   descripcion: [
     /^descripci[oó]n(_|\s)?(de)?(_|\s)?(producto|articulo|item|material)?(_|\s)?(vc|calculado)?$/i,

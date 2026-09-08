@@ -39,15 +39,28 @@ export const UniversalImportModal: React.FC<UniversalImportModalProps> = ({
   customAliases,
   onImportConfirmed
 }) => {
+  const isFrcSheet = /frc|incidencia|evento|averia|merma|diferencia/i.test(activeSheetTitle);
+
   const [activeTab, setActiveTab] = useState<'paste' | 'file'>('paste');
   const [rawText, setRawText] = useState('');
   const [parsedData, setParsedData] = useState<ParsedSpreadsheetResult | null>(null);
   const [customMappings, setCustomMappings] = useState<Record<string, string>>({});
-  const [consolidationMode, setConsolidationMode] = useState<ImportConsolidationMode>('consolidate_sum');
+  const [consolidationMode, setConsolidationMode] = useState<ImportConsolidationMode>(() => 
+    /frc|incidencia|evento|averia|merma|diferencia/i.test(activeSheetTitle) ? 'append' : 'consolidate_sum'
+  );
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'info' | 'error' | 'success' } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync consolidation mode when active sheet changes
+  React.useEffect(() => {
+    if (isFrcSheet) {
+      setConsolidationMode('append');
+    } else {
+      setConsolidationMode('consolidate_sum');
+    }
+  }, [activeSheetTitle, isFrcSheet]);
 
   // Initialize auto-mappings whenever parsedData changes
   const mappingSuggestions = useMemo(() => {
@@ -205,18 +218,28 @@ export const UniversalImportModal: React.FC<UniversalImportModalProps> = ({
         {/* Modal Header */}
         <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-950/70 border border-blue-200 dark:border-blue-800 flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-2xs">
-              <FileSpreadsheet className="w-5 h-5" />
+            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shadow-2xs ${
+              isFrcSheet 
+                ? 'bg-amber-100 dark:bg-amber-950/70 border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400'
+                : 'bg-blue-100 dark:bg-blue-950/70 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400'
+            }`}>
+              {isFrcSheet ? <Upload className="w-5 h-5" /> : <FileSpreadsheet className="w-5 h-5" />}
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                Ingestión Universal de Datos
-                <span className="text-xs px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-mono border border-blue-200 dark:border-blue-800/80">
+                {isFrcSheet ? 'Importación Masiva de Incidencias & FRC' : 'Ingestión Universal de Datos'}
+                <span className={`text-xs px-2 py-0.5 rounded-md font-mono border ${
+                  isFrcSheet
+                    ? 'bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/80'
+                    : 'bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/80'
+                }`}>
                   {activeSheetTitle}
                 </span>
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Importa datos desde Excel (.xlsx, .xls), CSV, TSV o copiando directamente desde Looker / Hojas de Cálculo.
+                {isFrcSheet 
+                  ? 'Importa lotes de incidencias operativas (averías, transporte, mermas, diferencias) desde Excel, CSV o pegando directamente desde el portapapeles.'
+                  : 'Importa datos desde Excel (.xlsx, .xls), CSV, TSV o copiando directamente desde Looker / Hojas de Cálculo.'}
               </p>
             </div>
           </div>
@@ -239,7 +262,7 @@ export const UniversalImportModal: React.FC<UniversalImportModalProps> = ({
                   onClick={() => setActiveTab('paste')}
                   className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
                     activeTab === 'paste'
-                      ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                      ? isFrcSheet ? 'border-amber-600 text-amber-600 dark:text-amber-400' : 'border-blue-600 text-blue-600 dark:text-blue-400'
                       : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
                   }`}
                 >
@@ -250,7 +273,7 @@ export const UniversalImportModal: React.FC<UniversalImportModalProps> = ({
                   onClick={() => setActiveTab('file')}
                   className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
                     activeTab === 'file'
-                      ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                      ? isFrcSheet ? 'border-amber-600 text-amber-600 dark:text-amber-400' : 'border-blue-600 text-blue-600 dark:text-blue-400'
                       : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
                   }`}
                 >
@@ -265,19 +288,38 @@ export const UniversalImportModal: React.FC<UniversalImportModalProps> = ({
                     <textarea
                       value={rawText}
                       onChange={(e) => setRawText(e.target.value)}
-                      placeholder="Copia las filas desde Excel, Google Sheets o Looker y pégalas aquí (Ctrl+V)..."
+                      placeholder={isFrcSheet 
+                        ? "Pega aquí tus incidencias FRC (ej. FRC_N, SKU, DESCRIPCION, CANTIDAD, FRC_EVEN, N_TRASPASO, PROVEEDOR, OBSERVACION)..."
+                        : "Copia las filas desde Excel, Google Sheets o Looker y pégalas aquí (Ctrl+V)..."}
                       className="w-full h-44 p-3.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono bg-slate-50/50 dark:bg-slate-950/50 text-slate-800 dark:text-slate-200 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all resize-none shadow-2xs"
                     />
                   </div>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => handleProcessText(rawText)}
-                      disabled={!rawText.trim() || isProcessing}
-                      className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 transition-all flex items-center gap-2 shadow-2xs cursor-pointer"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isProcessing ? 'animate-spin' : ''}`} />
-                      Analizar y Mapear Columnas
-                    </button>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    {isFrcSheet && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const sample = "FRC_N\tSKU\tDESCRIPCION\tLOTE\tCANTIDAD\tFRC_EVEN\tN_TRASPASO\tPROVEEDOR\tOBSERVACION\nFRC-2026-007\t200021021\tPARACETAMOL 500MG TAB X16 BAGO\tL-9988\t12\tTRANSPORTE\tTR-90088\tLABORATORIOS BAGO\tCajas aplastadas en rampa de descarga\nFRC-2026-008\t200045091\tAMOXICILINA 500MG CAP X21 CHILE\tL-7744\t8\tDIFERENCIAS\tTR-90089\tLABORATORIO CHILE\tFaltante contra guía de despacho";
+                          setRawText(sample);
+                          handleProcessText(sample);
+                        }}
+                        className="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                      >
+                        ⚡ Cargar Plantilla de Ejemplo FRC
+                      </button>
+                    )}
+                    <div className="flex justify-end gap-2 ml-auto">
+                      <button
+                        onClick={() => handleProcessText(rawText)}
+                        disabled={!rawText.trim() || isProcessing}
+                        className={`px-4 py-2 text-white text-xs font-bold rounded-xl disabled:bg-slate-300 dark:disabled:bg-slate-800 transition-all flex items-center gap-2 shadow-2xs cursor-pointer ${
+                          isFrcSheet ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'
+                        }`}
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isProcessing ? 'animate-spin' : ''}`} />
+                        Analizar y Mapear Columnas
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -421,136 +463,209 @@ export const UniversalImportModal: React.FC<UniversalImportModalProps> = ({
                 </div>
               </div>
 
-              {/* Feature: Intelligent CU_VC Consolidation & Deduplication Audit (Sin Lotes) */}
-              <div className="bg-slate-50/80 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 flex items-center justify-center">
-                      <Layers className="w-4 h-4" />
+              {/* Feature: Intelligent Consolidation & Deduplication Audit */}
+              {isFrcSheet ? (
+                <div className="bg-amber-50/80 dark:bg-amber-950/40 p-4 rounded-2xl border border-amber-200/80 dark:border-amber-800/80 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 flex items-center justify-center">
+                        <Upload className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-amber-950 dark:text-amber-100 flex items-center gap-2">
+                          Modo de Inserción de Incidencias FRC
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-200/70 dark:bg-amber-900/70 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 font-semibold">
+                            Registro de Eventos
+                          </span>
+                        </h4>
+                        <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80">
+                          Cada fila representa un evento independiente. Los números de folio FRC_N se respetan o se generan correlativamente si vienen vacíos.
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                        Consolidación por Vencimiento CU_VC (Sin Lotes)
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                          Anti-Duplicados
-                        </span>
-                      </h4>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        Detecta automáticamente si el archivo o la hoja activa ya tienen registros del mismo SKU + MM/YYYY
-                      </p>
+
+                    <div className="flex items-center gap-2 text-[11px] font-mono">
+                      <span className="px-2 py-0.5 rounded bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-100 font-bold">
+                        {parsedData.totalRows} incidencias listas
+                      </span>
                     </div>
                   </div>
 
-                  {reconciliation && (
-                    <div className="flex items-center gap-2 text-[11px] font-mono flex-wrap">
-                      {reconciliation.internalDeduplicatedCount > 0 && (
-                        <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800" title="Duplicados dentro del archivo importado fusionados sumando stock">
-                          {reconciliation.internalDeduplicatedCount} fusionados en archivo
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setConsolidationMode('append')}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        consolidationMode === 'append'
+                          ? 'border-amber-500 bg-white dark:bg-slate-900 ring-2 ring-amber-500/30 shadow-xs'
+                          : 'border-amber-200/70 dark:border-amber-800/70 bg-white/70 dark:bg-slate-900/50 hover:border-amber-400'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-950 dark:text-amber-100 flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5 text-amber-600" />
+                          Anexar Todo (Recomendado)
                         </span>
-                      )}
-                      {reconciliation.matchedCount > 0 ? (
-                        <span className="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                          {reconciliation.matchedCount} coincidencias en hoja
+                        {consolidationMode === 'append' && <Check className="w-4 h-4 text-amber-600" />}
+                      </div>
+                      <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-1 leading-tight">
+                        Inserta cada fila como un nuevo evento/incidencia con su folio. Ideal para cargas operativas periódicas.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setConsolidationMode('consolidate_overwrite')}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        consolidationMode === 'consolidate_overwrite'
+                          ? 'border-amber-500 bg-white dark:bg-slate-900 ring-2 ring-amber-500/30 shadow-xs'
+                          : 'border-amber-200/70 dark:border-amber-800/70 bg-white/70 dark:bg-slate-900/50 hover:border-amber-400'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <RefreshCw className="w-3.5 h-3.5 text-amber-600" />
+                          Actualizar si Folio FRC_N Existe
                         </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                          0 coincidencias (100% nuevos)
-                        </span>
-                      )}
-                      <span className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold">
-                        {reconciliation.rowsToAppend.length} nuevas filas
-                      </span>
-                    </div>
-                  )}
+                        {consolidationMode === 'consolidate_overwrite' && <Check className="w-4 h-4 text-amber-600" />}
+                      </div>
+                      <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-1 leading-tight">
+                        Si el archivo contiene números de folio FRC_N ya existentes, actualiza sus campos en lugar de duplicar.
+                      </p>
+                    </button>
+                  </div>
                 </div>
-
-                {/* Consolidation Mode Selector */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setConsolidationMode('consolidate_sum')}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      consolidationMode === 'consolidate_sum'
-                        ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 ring-2 ring-indigo-500/20'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                        Sumar Stock
-                      </span>
-                      {consolidationMode === 'consolidate_sum' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+              ) : (
+                <div className="bg-slate-50/80 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 flex items-center justify-center">
+                        <Layers className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                          Consolidación por Vencimiento CU_VC (Sin Lotes)
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            Anti-Duplicados
+                          </span>
+                        </h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Detecta automáticamente si el archivo o la hoja activa ya tienen registros del mismo SKU + MM/YYYY
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-tight">
-                      Suma la cantidad a la fila existente si coincide SKU + MM/YYYY. Recomendado.
-                    </p>
-                  </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setConsolidationMode('consolidate_overwrite')}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      consolidationMode === 'consolidate_overwrite'
-                        ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 ring-2 ring-indigo-500/20'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                        <RefreshCw className="w-3.5 h-3.5 text-slate-600" />
-                        Sobrescribir
-                      </span>
-                      {consolidationMode === 'consolidate_overwrite' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
-                    </div>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-tight">
-                      Reemplaza la cantidad existente con el valor del archivo importado.
-                    </p>
-                  </button>
+                    {reconciliation && (
+                      <div className="flex items-center gap-2 text-[11px] font-mono flex-wrap">
+                        {reconciliation.internalDeduplicatedCount > 0 && (
+                          <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800" title="Duplicados dentro del archivo importado fusionados sumando stock">
+                            {reconciliation.internalDeduplicatedCount} fusionados en archivo
+                          </span>
+                        )}
+                        {reconciliation.matchedCount > 0 ? (
+                          <span className="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                            {reconciliation.matchedCount} coincidencias en hoja
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            0 coincidencias (100% nuevos)
+                          </span>
+                        )}
+                        <span className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold">
+                          {reconciliation.rowsToAppend.length} nuevas filas
+                        </span>
+                      </div>
+                    )}
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setConsolidationMode('skip_existing')}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      consolidationMode === 'skip_existing'
-                        ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 ring-2 ring-indigo-500/20'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                        <Filter className="w-3.5 h-3.5 text-slate-600" />
-                        Omitir Existentes
-                      </span>
-                      {consolidationMode === 'skip_existing' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
-                    </div>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-tight">
-                      No altera filas existentes. Solo agrega los SKUs/vencimientos nuevos.
-                    </p>
-                  </button>
+                  {/* Consolidation Mode Selector */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setConsolidationMode('consolidate_sum')}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        consolidationMode === 'consolidate_sum'
+                          ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 ring-2 ring-indigo-500/20'
+                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                          Sumar Stock
+                        </span>
+                        {consolidationMode === 'consolidate_sum' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-tight">
+                        Suma la cantidad a la fila existente si coincide SKU + MM/YYYY. Recomendado.
+                      </p>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setConsolidationMode('append')}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      consolidationMode === 'append'
-                        ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 ring-2 ring-indigo-500/20'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                        <Layers className="w-3.5 h-3.5 text-slate-600" />
-                        Anexar Todo
-                      </span>
-                      {consolidationMode === 'append' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
-                    </div>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-tight">
-                      Modo clásico: inserta todas las filas al final sin consolidar.
-                    </p>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setConsolidationMode('consolidate_overwrite')}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        consolidationMode === 'consolidate_overwrite'
+                          ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 ring-2 ring-indigo-500/20'
+                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <RefreshCw className="w-3.5 h-3.5 text-slate-600" />
+                          Sobrescribir
+                        </span>
+                        {consolidationMode === 'consolidate_overwrite' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-tight">
+                        Reemplaza la cantidad existente con el valor del archivo importado.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setConsolidationMode('skip_existing')}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        consolidationMode === 'skip_existing'
+                          ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 ring-2 ring-indigo-500/20'
+                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <Filter className="w-3.5 h-3.5 text-slate-600" />
+                          Omitir Existentes
+                        </span>
+                        {consolidationMode === 'skip_existing' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-tight">
+                        No altera filas existentes. Solo agrega los SKUs/vencimientos nuevos.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setConsolidationMode('append')}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        consolidationMode === 'append'
+                          ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 ring-2 ring-indigo-500/20'
+                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5 text-slate-600" />
+                          Anexar Todo
+                        </span>
+                        {consolidationMode === 'append' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-tight">
+                        Modo clásico: inserta todas las filas al final sin consolidar.
+                      </p>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Data Preview Table */}
               <div className="space-y-2">
@@ -607,10 +722,16 @@ export const UniversalImportModal: React.FC<UniversalImportModalProps> = ({
             <button
               onClick={handleConfirmImport}
               disabled={isProcessing}
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+              className={`px-5 py-2.5 active:scale-98 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50 ${
+                isFrcSheet
+                  ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20'
+                  : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/20'
+              }`}
             >
               <Check className="w-4 h-4" />
-              {consolidationMode === 'consolidate_sum' && reconciliation && reconciliation.matchedCount > 0
+              {isFrcSheet
+                ? `Ingestar ${parsedData.totalRows} Incidencias en ${activeSheetTitle}`
+                : consolidationMode === 'consolidate_sum' && reconciliation && reconciliation.matchedCount > 0
                 ? `Ingestar y Consolidar ${parsedData.totalRows} Registros (${reconciliation.rowsToUpdate.length} sumados + ${reconciliation.rowsToAppend.length} nuevos)`
                 : `Ingestar ${parsedData.totalRows} Registros en ${activeSheetTitle}`}
             </button>

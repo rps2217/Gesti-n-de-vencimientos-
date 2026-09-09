@@ -87,7 +87,18 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  if (!isOpen || !activeSheet) return null;
+  const candidateCuVc = useMemo(() => {
+    if (!formData || !headers) return { cuVc: '', sku: '', ym: '', isValidComposite: false };
+    return extractCuVcFromRow(formData, headers, sheetConfig?.customAliases);
+  }, [formData, headers, sheetConfig?.customAliases]);
+
+  const existingCuVcMatch = useMemo(() => {
+    if (editingItem || !existingItems || existingItems.length === 0 || !candidateCuVc.isValidComposite) {
+      return null;
+    }
+    const match = findExistingItemByCuVc(formData, existingItems, headers, sheetConfig?.customAliases);
+    return match.exists ? match : null;
+  }, [editingItem, existingItems, formData, headers, sheetConfig?.customAliases, candidateCuVc]);
 
   const isMainOrEvents = activeView === 'main' || activeView === 'events';
   const categoryDef = EVENT_CATEGORIES[selectedEventCategory] || EVENT_CATEGORIES.VENCIMIENTO;
@@ -95,20 +106,6 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   // Identify key semantic columns in current headers
   const skuHeader = findColumnBySemantic(headers, 'sku', sheetConfig.customAliases) || headers.find(h => /sku|código|codigo/i.test(h));
   const currentSkuVal = skuHeader ? (formData[skuHeader] || '').trim() : '';
-
-  // Business Rule: No lotes. Unique item by SKU + MM/YYYY (CU_VC).
-  // Check if candidate draft matches an existing item by CU_VC when creating a new item.
-  const candidateCuVc = useMemo(() => {
-    return extractCuVcFromRow(formData, headers, sheetConfig.customAliases);
-  }, [formData, headers, sheetConfig.customAliases]);
-
-  const existingCuVcMatch = useMemo(() => {
-    if (editingItem || !existingItems || existingItems.length === 0 || !candidateCuVc.isValidComposite) {
-      return null;
-    }
-    const match = findExistingItemByCuVc(formData, existingItems, headers, sheetConfig.customAliases);
-    return match.exists ? match : null;
-  }, [editingItem, existingItems, formData, headers, sheetConfig.customAliases, candidateCuVc]);
 
   const cantHeader = findColumnBySemantic(headers, 'cantidad', sheetConfig.customAliases) || 
                      headers.find(h => /^(cant|cantidad|stock|unidades)$/i.test(h.trim()));
@@ -263,6 +260,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
     8, 
     sheetConfig.customAliases
   );
+
+  if (!isOpen || !activeSheet) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm md:p-4">

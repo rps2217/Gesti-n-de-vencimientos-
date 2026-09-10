@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Camera, X, RefreshCw, Zap, Volume2, VolumeX, ShieldAlert } from 'lucide-react';
+import { playBeep } from '../../utils/stockCountUtils';
 
 interface MobileCameraBarcodeScannerProps {
   isOpen: boolean;
@@ -82,30 +83,11 @@ export const MobileCameraBarcodeScanner: React.FC<MobileCameraBarcodeScannerProp
 
   // Audio & Haptic Feedback
   const triggerSuccessFeedback = () => {
-    // 1. Vibration for PDA / Cellphone
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+    if (soundEnabled) {
+      playBeep('success');
+    } else if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       try {
-        navigator.vibrate([40, 30, 40]);
-      } catch {}
-    }
-
-    // 2. Audio Beep
-    if (soundEnabled && typeof window !== 'undefined') {
-      try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContext) {
-          const ctx = new AudioContext();
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(1800, ctx.currentTime);
-          gain.gain.setValueAtTime(0.3, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.12);
-        }
+        navigator.vibrate(35);
       } catch {}
     }
   };
@@ -137,7 +119,7 @@ export const MobileCameraBarcodeScanner: React.FC<MobileCameraBarcodeScannerProp
       await html5QrCode.start(
         cameraId,
         {
-          fps: 20,
+          fps: 15,
           qrbox: (viewfinderWidth, viewfinderHeight) => {
             const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
             return {

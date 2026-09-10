@@ -26,6 +26,7 @@ import {
   buildAuditRowsFromSession,
   loadStockCountSessionsFromStorage, 
   saveStockCountSessionsToStorage, 
+  saveStockCountSessionsToStorageDebounced,
   loadCampaignsFromStorage,
   saveCampaignsToStorage,
   getActiveCampaignId,
@@ -37,7 +38,12 @@ import {
 import { saveAuditRowsToDedicatedSheet } from '../../lib/sheets';
 import { CampaignConsolidationDashboard } from './CampaignConsolidationDashboard';
 import { MobileCameraBarcodeScanner } from './MobileCameraBarcodeScanner';
-import { searchMasterProducts, findMasterProduct, getMasterProductSummary } from '../../utils/referenceResolver';
+import { 
+  searchMasterProducts, 
+  findMasterProduct, 
+  getMasterProductSummary,
+  buildMasterCatalogIndex
+} from '../../utils/referenceResolver';
 import { formatLocaleNumber, parseLocaleNumber } from '../../utils/pureCalculations';
 import { copyTextToClipboard } from '../../utils/exportUtils';
 
@@ -187,9 +193,16 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
   const [reconciliationFilter, setReconciliationFilter] = useState<'ALL' | 'DIF' | 'CUADRADO' | 'FALTANTE' | 'SOBRANTE' | 'NO_CATALOGADO'>('ALL');
   const [isSyncingToSheet, setIsSyncingToSheet] = useState(false);
 
-  // Save sessions to storage whenever they change
+  // Master catalog pre-indexed for lightning-fast O(1) lookups on low-end PDAs
+  const masterCatalogIndex = useMemo(() => {
+    return buildMasterCatalogIndex(masterProducts);
+  }, [masterProducts]);
+
+  const searchDebounceRef = useRef<any>(null);
+
+  // Save sessions to storage with debouncing to keep the main thread responsive
   useEffect(() => {
-    saveStockCountSessionsToStorage(sessions);
+    saveStockCountSessionsToStorageDebounced(sessions, 300);
   }, [sessions]);
 
   // Focus SKU input whenever switching to counting view
@@ -219,29 +232,34 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
     return Array.from({ length: 5 }, (_, i) => String(CURRENT_YEAR + i));
   }, [currentSession]);
 
-  // Handle master product search / SKU matching
+  // Handle master product search / SKU matching with O(1) exact lookup & debounced multi-match
   const handleSkuChange = (val: string) => {
     setScannedSku(val);
-    if (!val.trim()) {
+    const clean = val.trim();
+    if (!clean) {
       setSelectedProductDesc('');
       setCatalogSearchResults([]);
       setIsSearchDropdownOpen(false);
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
       return;
     }
 
-    // 1. Exact match check
-    const exact = findMasterProduct(val.trim(), masterProducts);
+    // 1. Instant O(1) exact match check
+    const exact = masterCatalogIndex.getBySku(clean);
     if (exact) {
-      const summary = getMasterProductSummary(exact);
-      setSelectedProductDesc(summary.name);
+      setSelectedProductDesc(exact.name);
       setIsSearchDropdownOpen(false);
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
       return;
     }
 
-    // 2. Multi-match search
-    const results = searchMasterProducts(val, masterProducts, 6);
-    setCatalogSearchResults(results);
-    setIsSearchDropdownOpen(results.length > 0);
+    // 2. Debounced multi-match search (200ms) to avoid CPU lockup during fast typing / scanning
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      const results = masterCatalogIndex.search(clean, 6);
+      setCatalogSearchResults(results);
+      setIsSearchDropdownOpen(results.length > 0);
+    }, 200);
   };
 
   const handleSelectProductFromCatalog = (product: any) => {
@@ -308,9 +326,9 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
     const cleanSku = sku.trim();
     const qty = countQuantity;
 
-    // Lookup master info to enrich entry
-    const master = findMasterProduct(cleanSku, masterProducts);
-    const summary = master ? getMasterProductSummary(master) : null;
+    // Lookup master info in O(1) to enrich entry
+    const summary = masterCatalogIndex.getBySku(cleanSku);
+    const master = masterCatalogIndex.getRawBySku(cleanSku);
     const finalDesc = selectedProductDesc || (summary ? summary.name : 'Producto sin descripción');
 
     let cu_vc: string | undefined = undefined;
@@ -385,9 +403,8 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
     const cleanSku = code.trim();
     if (!cleanSku) return;
 
-    // Fetch product info from catalog
-    const master = findMasterProduct(cleanSku, masterProducts);
-    const summary = master ? getMasterProductSummary(master) : null;
+    // Fetch product info from catalog in O(1)
+    const summary = masterCatalogIndex.getBySku(cleanSku);
     const finalDesc = summary ? summary.name : 'Producto sin descripción';
     setSelectedProductDesc(finalDesc);
 
@@ -437,9 +454,8 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
     }
     lastScanRef.current = { sku: cleanSku, timestamp: now };
 
-    // Fetch product name if any to show in prompt
-    const master = findMasterProduct(cleanSku, masterProducts);
-    const summary = master ? getMasterProductSummary(master) : null;
+    // Fetch product name in O(1)
+    const summary = masterCatalogIndex.getBySku(cleanSku);
     const finalDesc = selectedProductDesc || (summary ? summary.name : 'Producto sin descripción');
     setSelectedProductDesc(finalDesc);
 
@@ -650,11 +666,11 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
     }));
   };
 
-  // Reconciled items for the active session
+  // Reconciled items for the active session (computed lazily only in RECONCILIATION view to optimize scan performance)
   const reconciliation = useMemo(() => {
-    if (!currentSession) return [];
+    if (!currentSession || viewState !== 'RECONCILIATION') return [];
     return reconcileStockCountSession(currentSession, sheetItems, headers, masterProducts);
-  }, [currentSession, sheetItems, headers, masterProducts]);
+  }, [currentSession, sheetItems, headers, masterProducts, viewState]);
 
   // Filtered reconciliation list for display
   const filteredReconciliation = useMemo(() => {

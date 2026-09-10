@@ -74,6 +74,8 @@ export function generateShortVcId(): string {
 
 const STOCK_COUNT_STORAGE_KEY = 'app_stock_count_sessions_v1';
 
+let saveSessionsDebounceTimer: any = null;
+
 /**
  * Loads saved count sessions from localStorage (IndexedDB fallback safe)
  */
@@ -90,7 +92,7 @@ export function loadStockCountSessionsFromStorage(): StockCountSession[] {
 }
 
 /**
- * Persists count sessions to storage
+ * Persists count sessions to storage immediately (synchronous)
  */
 export function saveStockCountSessionsToStorage(sessions: StockCountSession[]): void {
   try {
@@ -98,6 +100,18 @@ export function saveStockCountSessionsToStorage(sessions: StockCountSession[]): 
   } catch (e) {
     console.warn('Error saving stock count sessions to storage:', e);
   }
+}
+
+/**
+ * Non-blocking debounced persistence to prevent UI freeze during high-frequency barcode scanning
+ */
+export function saveStockCountSessionsToStorageDebounced(sessions: StockCountSession[], delayMs: number = 300): void {
+  if (saveSessionsDebounceTimer) {
+    clearTimeout(saveSessionsDebounceTimer);
+  }
+  saveSessionsDebounceTimer = setTimeout(() => {
+    saveStockCountSessionsToStorage(sessions);
+  }, delayMs);
 }
 
 /**
@@ -1164,51 +1178,86 @@ export function buildAuditRowsFromSession(
   });
 }
 
+// AudioContext singleton to avoid repeated instantiation and memory leaks on mobile/PDA devices
+let sharedAudioContext: AudioContext | null = null;
+
+function getSharedAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    if (!sharedAudioContext) {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        sharedAudioContext = new AudioContextClass();
+      }
+    }
+    if (sharedAudioContext && sharedAudioContext.state === 'suspended') {
+      sharedAudioContext.resume().catch(() => {});
+    }
+    return sharedAudioContext;
+  } catch (e) {
+    return null;
+  }
+}
+
 /**
- * Synthesizes dynamic, clean beep tones using the browser's Web Audio API (Zero dependencies)
+ * Synthesizes dynamic, clean beep tones using the browser's Web Audio API (Zero dependencies).
+ * Reuses a single AudioContext instance and triggers instant haptic feedback on mobile PDAs.
  */
 export function playBeep(type: 'success' | 'error' | 'skip'): void {
+  // 1. Instant haptic feedback for mobile / PDA terminals
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+    try {
+      if (type === 'success') {
+        navigator.vibrate(35);
+      } else if (type === 'error') {
+        navigator.vibrate([60, 50, 60]);
+      } else if (type === 'skip') {
+        navigator.vibrate(20);
+      }
+    } catch {}
+  }
+
+  // 2. High performance Web Audio tone
   try {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
     
     if (type === 'success') {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(1200, ctx.currentTime); // Crisp, positive high beep
-      gain.gain.setValueAtTime(0.06, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.12);
+      osc.frequency.setValueAtTime(1400, ctx.currentTime); // Crisp, positive high beep
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.09);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start();
-      osc.stop(ctx.currentTime + 0.12);
+      osc.stop(ctx.currentTime + 0.09);
     } else if (type === 'skip') {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(750, ctx.currentTime); // Soft neutral beep
-      gain.gain.setValueAtTime(0.04, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.1);
+      osc.frequency.setValueAtTime(800, ctx.currentTime); // Soft neutral beep
+      gain.gain.setValueAtTime(0.05, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.08);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start();
-      osc.stop(ctx.currentTime + 0.1);
+      osc.stop(ctx.currentTime + 0.08);
     } else if (type === 'error') {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sawtooth'; // Buzzer sound
-      osc.frequency.setValueAtTime(140, ctx.currentTime); // Low pitch error buzz
+      osc.frequency.setValueAtTime(150, ctx.currentTime); // Low pitch error buzz
       gain.gain.setValueAtTime(0.12, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.3);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start();
-      osc.stop(ctx.currentTime + 0.3);
+      osc.stop(ctx.currentTime + 0.25);
     }
   } catch (e) {
-    console.warn('AudioContext failed to execute (expected browser gesture restriction if not interacted yet):', e);
+    console.warn('AudioContext failed to execute:', e);
   }
 }
 

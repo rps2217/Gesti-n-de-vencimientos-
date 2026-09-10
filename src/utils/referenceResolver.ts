@@ -9,6 +9,145 @@ export interface MasterProductSummary {
   raw: any;
 }
 
+export interface MasterCatalogIndex {
+  exactMap: Map<string, any>;
+  alphaMap: Map<string, any>;
+  summaryMap: Map<string, MasterProductSummary>;
+  summaries: MasterProductSummary[];
+  getBySku: (sku: string) => MasterProductSummary | null;
+  getRawBySku: (sku: string) => any | null;
+  search: (query: string, limit?: number) => MasterProductSummary[];
+}
+
+/**
+ * Builds a high-performance O(1) indexed catalog for lightning-fast PDA barcode scanning.
+ * Pre-computes summaries and hash indexes so scans don't perform O(N) array traversals or regexes.
+ */
+export function buildMasterCatalogIndex(
+  products: any[],
+  customAliases?: Record<string, string[]>
+): MasterCatalogIndex {
+  const exactMap = new Map<string, any>();
+  const alphaMap = new Map<string, any>();
+  const summaryMap = new Map<string, MasterProductSummary>();
+  const summaries: MasterProductSummary[] = [];
+
+  if (!products || products.length === 0) {
+    return {
+      exactMap,
+      alphaMap,
+      summaryMap,
+      summaries,
+      getBySku: () => null,
+      getRawBySku: () => null,
+      search: () => []
+    };
+  }
+
+  const firstProd = products[0];
+  const keys = Object.keys(firstProd || {});
+  const skuCol = findColumnBySemantic(keys, 'sku', customAliases) || keys.find(k => /sku|código|codigo/i.test(k));
+
+  for (let i = 0; i < products.length; i++) {
+    const prod = products[i];
+    if (!prod) continue;
+
+    const summary = getMasterProductSummary(prod, customAliases);
+    summaries.push(summary);
+
+    const rawSku = skuCol ? prod[skuCol] : (prod.SKU || prod.sku);
+    const skuStr = String(rawSku !== undefined && rawSku !== null ? rawSku : summary.sku).trim();
+
+    if (skuStr) {
+      const lower = skuStr.toLowerCase();
+      exactMap.set(lower, prod);
+      exactMap.set(skuStr, prod);
+      summaryMap.set(lower, summary);
+      summaryMap.set(skuStr, summary);
+
+      const alpha = lower.replace(/[^a-z0-9]/g, '');
+      if (alpha && !alphaMap.has(alpha)) {
+        alphaMap.set(alpha, prod);
+      }
+    }
+
+    // Also index by any barcode / EAN columns if present
+    for (const k of Object.keys(prod)) {
+      if (/barcode|ean|c[oó]d(_|\s)?barra/i.test(k) && prod[k]) {
+        const barcodeVal = String(prod[k]).trim().toLowerCase();
+        if (barcodeVal) {
+          if (!exactMap.has(barcodeVal)) exactMap.set(barcodeVal, prod);
+          if (!summaryMap.has(barcodeVal)) summaryMap.set(barcodeVal, summary);
+        }
+      }
+    }
+  }
+
+  const getRawBySku = (sku: string): any | null => {
+    if (!sku) return null;
+    const clean = String(sku).trim().toLowerCase();
+    if (!clean) return null;
+
+    // 1. Direct O(1) hash map lookup
+    const direct = exactMap.get(clean);
+    if (direct) return direct;
+
+    // 2. Alphanumeric match O(1)
+    const alpha = clean.replace(/[^a-z0-9]/g, '');
+    if (alpha) {
+      const alphaMatch = alphaMap.get(alpha);
+      if (alphaMatch) return alphaMatch;
+    }
+
+    return null;
+  };
+
+  const getBySku = (sku: string): MasterProductSummary | null => {
+    if (!sku) return null;
+    const clean = String(sku).trim().toLowerCase();
+    if (!clean) return null;
+
+    const direct = summaryMap.get(clean);
+    if (direct) return direct;
+
+    const raw = getRawBySku(sku);
+    if (raw) {
+      return getMasterProductSummary(raw, customAliases);
+    }
+    return null;
+  };
+
+  const search = (query: string, limit: number = 8): MasterProductSummary[] => {
+    const q = (query || '').trim().toLowerCase();
+    if (!q) return summaries.slice(0, limit);
+
+    const results: MasterProductSummary[] = [];
+    for (let i = 0; i < summaries.length; i++) {
+      const s = summaries[i];
+      if (
+        s.sku.toLowerCase().includes(q) ||
+        s.name.toLowerCase().includes(q) ||
+        s.provider.toLowerCase().includes(q) ||
+        s.category.toLowerCase().includes(q)
+      ) {
+        results.push(s);
+        if (results.length >= limit) break;
+      }
+    }
+    return results;
+  };
+
+  return {
+    exactMap,
+    alphaMap,
+    summaryMap,
+    summaries,
+    getBySku,
+    getRawBySku,
+    search
+  };
+}
+
 /**
  * Extracts a normalized, semantic summary of a master product row
  */

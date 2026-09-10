@@ -558,18 +558,28 @@ export function importPharmacySnapshotToCampaign(
   filename: string = 'Snapshot_ERP'
 ): { updatedCampaign: InventoryCampaign; totalImported: number; newSkus: number; updatedSkus: number } {
   const now = new Date().toISOString();
-  const skuCol = findColumnBySemantic(headers, 'sku') || 'Código SKU';
-  const descCol = findColumnBySemantic(headers, 'descripcion') || 'Descripción';
-  const provCol = findColumnBySemantic(headers, 'proveedor') || 'Proveedor';
-  const stockCol = findColumnBySemantic(headers, 'cantidad') || 'Stock';
-  const ventaCol = findColumnBySemantic(headers, 'venta') || 'Venta';
-  const ingresoCol = findColumnBySemantic(headers, 'ingreso') || 'Ingreso';
-  const egresoCol = findColumnBySemantic(headers, 'egreso') || 'Egreso';
-  const invIniCol = findColumnBySemantic(headers, 'inv_inicial') || 'Inv. Inicial';
-  const localCol = findColumnBySemantic(headers, 'local') || 'Local';
-  const minCol = findColumnBySemantic(headers, 'stock_min') || 'Stock Min';
-  const maxCol = findColumnBySemantic(headers, 'stock_max') || 'Stock Max';
-  const critCol = findColumnBySemantic(headers, 'stock_critico') || 'Stock Crítico';
+  
+  // Dynamic header resolution
+  const skuCol = findColumnBySemantic(headers, 'sku') || 
+    headers.find(h => /^(c[oó]d(igo)?(_|\s)?(sku|barra|art|articulo|producto)?|ean|barcode|sku)$/i.test(h.trim()));
+    
+  const descCol = findColumnBySemantic(headers, 'descripcion') || 
+    headers.find(h => /^(descripci[oó]n|nombre|producto|articulo|detalle)$/i.test(h.trim()));
+    
+  const provCol = findColumnBySemantic(headers, 'proveedor') || 
+    headers.find(h => /^(proveedor|rut(_|\s)?prov(eedor)?|laboratorio|marca)$/i.test(h.trim()));
+    
+  const stockCol = findColumnBySemantic(headers, 'cantidad') || 
+    headers.find(h => /^(stock|saldo|existencia(s)?|cant(idad)?|unidades)$/i.test(h.trim()));
+    
+  const ventaCol = findColumnBySemantic(headers, 'venta');
+  const ingresoCol = findColumnBySemantic(headers, 'ingreso');
+  const egresoCol = findColumnBySemantic(headers, 'egreso');
+  const invIniCol = findColumnBySemantic(headers, 'inv_inicial');
+  const localCol = findColumnBySemantic(headers, 'local');
+  const minCol = findColumnBySemantic(headers, 'stock_min');
+  const maxCol = findColumnBySemantic(headers, 'stock_max');
+  const critCol = findColumnBySemantic(headers, 'stock_critico');
 
   let newSkus = 0;
   let updatedSkus = 0;
@@ -580,18 +590,46 @@ export function importPharmacySnapshotToCampaign(
   let detectedLocal = campaign.local || '';
 
   for (const row of rows) {
-    const rawSku = skuCol ? row[skuCol] : (row['Código SKU'] || row['Codigo SKU'] || row.SKU || row.sku);
-    const cleanSku = String(rawSku ?? '').trim();
+    // 1. Resolve SKU code (handling multiple formats and aliases)
+    let rawSku = skuCol ? row[skuCol] : null;
+    if (rawSku === undefined || rawSku === null || String(rawSku).trim() === '') {
+      rawSku = row['Código SKU'] || row['Codigo SKU'] || row['Código'] || row['Codigo'] || 
+               row['Cód. Barra'] || row['Cod. Barra'] || row['EAN'] || row.SKU || row.sku || 
+               row.CODIGO || row.Codigo;
+    }
+    
+    // Normalization (strip trailing decimals if parsed as numeric float like 7804671180800.0)
+    let cleanSku = String(rawSku ?? '').trim();
+    if (cleanSku.endsWith('.0')) {
+      cleanSku = cleanSku.substring(0, cleanSku.length - 2);
+    }
     if (!cleanSku) continue;
 
-    const rawDesc = descCol ? row[descCol] : (row['Descripción'] || row['Descripcion'] || row.PRODUCTO || '');
-    const rawProv = provCol ? row[provCol] : (row['Proveedor'] || '');
-    const rawStock = stockCol ? row[stockCol] : (row['Stock'] ?? 0);
-    const rawVenta = ventaCol ? row[ventaCol] : (row['Venta'] ?? 0);
-    const rawIngreso = ingresoCol ? row[ingresoCol] : (row['Ingreso'] ?? 0);
-    const rawEgreso = egresoCol ? row[egresoCol] : (row['Egreso'] ?? 0);
-    const rawInvIni = invIniCol ? row[invIniCol] : (row['Inv. Inicial'] ?? 0);
-    const rawLocal = localCol ? row[localCol] : (row['Local'] || '');
+    // 2. Resolve Description
+    let rawDesc = descCol ? row[descCol] : null;
+    if (!rawDesc) {
+      rawDesc = row['Descripción'] || row['Descripcion'] || row['DESCRIPCION'] || 
+                row['PRODUCTO'] || row['Producto'] || row['Nombre'] || row['Articulo'] || '';
+    }
+
+    // 3. Resolve Provider
+    let rawProv = provCol ? row[provCol] : null;
+    if (!rawProv) {
+      rawProv = row['Proveedor'] || row['PROVEEDOR'] || row['Rut Proveedor'] || row['Laboratorio'] || '';
+    }
+
+    // 4. Resolve Stock
+    let rawStock = stockCol ? row[stockCol] : null;
+    if (rawStock === undefined || rawStock === null || String(rawStock).trim() === '') {
+      rawStock = row['Stock'] || row['STOCK'] || row['Saldo'] || row['SALDO'] || 
+                 row['Existencias'] || row['Cantidad'] || row['Cant'] || 0;
+    }
+
+    const rawVenta = ventaCol ? row[ventaCol] : (row['Venta'] ?? row['VENTA'] ?? 0);
+    const rawIngreso = ingresoCol ? row[ingresoCol] : (row['Ingreso'] ?? row['INGRESO'] ?? 0);
+    const rawEgreso = egresoCol ? row[egresoCol] : (row['Egreso'] ?? row['EGRESO'] ?? 0);
+    const rawInvIni = invIniCol ? row[invIniCol] : (row['Inv. Inicial'] ?? row['INV_INICIAL'] ?? 0);
+    const rawLocal = localCol ? row[localCol] : (row['Local'] ?? row['LOCAL'] ?? '');
     const rawMin = minCol ? row[minCol] : (row['Stock Min'] ?? 0);
     const rawMax = maxCol ? row[maxCol] : (row['Stock Max'] ?? 0);
     const rawCrit = critCol ? row[critCol] : (row['Stock Crítico'] ?? 0);

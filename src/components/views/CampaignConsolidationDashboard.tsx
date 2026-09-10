@@ -239,26 +239,42 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
     }
   };
 
-  // Handle file drop / upload
+  // Handle file drop / upload (Supports Excel .xlsx, .xls, .csv, .txt, .tsv)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeCampaign) return;
 
     setIsProcessingSnapshot(true);
     try {
-      const text = await file.text();
-      const delimiter = detectDelimiter(text);
-      const { headers, rows } = parseDelimitedText(text, delimiter);
+      let parsedHeaders: string[] = [];
+      let parsedRows: Record<string, any>[] = [];
 
-      if (rows.length === 0) {
+      const fileNameLower = file.name.toLowerCase();
+      const isExcel = fileNameLower.endsWith('.xlsx') || fileNameLower.endsWith('.xls');
+
+      if (isExcel) {
+        const buffer = await file.arrayBuffer();
+        const { parseExcelBuffer } = await import('../../utils/universalImporter');
+        const excelResult = await parseExcelBuffer(buffer);
+        parsedHeaders = excelResult.headers;
+        parsedRows = excelResult.rows;
+      } else {
+        const text = await file.text();
+        const delimiter = detectDelimiter(text);
+        const delimitedResult = parseDelimitedText(text, delimiter);
+        parsedHeaders = delimitedResult.headers;
+        parsedRows = delimitedResult.rows;
+      }
+
+      if (parsedRows.length === 0) {
         showToast('El archivo no contiene filas o tiene un formato no reconocido', 'error');
         return;
       }
 
       const { updatedCampaign, totalImported, newSkus, updatedSkus } = importPharmacySnapshotToCampaign(
         activeCampaign,
-        rows,
-        headers,
+        parsedRows,
+        parsedHeaders,
         file.name
       );
 

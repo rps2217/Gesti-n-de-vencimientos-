@@ -263,3 +263,112 @@ export interface StockCountReconciliationItem {
   ajusteMovimiento: number;        // Ajuste por stock en movimiento (ventas - recepciones durante el conteo)
   teoricoOriginal?: number;        // Cantidad teórica en tiempo real de la planilla
 }
+
+// ==========================================
+// CAMPAÑA DE INVENTARIO CÍCLICO MULTISESIÓN
+// ==========================================
+
+export type CampaignStatus = 'ACTIVA' | 'PAUSADA' | 'CERRADA';
+export type CampaignItemAuditStatus = 'VALIDADO_OK' | 'DISCREPANCIA' | 'NUNCA_PISTOLEADO' | 'HALLAZGO';
+
+export interface CampaignSnapshotItem {
+  sku: string;
+  descripcion: string;
+  proveedor?: string;
+  stockTeorico: number;
+  invInicial?: number;
+  egreso?: number;
+  ingreso?: number;
+  venta?: number;
+  stockMin?: number;
+  stockMax?: number;
+  stockCritico?: number;
+  local?: string;
+  fechaCarga: string;
+}
+
+export interface CampaignSnapshotRecord {
+  id: string;
+  nombreArchivo: string;
+  fechaCarga: string;
+  totalSkus: number;
+  totalStockTeorico: number;
+  totalVentasRegistradas?: number;
+}
+
+export interface ClosedAuditItem {
+  sku: string;
+  itemKey: string;
+  fechaValidacion: string;
+  sesionId?: string;
+  ubicacion?: string;
+  stockTeoricoValidado: number;
+  stockFisicoValidado: number;
+  diferenciaValidada: number;
+  nota?: string;
+}
+
+export interface InventoryCampaign {
+  id: string;
+  nombre: string;                                   // Ej: "Inventario General Farmacia Local 121 - Septiembre 2026"
+  local?: string;                                   // Ej: "LOCAL 121"
+  fechaInicio: string;                              // ISO
+  fechaActualizacion: string;                       // ISO
+  fechaCierre?: string;                             // ISO
+  estado: CampaignStatus;                           // 'ACTIVA' | 'PAUSADA' | 'CERRADA'
+  snapshotTeoricoActual: Record<string, CampaignSnapshotItem>; // Mapeo SKU -> Item teórico más reciente
+  historialSnapshots: CampaignSnapshotRecord[];     // Registro de archivos Excel subidos en distintos días
+  sessionIds: string[];                             // IDs de sesiones de conteo vinculadas a esta campaña
+  itemsValidadosCerrados: Record<string, ClosedAuditItem>; // SKUs ya validados/cerrados como OK
+  ajustesVentaManual: Record<string, number>;       // Ajustes de ventas en caja durante el conteo
+  notasCierre?: string;
+}
+
+export interface CampaignAuditRow {
+  sku: string;
+  descripcion: string;
+  proveedor: string;
+  local?: string;
+  stockTeorico: number;
+  stockFisicoTotal: number;
+  ventaRegistrada: number;
+  ajusteManualVenta: number;
+  stockTeoricoEfectivo: number;                     // stockTeorico - ajusteManualVenta (o + ajuste)
+  diferenciaNeta: number;                           // stockFisicoTotal - stockTeoricoEfectivo
+  estadoGlobal: CampaignItemAuditStatus;            // 🟢 VALIDADO_OK | 🟡 DISCREPANCIA | 🔴 NUNCA_PISTOLEADO | 🔵 HALLAZGO
+  esCerrado: boolean;
+  fechaCierre?: string;
+  sesionesDondeAparece: Array<{
+    sesionId: string;
+    nombreSesion: string;
+    ubicacion?: string;
+    cantidad: number;
+    timestamp: string;
+  }>;
+}
+
+export interface CampaignConsolidationMatrix {
+  campaignId: string;
+  nombreCampana: string;
+  fechaCalculo: string;
+  totalSkusTeoricos: number;
+  totalSkusFisicosAuditados: number;
+  porcentajeCobertura: number;                      // % de SKUs teóricos que ya tienen al menos 1 lectura física o están validados
+  cuadradosCount: number;
+  discrepanciasCount: number;
+  nuncaPistoleadosCount: number;
+  hallazgosCount: number;
+  totalFisicoContado: number;
+  totalTeoricoEsperado: number;
+  diferenciaNetaTotal: number;
+  cuadrados: CampaignAuditRow[];                    // 🟢 Pistoleados y coinciden (o marcados como cerrados)
+  discrepancias: CampaignAuditRow[];                // 🟡 Pistoleados pero no coinciden
+  nuncaPistoleados: CampaignAuditRow[];             // 🔴 En snapshot pero 0 lecturas en todas las sesiones
+  hallazgos: CampaignAuditRow[];                    // 🔵 Pistoleados físicamente pero no en snapshot
+  resumenPorUbicacion: Array<{
+    ubicacion: string;
+    sesionesCount: number;
+    skusContados: number;
+    totalUnidades: number;
+  }>;
+}

@@ -352,6 +352,214 @@ export async function saveCloudConfig(config: any, configSheetName = '_CONFIG_AP
   }
 }
 
+/**
+ * Persistencia en la nube de Campañas de Inventario y Sesiones de Conteo.
+ * Permite que cualquier dispositivo conectado a Google Sheets comparta y consulte las campañas.
+ */
+export async function saveCampaignsToCloud(
+  campaignsPayload: {
+    campaigns: any[];
+    activeCampaignId?: string | null;
+    sessions?: any[];
+    lastUpdated?: string;
+  },
+  configSheetName = '_CONFIG_APP'
+): Promise<boolean> {
+  try {
+    const jsonStr = JSON.stringify({
+      ...campaignsPayload,
+      lastUpdated: new Date().toISOString()
+    });
+
+    // 1. Guardar en Script Properties primero (latencia ultrarrápida sin crear pestañas extra)
+    try {
+      const scriptPropsRes = await fetchFromScript({
+        action: 'saveAppProperties',
+        config: {
+          CAMPAIGNS_DATA: jsonStr
+        },
+        spreadsheetId: SPREADSHEET_ID
+      });
+      if (scriptPropsRes && scriptPropsRes.success) {
+        // También intentar respaldar en _CONFIG_APP si está disponible
+      }
+    } catch (propsErr) {
+      console.warn('[Sheets] No se pudo guardar campañas en ScriptProperties, guardando en hoja _CONFIG_APP:', propsErr);
+    }
+
+    // 2. Guardar en la hoja _CONFIG_APP como respaldo visible
+    try {
+      const rows = await getSheetData(configSheetName);
+      let foundRow = -1;
+      if (rows && rows.length >= 1) {
+        for (let i = 1; i < rows.length; i++) {
+          if (rows[i][0] === 'CAMPAIGNS_DATA') {
+            foundRow = i + 1;
+            break;
+          }
+        }
+      }
+
+      if (foundRow > 0) {
+        await updateRow(configSheetName, foundRow, ['CAMPAIGNS_DATA', jsonStr, new Date().toISOString()]);
+      } else {
+        if (!rows || rows.length === 0) {
+          await appendRow(configSheetName, ['CLAVE', 'VALOR_JSON', 'ULTIMA_ACTUALIZACION']);
+        }
+        await appendRow(configSheetName, ['CAMPAIGNS_DATA', jsonStr, new Date().toISOString()]);
+      }
+    } catch (sheetErr) {
+      console.warn('[Sheets] Respaldo en _CONFIG_APP falló:', sheetErr);
+    }
+
+    return true;
+  } catch (err) {
+    console.error('[Sheets] Error al guardar campañas en la nube:', err);
+    throw err;
+  }
+}
+
+/**
+ * Carga las campañas de inventario y sesiones desde Google Sheets (Nube)
+ */
+export async function loadCampaignsFromCloud(configSheetName = '_CONFIG_APP'): Promise<{
+  campaigns?: any[];
+  activeCampaignId?: string | null;
+  sessions?: any[];
+  lastUpdated?: string;
+} | null> {
+  // 1. Intentar cargar desde Script Properties
+  try {
+    const res = await fetchFromScript({ action: 'getAppProperties', spreadsheetId: SPREADSHEET_ID });
+    if (res && res.success && res.config && res.config.CAMPAIGNS_DATA) {
+      const parsed = typeof res.config.CAMPAIGNS_DATA === 'string' 
+        ? JSON.parse(res.config.CAMPAIGNS_DATA) 
+        : res.config.CAMPAIGNS_DATA;
+      if (parsed && Array.isArray(parsed.campaigns)) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('[Sheets] Script Properties no devolvió CAMPAIGNS_DATA:', e);
+  }
+
+  // 2. Intentar cargar desde la hoja _CONFIG_APP
+  try {
+    const rows = await getSheetData(configSheetName);
+    if (rows && rows.length >= 2) {
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i][0] === 'CAMPAIGNS_DATA' && rows[i][1]) {
+          const parsed = JSON.parse(rows[i][1]);
+          if (parsed && Array.isArray(parsed.campaigns)) {
+            return parsed;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[Sheets] No se pudo leer CAMPAIGNS_DATA de _CONFIG_APP:', e);
+  }
+
+  return null;
+}
+
+export const AUDIT_SHEET_DEFAULT_HEADERS = [
+  'ID_CAMPANA',
+  'FECHA_AUDITORIA',
+  'LOCAL',
+  'SKU',
+  'DESCRIPCION',
+  'PROVEEDOR',
+  'STOCK_ERP',
+  'STOCK_FISICO',
+  'DIFERENCIA',
+  'VENTA_AJUSTE',
+  'ESTADO_AUDITORIA',
+  'UBICACIONES_MUEBLES',
+  'USUARIO_TERMINAL',
+  'ULTIMA_ACTUALIZACION'
+];
+
+/**
+ * Guarda las filas consolidadas de auditoría física en una pestaña DEDICADA de Google Sheets
+ * (por defecto "_AUDITORIA_INVENTARIO" o "AUDITORIA_CAMPANAS").
+ * PRESERVA la pestaña VENCIMIENTOS intacta y sin mezclar.
+ */
+export async function saveAuditRowsToDedicatedSheet(
+  sheetName: string = '_AUDITORIA_INVENTARIO',
+  rows: Record<string, any>[]
+): Promise<{ success: boolean; count: number; sheetName: string }> {
+  if (!rows || rows.length === 0) {
+    return { success: true, count: 0, sheetName };
+  }
+
+  clearSheetsCache(sheetName);
+  let existingData: any[][] = [];
+  try {
+    existingData = await getSheetData(sheetName, true);
+  } catch (err) {
+    console.warn(`[Sheets] La hoja ${sheetName} no existe aún o está vacía, se creará al insertar encabezados.`, err);
+    existingData = [];
+  }
+
+  // Si la hoja está vacía, insertar encabezados oficiales
+  if (!existingData || existingData.length === 0) {
+    await appendRow(sheetName, AUDIT_SHEET_DEFAULT_HEADERS);
+    existingData = [AUDIT_SHEET_DEFAULT_HEADERS];
+  }
+
+  const headerList: string[] = existingData[0] && existingData[0].length > 0 
+    ? existingData[0].map(h => String(h).trim().toUpperCase()) 
+    : AUDIT_SHEET_DEFAULT_HEADERS;
+
+  // Mapa de SKU existente en la hoja de auditoría para actualizar si ya existe la fila en la misma campaña
+  const skuRowMap = new Map<string, number>();
+  const campaignColIdx = headerList.findIndex(h => /ID_CAMPANA|CAMPANA/i.test(h));
+  const skuColIdx = headerList.findIndex(h => /^SKU$|CODIGO/i.test(h));
+
+  for (let r = 1; r < existingData.length; r++) {
+    const campVal = campaignColIdx >= 0 ? String(existingData[r][campaignColIdx] || '').trim() : '';
+    const skuVal = skuColIdx >= 0 ? String(existingData[r][skuColIdx] || '').trim() : '';
+    if (skuVal) {
+      skuRowMap.set(`${campVal}_${skuVal}`, r + 1); // 1-indexed row number in Google Sheets
+    }
+  }
+
+  const nowIso = new Date().toISOString();
+  let updatedCount = 0;
+  let appendedCount = 0;
+
+  for (const row of rows) {
+    const campId = String(row.ID_CAMPANA || row.id_campana || '').trim();
+    const sku = String(row.SKU || row.sku || '').trim();
+    const compositeKey = `${campId}_${sku}`;
+
+    const values = headerList.map(header => {
+      if (header === 'ULTIMA_ACTUALIZACION') return nowIso;
+      if (row[header] !== undefined) return String(row[header]);
+      // Search lowercase or normalized key
+      const lowerKey = header.toLowerCase();
+      if (row[lowerKey] !== undefined) return String(row[lowerKey]);
+      return '';
+    });
+
+    const existingRowNumber = skuRowMap.get(compositeKey);
+    if (existingRowNumber) {
+      await updateRow(sheetName, existingRowNumber, values);
+      updatedCount++;
+    } else {
+      await appendRow(sheetName, values);
+      appendedCount++;
+    }
+  }
+
+  return { 
+    success: true, 
+    count: updatedCount + appendedCount, 
+    sheetName 
+  };
+}
+
 export const APPS_SCRIPT_TEMPLATE = `// Google Apps Script (Code.gs) - Versión de Alto Rendimiento (Lectura Concurrente + Carga en Lote)
 function doPost(e) {
   let isWriteAction = false;

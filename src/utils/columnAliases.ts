@@ -25,9 +25,64 @@ export type KnownFieldSemantic =
   | 'categoria'
   | 'mundo'
   | 'pm'
-  | 'ubicacion';
+  | 'ubicacion'
+  | 'local'
+  | 'venta'
+  | 'ingreso'
+  | 'egreso'
+  | 'inv_inicial'
+  | 'stock_min'
+  | 'stock_max'
+  | 'stock_critico';
 
 export const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
+  local: [
+    /^local$/i,
+    /^sucursal$/i,
+    /^farmacia$/i,
+    /^tienda$/i,
+    /^cod(_|\s)?local$/i,
+    /^nro(_|\s)?local$/i
+  ],
+  venta: [
+    /^venta(s)?$/i,
+    /^ventas(_|\s)?(del(_|\s)?periodo|periodo|turno|dia|d[ií]a)?$/i,
+    /^unidades(_|\s)?vendidas$/i,
+    /^cant(_|\s)?venta$/i
+  ],
+  ingreso: [
+    /^ingreso(s)?$/i,
+    /^recepci[oó]n$/i,
+    /^entradas$/i,
+    /^cant(_|\s)?ingreso$/i
+  ],
+  egreso: [
+    /^egreso(s)?$/i,
+    /^salida(s)?$/i,
+    /^merma(s)?$/i,
+    /^cant(_|\s)?egreso$/i
+  ],
+  inv_inicial: [
+    /^inv(\.|\s)?inicial$/i,
+    /^inventario(_|\s)?inicial$/i,
+    /^stock(_|\s)?inicial$/i,
+    /^saldo(_|\s)?inicial$/i
+  ],
+  stock_min: [
+    /^stock(_|\s)?min(imo)?$/i,
+    /^stock_min$/i,
+    /^minimo$/i
+  ],
+  stock_max: [
+    /^stock(_|\s)?max(imo)?$/i,
+    /^stock_max$/i,
+    /^maximo$/i
+  ],
+  stock_critico: [
+    /^stock(_|\s)?cr[ií]tico$/i,
+    /^stock_critico$/i,
+    /^critico$/i
+  ],
   ubicacion: [
     /^ubicaci[oó]n(_|\s)?(bod|bodega|almacen|pasillo)?$/i,
     /^pasillo$/i,

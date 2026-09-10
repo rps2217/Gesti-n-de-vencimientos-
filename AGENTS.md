@@ -178,6 +178,22 @@ Resuelve el problema común de las hojas de cálculo con encabezados inconsisten
 - **`ItemDetailDrawer.tsx`**: Drawer lateral que agrupa toda la trazabilidad de un SKU (historial de vencimientos, lotes y eventos relacionados).
 - **`PmReportModal.tsx`**: Genera reportes listos para copiar al portapapeles o exportar para jefaturas de producto/operaciones.
 
+### M. Sistema de Campañas de Inventario Cíclico y Matriz de Consolidación (Farmacia en Movimiento)
+- **Propósito**: Auditorías de inventario completas en farmacias con stock en constante movimiento (atención al público simultánea), dividiendo el trabajo en múltiples días y sesiones por mueble/pasillo.
+- **Estructura de la Información de Farmacia**:
+  - Reconocimiento nativo de las columnas oficiales del ERP: `Local`, `Código SKU`, `Descripción`, `Proveedor`, `Stock`, `Inv. Inicial`, `Egreso`, `Ingreso`, `Venta`, `Stock Min`, `Stock Max`, `Stock Crítico`, `Precio de Lista`.
+- **Arquitectura de "Separación de Aguas" (4 Estados de Auditoría)**:
+  1. 🟢 **Cuadrados / Validados (`VALIDADO_OK`)**: SKUs auditados cuyo stock físico coincide con el teórico (o validados manualmente por el operario).
+  2. 🟡 **Discrepancias (`DISCREPANCIA`)**: SKUs con diferencias (faltantes o sobrantes) pendientes de revisión de ventas en caja o de una 2da vuelta de conteo.
+  3. 🔴 **Nunca Pistoleados (`NUNCA_PISTOLEADO`)**: SKUs con stock teórico en el ERP pero con cero lecturas registradas en todas las sesiones.
+  4. 🔵 **Hallazgos Físicos (`HALLAZGO`)**: SKUs pistoleados físicamente en los muebles pero no registrados en el snapshot del ERP.
+- **Herramientas Clave**:
+  - **Ajuste de Ventas en Vivo**: Permite ingresar ventas registradas en caja durante el turno para recalcular en tiempo real el stock teórico efectivo y la diferencia neta.
+  - **Validación con un Clic**: Permite marcar un SKU como cerrado/conforme, fijando su estado en la matriz global.
+  - **Exportación de Planilla de 2do Conteo (.xlsx)**: Genera una planilla limpia con únicamente los SKUs discrepantes para el equipo de revisión.
+  - **Exportación de Acta de Cierre Oficial (.xlsx)**: Genera el informe final consolidado con desglose por mueble y auditoría.
+  - **Lanzador de 2da Vuelta Directa**: Crea automáticamente una sesión de conteo focalizada en los SKUs descuadrados.
+
 ---
 
 ## 4. Integración con Google Sheets y Google Apps Script

@@ -6,14 +6,15 @@ import {
   Package, Search, Eye, EyeOff, Sparkles, Layers, FileSpreadsheet, 
   Tag, Barcode, Hash, MapPin, Sliders, ShieldCheck, Database,
   ArrowUpRight, ArrowDownRight, ChevronRight, HelpCircle,
-  Lock, Unlock, ListTodo, Zap, Copy, MessageSquare, CheckCheck, Share2, FileWarning
+  Lock, Unlock, ListTodo, Zap, Copy, MessageSquare, CheckCheck, Share2, FileWarning, Store
 } from 'lucide-react';
 import { 
   StockCountSession, 
   StockCountEntry, 
   StockCountMode, 
   StockCountReconciliationItem, 
-  InventoryItem 
+  InventoryItem,
+  InventoryCampaign
 } from '../../types';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
@@ -21,12 +22,19 @@ import {
   calculateLastDayOfMonthDateString, 
   reconcileStockCountSession, 
   buildVencimientosRowFromCount,
+  buildAuditRowsFromSession,
   loadStockCountSessionsFromStorage, 
   saveStockCountSessionsToStorage, 
+  loadCampaignsFromStorage,
+  saveCampaignsToStorage,
+  getActiveCampaignId,
+  setActiveCampaignId,
   exportStockCountToExcel,
   generateShortVcId,
   playBeep
 } from '../../utils/stockCountUtils';
+import { saveAuditRowsToDedicatedSheet } from '../../lib/sheets';
+import { CampaignConsolidationDashboard } from './CampaignConsolidationDashboard';
 import { searchMasterProducts, findMasterProduct, getMasterProductSummary } from '../../utils/referenceResolver';
 import { formatLocaleNumber, parseLocaleNumber } from '../../utils/pureCalculations';
 import { copyTextToClipboard } from '../../utils/exportUtils';
@@ -67,12 +75,69 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
   onClose
 }) => {
   const navigate = useNavigate();
+  // Campaigns list & active campaign
+  const [campaigns, setCampaigns] = useState<InventoryCampaign[]>(() => loadCampaignsFromStorage());
+  const [activeCampaignIdState, setActiveCampaignIdState] = useState<string | null>(() => getActiveCampaignId());
+
   // Session list & active session
   const [sessions, setSessions] = useState<StockCountSession[]>(() => loadStockCountSessionsFromStorage());
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   
-  // Navigation view inside modal: 'LIST' | 'COUNTING' | 'RECONCILIATION'
-  const [viewState, setViewState] = useState<'LIST' | 'COUNTING' | 'RECONCILIATION'>('LIST');
+  // Navigation view inside modal: 'CAMPAIGN' | 'LIST' | 'COUNTING' | 'RECONCILIATION'
+  const [viewState, setViewState] = useState<'CAMPAIGN' | 'LIST' | 'COUNTING' | 'RECONCILIATION'>(() => {
+    const savedCampaigns = loadCampaignsFromStorage();
+    return savedCampaigns.length > 0 ? 'CAMPAIGN' : 'LIST';
+  });
+
+  // Persist campaigns
+  const handleUpdateCampaigns = (updated: InventoryCampaign[]) => {
+    setCampaigns(updated);
+    saveCampaignsToStorage(updated);
+  };
+
+  const handleSelectCampaign = (id: string) => {
+    setActiveCampaignIdState(id);
+    setActiveCampaignId(id);
+  };
+
+  // Launch targeted recount for discrepancies from campaign
+  const handleStartTargetedRecount = (sessionName: string, targetSkus: string[]) => {
+    const newSessionId = `session_${Date.now()}`;
+    const newSession: StockCountSession = {
+      id: newSessionId,
+      nombre: sessionName,
+      fechaInicio: new Date().toISOString(),
+      hojaOrigen: activeSheetTitle || 'main',
+      estado: 'IN_PROGRESS',
+      modo: 'DOCUMENT',
+      requiereVencimiento: false,
+      ubicacion: 'Auditoría 2da Vuelta',
+      conteos: []
+    };
+
+    // Update sessions
+    const updatedSessions = [newSession, ...sessions];
+    setSessions(updatedSessions);
+    saveStockCountSessionsToStorage(updatedSessions);
+
+    // If campaign exists, link session to campaign
+    if (activeCampaignIdState) {
+      const updatedCampaigns = campaigns.map(c => {
+        if (c.id === activeCampaignIdState) {
+          return {
+            ...c,
+            sessionIds: [...c.sessionIds, newSessionId]
+          };
+        }
+        return c;
+      });
+      handleUpdateCampaigns(updatedCampaigns);
+    }
+
+    setActiveSessionId(newSessionId);
+    setViewState('COUNTING');
+    showToast(`Sesión de 2da vuelta iniciada para ${targetSkus.length} SKUs`, 'success');
+  };
 
   // New session creation form states
   const [newSessionName, setNewSessionName] = useState('');
@@ -526,6 +591,45 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
     }
   };
 
+  // Sync general stock count / furniture audit to the dedicated _AUDITORIA_INVENTARIO sheet (leaving VENCIMIENTOS untouched)
+  const handleSyncToAuditSheet = async () => {
+    if (!currentSession || reconciliation.length === 0) return;
+    setIsSyncingToSheet(true);
+
+    try {
+      const activeCamp = campaigns.find(c => c.id === activeCampaignIdState) || null;
+      const rowsToSave = buildAuditRowsFromSession(currentSession, reconciliation, activeCamp);
+      
+      if (rowsToSave.length === 0) {
+        showToast('No hay registros contados para guardar en auditoría', 'warning');
+        setIsSyncingToSheet(false);
+        return;
+      }
+
+      showToast(`Guardando ${rowsToSave.length} registros en la hoja _AUDITORIA_INVENTARIO...`, 'info', 'Guardando');
+      const res = await saveAuditRowsToDedicatedSheet('_AUDITORIA_INVENTARIO', rowsToSave);
+
+      // Mark session as COMPLETED
+      setSessions(prev => prev.map(s => {
+        if (s.id === currentSession.id) {
+          return {
+            ...s,
+            estado: 'COMPLETED',
+            fechaCierre: new Date().toISOString()
+          };
+        }
+        return s;
+      }));
+
+      playBeep('success');
+      showToast(`¡Auditoría guardada exitosamente en la pestaña "${res.sheetName}" de Google Sheets! (La pestaña VENCIMIENTOS permanece intacta)`, 'success', 'Auditoría Guardada');
+    } catch (e: any) {
+      showToast(`Error al guardar en auditoría: ${e.message}`, 'error');
+    } finally {
+      setIsSyncingToSheet(false);
+    }
+  };
+
   // Build executive summary text for supervisor / WhatsApp
   const buildReconciliationSummaryText = () => {
     if (!currentSession) return '';
@@ -620,7 +724,7 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
         {/* ======================================================== */}
         {/* HEADER                                                  */}
         {/* ======================================================== */}
-        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
+        <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-500/20">
               <Barcode className="w-5 h-5" />
@@ -630,7 +734,7 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                 <h2 className="text-base sm:text-lg font-bold tracking-tight">
                   Módulo de Conteo de Existencias
                 </h2>
-                {currentSession && (
+                {currentSession && viewState !== 'CAMPAIGN' && (
                   <span className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
                     currentSession.modo === 'BLIND' 
                       ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
@@ -641,22 +745,47 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                 )}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                {viewState === 'LIST' && 'Administra sesiones de inventario físico y conteo de existencias.'}
+                {viewState === 'CAMPAIGN' && 'Consolidación global de campaña, snapshots de ERP y cuadratura de farmacia.'}
+                {viewState === 'LIST' && 'Administra sesiones de conteo por mueble o pasillo.'}
                 {viewState === 'COUNTING' && `Sesión activa: ${currentSession?.nombre} • ${currentSession?.conteos.length || 0} lecturas registradas`}
-                {viewState === 'RECONCILIATION' && `Cuadratura: ${currentSession?.nombre} • Comparativa Físico vs Teórico`}
+                {viewState === 'RECONCILIATION' && `Cuadratura de Sesión: ${currentSession?.nombre} • Comparativa Físico vs Teórico`}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {viewState !== 'LIST' && (
-              <button
-                onClick={() => setViewState('LIST')}
-                className="px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors flex items-center gap-1.5"
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Mis Sesiones</span>
-              </button>
+            {/* Tab: Campaña Farmacia */}
+            <button
+              onClick={() => setViewState('CAMPAIGN')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+                viewState === 'CAMPAIGN'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              <Store className="w-3.5 h-3.5" />
+              <span>Matriz Campaña Farmacia</span>
+            </button>
+
+            {/* Tab: Sesiones por Mueble */}
+            <button
+              onClick={() => setViewState('LIST')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+                viewState === 'LIST'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Sesiones por Mueble ({sessions.length})</span>
+            </button>
+
+            {/* If in counting or reconciliation, show badge to jump back */}
+            {viewState === 'COUNTING' && (
+              <span className="px-2.5 py-1 text-xs font-bold bg-amber-500 text-white rounded-xl flex items-center gap-1">
+                <Play className="w-3 h-3" />
+                <span>Pistoleando</span>
+              </span>
             )}
 
             <button
@@ -667,6 +796,22 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
             </button>
           </div>
         </div>
+
+        {/* ======================================================== */}
+        {/* BODY - VIEW 0: CAMPAIGN CONSOLIDATION DASHBOARD          */}
+        {/* ======================================================== */}
+        {viewState === 'CAMPAIGN' && (
+          <CampaignConsolidationDashboard
+            campaigns={campaigns}
+            activeCampaignId={activeCampaignIdState}
+            sessions={sessions}
+            onUpdateCampaigns={handleUpdateCampaigns}
+            onSelectCampaign={handleSelectCampaign}
+            onStartTargetedRecount={handleStartTargetedRecount}
+            showToast={showToast}
+            onSwitchToTerminal={() => setViewState('LIST')}
+          />
+        )}
 
         {/* ======================================================== */}
         {/* BODY - VIEW 1: SESSIONS LIST & NEW SESSION CREATOR       */}
@@ -1559,14 +1704,41 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                   )}
                 </div>
 
-                <button
-                  onClick={handleSyncToVencimientos}
-                  disabled={isSyncingToSheet}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-                >
-                  <Database className="w-4 h-4" />
-                  <span>{isSyncingToSheet ? 'Sincronizando...' : 'Sincronizar a VENCIMIENTOS'}</span>
-                </button>
+                {/* If session has expiry dates, offer VENCIMIENTOS sync. Always offer dedicated AUDITORIA sheet save */}
+                {currentSession.requiereVencimiento ? (
+                  <button
+                    onClick={handleSyncToVencimientos}
+                    disabled={isSyncingToSheet}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                    title="Guarda los registros con fecha de vencimiento y CU_VC en la pestaña VENCIMIENTOS"
+                  >
+                    <Database className="w-4 h-4" />
+                    <span>{isSyncingToSheet ? 'Sincronizando...' : 'Sincronizar a VENCIMIENTOS'}</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSyncToAuditSheet}
+                    disabled={isSyncingToSheet}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                    title="Guarda esta sesión de conteo en la pestaña dedicada '_AUDITORIA_INVENTARIO' de Google Sheets (No modifica VENCIMIENTOS)"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>{isSyncingToSheet ? 'Guardando...' : 'Guardar en _AUDITORIA_INVENTARIO'}</span>
+                  </button>
+                )}
+
+                {/* Additional option to save to dedicated audit sheet even if expiration date is active */}
+                {currentSession.requiereVencimiento && (
+                  <button
+                    onClick={handleSyncToAuditSheet}
+                    disabled={isSyncingToSheet}
+                    className="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer border border-slate-200 dark:border-slate-700"
+                    title="Guarda también un registro en la hoja de auditoría general"
+                  >
+                    <ShieldCheck className="w-4 h-4 text-indigo-500" />
+                    <span>Guardar en Auditoría</span>
+                  </button>
+                )}
               </div>
             </div>
 

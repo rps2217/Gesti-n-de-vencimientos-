@@ -1,8 +1,12 @@
 export const SPREADSHEET_ID = '1a4jGo-7pduH4fue73F_67sQYJS0LJqI7hiXYpyWVA8o';
 
 function getScriptUrl(): string | null {
-  const url = localStorage.getItem('appsheet_clone_scriptUrl');
-  return url ? url.trim() : null;
+  try {
+    const url = localStorage.getItem('appsheet_clone_scriptUrl');
+    return url ? url.trim() : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface ScriptResponse<T = any> {

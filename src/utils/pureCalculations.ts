@@ -210,17 +210,17 @@ export function parseLocaleNumber(val: any, fallback = 0): number {
   let str = String(val).trim();
   if (!str) return fallback;
 
-  // Remove currency signs and spaces
-  str = str.replace(/[$€£S/.]\s*/g, '').trim();
+  // Remove currency signs, prefixes (like S/., CLP, USD, etc.) and outer whitespace
+  str = str.replace(/^(S\/\.|\$|€|£|CLP|USD)\s*/i, '').trim();
 
-  // Handle European/Latin style: 1.250,50 -> 1250.50
+  // Handle European/Latin style with thousands periods and comma decimal: 1.250,50 -> 1250.50
   if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(str)) {
     str = str.replace(/\./g, '').replace(',', '.');
   } else if (/^\d+(,\d+)$/.test(str)) {
     // Single comma decimal: 1250,50 -> 1250.50
     str = str.replace(',', '.');
   } else if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(str)) {
-    // US style: 1,250.50 -> 1250.50
+    // US style with thousands commas and dot decimal: 1,250.50 -> 1250.50
     str = str.replace(/,/g, '');
   }
 

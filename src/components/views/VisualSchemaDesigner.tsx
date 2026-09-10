@@ -335,8 +335,8 @@ export const VisualSchemaDesigner: React.FC<VisualSchemaDesignerProps> = ({
 
   // Helper to render type-specific column badges / icons
   const renderTypeIcon = (type?: ColumnType, isKey?: boolean) => {
-    if (isKey) return <Key className="w-3 h-3 text-amber-500" title="Llave Primaria" />;
-    if (type === 'ref') return <Link2 className="w-3 h-3 text-blue-500" title="Relación / Referencia" />;
+    if (isKey) return <span title="Llave Primaria"><Key className="w-3 h-3 text-amber-500" /></span>;
+    if (type === 'ref') return <span title="Relación / Referencia"><Link2 className="w-3 h-3 text-blue-500" /></span>;
     return <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 scale-90">{type || 'text'}</span>;
   };
 

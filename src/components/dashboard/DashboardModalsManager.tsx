@@ -57,7 +57,7 @@ export interface DashboardModalsManagerProps {
   formErrors: Record<string, string>;
   selectedEventCategory: EventCategory;
   handleSelectEventCategory: (cat: EventCategory) => void;
-  handleFormChange: (header: string, val: string) => void;
+  handleFormChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
   handleSave: (e: React.FormEvent) => Promise<void>;
   isSaving: boolean;
   handleBatchFormUpdate: (updates: Record<string, string>) => void;
@@ -76,7 +76,7 @@ export interface DashboardModalsManagerProps {
   // Bulk Edit
   isBulkEditOpen: boolean;
   setIsBulkEditOpen: (open: boolean) => void;
-  selectedRowIds: (string | number)[];
+  selectedRowIds: number[];
   handleApplyBulkEdit: (values: { frc_n: string; n_traspaso: string; tipo_evento: string; frc_bod: string }) => Promise<void>;
 
   // Gmail
@@ -98,7 +98,7 @@ export interface DashboardModalsManagerProps {
   setIsColumnManagerOpen: (open: boolean) => void;
   allManageableColumns: any[];
   toggleVisibility: (col: string) => void;
-  moveColumn: (dragIndex: number, hoverIndex: number) => void;
+  moveColumn: (colId: string, direction: 'up' | 'down') => void;
   showAllColumns: () => void;
   resetColumnOrder: () => void;
   handleColumnDrop: (dragged: string, droppedOn: string) => void;

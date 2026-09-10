@@ -355,7 +355,7 @@ export const InventoryDashboard: React.FC = () => {
     try {
       setIsSyncingCloud(true);
       const targetSheet = cloudConfigSheetName || '_CONFIG_APP';
-      await saveCloudConfig(targetSheet, sheetConfig);
+      await saveCloudConfig(sheetConfig, targetSheet);
       setHasCloudConfigSheet(true);
       setConfigStorageMode('sheet');
       setSyncSuccessMessage('¡Configuración guardada con éxito en la pestaña ' + targetSheet + '!');
@@ -1339,7 +1339,7 @@ export const InventoryDashboard: React.FC = () => {
       setFormData(initialData);
     } else {
       setEditingItem(null);
-      const cat = initialCategory || (eventFilter !== 'all' ? eventFilter : 'VENCIMIENTO');
+      const cat: EventCategory = initialCategory || (Array.isArray(eventFilter) && eventFilter.length === 1 && (eventFilter[0] in EVENT_CATEGORIES) ? (eventFilter[0] as EventCategory) : 'VENCIMIENTO');
       setSelectedEventCategory(cat);
 
       const initialData: Record<string, string> = {};
@@ -1572,7 +1572,7 @@ export const InventoryDashboard: React.FC = () => {
 
     return errors;
   };
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     let newForm = { ...formData, [name]: value };
     
@@ -1727,8 +1727,8 @@ export const InventoryDashboard: React.FC = () => {
 
       if (!targetExistingItem && (activeView === 'main' || /vencimiento|caducidad|stock/i.test(activeSheet.title))) {
         const matched = findExistingItemByCuVc(formData, items, headers, sheetConfig.customAliases);
-        if (matched) {
-          targetExistingItem = matched;
+        if (matched.exists && matched.existingItem) {
+          targetExistingItem = matched.existingItem;
           isConsolidatingWithExisting = true;
         }
       }

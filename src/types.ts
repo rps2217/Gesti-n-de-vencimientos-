@@ -110,6 +110,8 @@ export interface ColumnSchema {
   formula?: string;
   isKey?: boolean; // Primary key for table relation
   isLabel?: boolean; // Main display label when referenced
+  label?: string; // Custom display label
+  required?: boolean; // Whether input is required
   refTable?: string; // Target sheet name when type is 'ref'
   refKeyCol?: string; // Target key column
   refLabelCol?: string; // Target label column
@@ -226,6 +228,7 @@ export interface StockCountEntry {
 export interface StockCountSession {
   id: string;
   nombre: string;                  // Nombre identificador (ej: "Conteo Pasillo 3 - Lácteos")
+  ubicacion?: string;              // Pasillo / Rack / Bodega (opcional)
   modo: StockCountMode;            // 'BLIND' o 'DOCUMENT'
   requiereVencimiento: boolean;    // Toggle MM/YYYY activable/desactivable a necesidad
   hojaOrigen: string;              // Pestaña de referencia (ej: 'main', 'products')

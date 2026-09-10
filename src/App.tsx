@@ -15,25 +15,33 @@ export default function App() {
   const themeMenuRef = useRef<HTMLDivElement>(null);
 
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
-    const savedVariant = localStorage.getItem('app_theme_variant');
-    const isDark = localStorage.getItem('app_dark_mode') === 'true';
-    if (!isDark) return 'light';
-    return savedVariant === 'gray' ? 'dark-gray' : 'dark-slate';
+    try {
+      const savedVariant = localStorage.getItem('app_theme_variant');
+      const isDark = localStorage.getItem('app_dark_mode') === 'true';
+      if (!isDark) return 'light';
+      return savedVariant === 'gray' ? 'dark-gray' : 'dark-slate';
+    } catch {
+      return 'light';
+    }
   });
 
   useEffect(() => {
-    if (themeMode === 'light') {
-      localStorage.setItem('app_dark_mode', 'false');
-      document.documentElement.classList.remove('dark', 'theme-gray');
-    } else if (themeMode === 'dark-slate') {
-      localStorage.setItem('app_dark_mode', 'true');
-      localStorage.setItem('app_theme_variant', 'slate');
-      document.documentElement.classList.add('dark');
-      document.documentElement.classList.remove('theme-gray');
-    } else if (themeMode === 'dark-gray') {
-      localStorage.setItem('app_dark_mode', 'true');
-      localStorage.setItem('app_theme_variant', 'gray');
-      document.documentElement.classList.add('dark', 'theme-gray');
+    try {
+      if (themeMode === 'light') {
+        localStorage.setItem('app_dark_mode', 'false');
+        document.documentElement.classList.remove('dark', 'theme-gray');
+      } else if (themeMode === 'dark-slate') {
+        localStorage.setItem('app_dark_mode', 'true');
+        localStorage.setItem('app_theme_variant', 'slate');
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('theme-gray');
+      } else if (themeMode === 'dark-gray') {
+        localStorage.setItem('app_dark_mode', 'true');
+        localStorage.setItem('app_theme_variant', 'gray');
+        document.documentElement.classList.add('dark', 'theme-gray');
+      }
+    } catch (err) {
+      console.warn('LocalStorage error setting theme:', err);
     }
   }, [themeMode]);
 
@@ -57,7 +65,11 @@ export default function App() {
       return;
     }
 
-    localStorage.setItem('appsheet_clone_scriptUrl', setupUrl.trim());
+    try {
+      localStorage.setItem('appsheet_clone_scriptUrl', setupUrl.trim());
+    } catch (err) {
+      console.warn('LocalStorage error setting scriptUrl:', err);
+    }
     setNeedsSetup(false);
     setIsChangingUrl(false);
     setSetupError('');
@@ -239,7 +251,7 @@ export default function App() {
                   </div>
                 </nav>
                 <main className="flex-1 flex flex-col overflow-hidden print:overflow-visible">
-                  <InventoryDashboard darkMode={darkMode} />
+                  <InventoryDashboard />
                 </main>
               </>
             } />

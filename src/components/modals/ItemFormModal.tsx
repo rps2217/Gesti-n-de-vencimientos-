@@ -38,7 +38,7 @@ interface ItemFormModalProps {
   formErrors: Record<string, string>;
   selectedEventCategory: EventCategory;
   onSelectEventCategory: (cat: EventCategory) => void;
-  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
   onSave: (e: React.FormEvent) => Promise<void>;
   isSaving: boolean;
   sheetConfig: SheetConfig;
@@ -88,7 +88,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   }, []);
 
   const candidateCuVc = useMemo(() => {
-    if (!formData || !headers) return { cuVc: '', sku: '', ym: '', isValidComposite: false };
+    if (!formData || !headers) return { cuVc: '', sku: '', yyyy: '', mm: '', isValidComposite: false };
     return extractCuVcFromRow(formData, headers, sheetConfig?.customAliases);
   }, [formData, headers, sheetConfig?.customAliases]);
 

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, AlertCircle, Loader2, Info, X } from 'lucide-react';
 
-export type ToastType = 'success' | 'error' | 'loading' | 'info';
+export type ToastType = 'success' | 'error' | 'loading' | 'info' | 'warning';
 
 export interface ToastItem {
   id: string;
@@ -84,6 +84,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                   ? 'bg-slate-900/95 dark:bg-slate-900/95 text-emerald-100 border-emerald-500/30 shadow-emerald-950/20'
                   : toast.type === 'error'
                   ? 'bg-slate-900/95 dark:bg-slate-900/95 text-rose-100 border-rose-500/30 shadow-rose-950/20'
+                  : toast.type === 'warning'
+                  ? 'bg-slate-900/95 dark:bg-slate-900/95 text-amber-100 border-amber-500/30 shadow-amber-950/20'
                   : toast.type === 'loading'
                   ? 'bg-slate-900/95 dark:bg-slate-900/95 text-blue-100 border-blue-500/30 shadow-blue-950/20'
                   : 'bg-slate-900/95 dark:bg-slate-900/95 text-slate-100 border-slate-700/50'
@@ -92,6 +94,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               <div className="shrink-0 mt-0.5">
                 {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-400" />}
                 {toast.type === 'error' && <AlertCircle className="w-5 h-5 text-rose-400" />}
+                {toast.type === 'warning' && <AlertCircle className="w-5 h-5 text-amber-400" />}
                 {toast.type === 'loading' && <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />}
                 {toast.type === 'info' && <Info className="w-5 h-5 text-slate-400" />}
               </div>

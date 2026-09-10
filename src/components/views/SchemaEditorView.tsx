@@ -3,7 +3,7 @@ import { VIRTUAL_COLUMNS } from '../../utils/virtualColumns';
 import { 
   Sparkles, Code2, UploadCloud, Cloud, Sliders, CheckCircle2, Loader2, Key, Eye, EyeOff, Search, Link2, CheckSquare, Square, TableProperties, Layers
 } from 'lucide-react';
-import { SheetConfig, SpreadsheetMetadata, SheetProperties, ColumnSchema, ColumnType, ColumnBehavior } from '../../types';
+import { SheetConfig, SpreadsheetMetadata, SheetProperties, ColumnSchema, ColumnType, ColumnBehavior, UserVirtualColumn } from '../../types';
 import { getSheetData } from '../../lib/sheets';
 import { VisualSchemaDesigner } from './VisualSchemaDesigner';
 
@@ -487,7 +487,7 @@ export const SchemaEditorView: React.FC<SchemaEditorViewProps> = ({
               </span>
               <button
                 onClick={() => {
-                  const newVirtualColumn = {
+                  const newVirtualColumn: UserVirtualColumn = {
                     id: `uvc_${Date.now()}`,
                     label: 'Nueva Columna',
                     operation: 'concatenate',

@@ -65,7 +65,22 @@ export function findMasterProduct(
     }
   }
 
-  // Fallback: check all fields for exact matching code
+  // Fallback 1: Normalized alphanumeric match (e.g. '1001' matches 'SKU-1001')
+  const alphaTarget = targetSku.replace(/[^a-z0-9]/g, '');
+  if (alphaTarget) {
+    for (const prod of products) {
+      if (!prod) continue;
+      const prodVal = skuCol ? prod[skuCol] : (prod.SKU || prod.sku);
+      if (prodVal !== undefined && prodVal !== null) {
+        const cleanAlpha = String(prodVal).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (cleanAlpha === alphaTarget || cleanAlpha.endsWith(alphaTarget)) {
+          return prod;
+        }
+      }
+    }
+  }
+
+  // Fallback 2: check all fields for exact matching code
   for (const prod of products) {
     for (const k of Object.keys(prod)) {
       if (/sku|código|codigo|id/i.test(k)) {
@@ -144,7 +159,7 @@ export function dereferenceMasterProduct(
   };
 
   for (const targetHeader of targetHeaders) {
-    const cleanHeader = targetHeader.trim();
+    const cleanHeader = String(targetHeader || '').trim();
     let val: any = undefined;
 
     if (/sku|código|codigo/i.test(cleanHeader)) {

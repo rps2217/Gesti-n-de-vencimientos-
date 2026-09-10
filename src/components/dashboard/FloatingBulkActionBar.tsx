@@ -9,7 +9,7 @@ import { parseAnyDate } from '../../utils/pureCalculations';
 import { exportToExcel } from '../../utils/exportUtils';
 
 export interface FloatingBulkActionBarProps {
-  selectedRowIds: (string | number)[];
+  selectedRowIds: number[];
   filteredItems: InventoryItem[];
   activeView: string;
   bulkActionCtx: BulkActionContext;
@@ -28,7 +28,7 @@ export interface FloatingBulkActionBarProps {
   setIsBulkEditOpen: (open: boolean) => void;
   handleBulkDelete: () => void;
   setIsBulkActionsConfigOpen: (open: boolean) => void;
-  setSelectedRowIds: (ids: (string | number)[]) => void;
+  setSelectedRowIds: (ids: number[]) => void;
 }
 
 export const FloatingBulkActionBar: React.FC<FloatingBulkActionBarProps> = ({

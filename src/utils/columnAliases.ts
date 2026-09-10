@@ -27,7 +27,7 @@ export type KnownFieldSemantic =
   | 'pm'
   | 'ubicacion';
 
-const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
+export const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
   ubicacion: [
     /^ubicaci[oó]n(_|\s)?(bod|bodega|almacen|pasillo)?$/i,
     /^pasillo$/i,
@@ -62,8 +62,11 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
   ],
   sku: [
     /^sku(_|\s)?(vc|calculado)?$/i,
+    /^sku$/i,
+    /^c[oó]digo(_|\s)?sku$/i,
+    /^cod(_|\s)?sku$/i,
     /^cod(_|\s)?(prod|producto|art|articulo|item|mat|material)?(_|\s)?(vc|calculado)?$/i,
-    /^codigo(_|\s)?(de)?(_|\s)?(producto|articulo|item|material)?(_|\s)?(vc|calculado)?$/i,
+    /^codigo(_|\s)?(de|del)?(_|\s)?(producto|articulo|item|material)?(_|\s)?(vc|calculado)?$/i,
     /^item(_|\s)?(code|id|num)?(_|\s)?(vc|calculado)?$/i,
     /^product(_|\s)?(id|code)?(_|\s)?(vc|calculado)?$/i,
     /^clave(_|\s)?(prod|producto)?(_|\s)?(vc|calculado)?$/i,
@@ -72,25 +75,26 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
     /^nro(_|\s)?(de)?(_|\s)?(articulo|prod)$/i
   ],
   descripcion: [
-    /^descripci[oó]n(_|\s)?(de)?(_|\s)?(producto|articulo|item|material)?(_|\s)?(vc|calculado)?$/i,
+    /^descripci[oó]n(_|\s)?(de|del)?(_|\s)?(producto|articulo|item|material)?(_|\s)?(vc|calculado)?$/i,
     /^desc(_|\s)?(vc|calculado)?$/i,
     /^producto(_|\s)?(vc|calculado)?$/i,
     /^articulo(_|\s)?(vc|calculado)?$/i,
     /^art[ií]culo(_|\s)?(vc|calculado)?$/i,
     /^item(_|\s)?(name)?(_|\s)?(vc|calculado)?$/i,
-    /^nombre(_|\s)?(de)?(_|\s)?(producto|articulo|item)?(_|\s)?(vc|calculado)?$/i,
+    /^nombre(_|\s)?(de|del)?(_|\s)?(producto|articulo|item)?(_|\s)?(vc|calculado)?$/i,
     /^detalle(_|\s)?(producto)?(_|\s)?(vc|calculado)?$/i,
     /^denominaci[oó]n(_|\s)?(vc|calculado)?$/i,
     /^descripci[oó]n$/i
   ],
   fecha_vc: [
-    /^fecha(_|\s)?(vc|vencimiento|caducidad|exp|expiracion|expiraci[oó]n)$/i,
+    /^fecha(_|\s)?(vc|vencimiento|caducidad|exp|expiracion|expiraci[oó]n|vto|vcto)$/i,
     /^vencimiento$/i,
     /^caducidad$/i,
     /^expiraci[oó]n$/i,
-    /^f(_|\s)?(venc|vto|cad|exp)$/i,
+    /^f(_|\s)?(venc|vto|vcto|cad|exp)$/i,
     /^vto$/i,
-    /^fecha(_|\s)?vto$/i,
+    /^vcto$/i,
+    /^fecha(_|\s)?(vto|vcto)$/i,
     /^expiry(_|\s)?date$/i,
     /^exp(_|\s)?date$/i
   ],
@@ -113,8 +117,9 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
     /^yyyy$/i,
     /^yy$/i,
     /^a[ñn]o$/i,
+    /^an?io$/i,
     /^year$/i,
-    /^a[ñn]o(_|\s)?(vc|vencimiento|caducidad)?$/i
+    /^(an?io|a[ñn]o)(_|\s)?(vc|vencimiento|caducidad)?$/i
   ],
   cantidad: [
     /^cantidad$/i,
@@ -124,6 +129,8 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
     /^qty$/i,
     /^quantity$/i,
     /^stock$/i,
+    /^cant(idad)?(_|\s)?(disp|disponible|stock|te[oó]rico|f[ií]sico)?$/i,
+    /^stock(_|\s)?(disp|disponible|total)?$/i,
     /^total(_|\s)?unidades$/i,
     /^piezas$/i,
     /^pzas$/i,
@@ -198,6 +205,10 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
   ],
   proveedor: [
     /^proveedor$/i,
+    /^prov$/i,
+    /^rut(_|\s)?(del?(_|\s)?)?proveedor$/i,
+    /^rut$/i,
+    /^nombre(_|\s)?(del?(_|\s)?)?proveedor$/i,
     /^fabricante$/i,
     /^laboratorio$/i,
     /^distribuidor$/i,
@@ -281,8 +292,9 @@ const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
 };
 
 // Normalize text removing diacritics and special spaces for fuzzy comparisons
-export function normalizeHeaderString(str: string): string {
-  return str
+export function normalizeHeaderString(str: any): string {
+  if (str === null || str === undefined) return '';
+  return String(str)
     .trim()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -301,7 +313,7 @@ export function findColumnBySemantic(
   semantic: KnownFieldSemantic, 
   customAliases?: Record<string, string[]>
 ): string | undefined {
-  if (!headers || headers.length === 0) return undefined;
+  if (!headers || !Array.isArray(headers) || headers.length === 0) return undefined;
 
   // Check cache for headers array reference when no customAliases are passed (most common case)
   if (!customAliases) {
@@ -315,8 +327,8 @@ export function findColumnBySemantic(
   
   if (customAliases && customAliases[semantic]) {
     for (const alias of customAliases[semantic]) {
-      if (alias && alias.trim()) {
-        const trimmed = alias.trim();
+      if (alias && String(alias).trim()) {
+        const trimmed = String(alias).trim();
         // Exact match regex and case-insensitive substring regex
         const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         patterns.push(new RegExp(`^${escaped}$`, 'i'));
@@ -329,7 +341,9 @@ export function findColumnBySemantic(
 
   // 1. Direct regex match
   for (const header of headers) {
-    const cleanHeader = header.trim();
+    if (header === null || header === undefined) continue;
+    const cleanHeader = String(header).trim();
+    if (!cleanHeader) continue;
     for (const pattern of patterns) {
       if (pattern.test(cleanHeader)) {
         matched = header;
@@ -342,7 +356,9 @@ export function findColumnBySemantic(
   // 2. Normalized fallback check if not matched
   if (!matched) {
     for (const header of headers) {
+      if (header === null || header === undefined) continue;
       const norm = normalizeHeaderString(header);
+      if (!norm) continue;
       for (const pattern of patterns) {
         if (pattern.test(norm)) {
           matched = header;
@@ -407,17 +423,17 @@ export function detectAllColumnSemantics(
  * Helper to find phone/whatsapp column
  */
 export function findPhoneColumn(headers: string[], customAliases?: Record<string, string[]>): string | undefined {
-  if (!headers || headers.length === 0) return undefined;
+  if (!headers || !Array.isArray(headers) || headers.length === 0) return undefined;
   return findColumnBySemantic(headers, 'telefono', customAliases) 
-    || headers.find(h => /tel|cel|phone|whatsapp|wsp|m[oó]vil|fono/i.test(h));
+    || headers.find(h => h && /tel|cel|phone|whatsapp|wsp|m[oó]vil|fono/i.test(String(h)));
 }
 
 /**
  * Helper to find email column
  */
 export function findEmailColumn(headers: string[], customAliases?: Record<string, string[]>): string | undefined {
-  if (!headers || headers.length === 0) return undefined;
+  if (!headers || !Array.isArray(headers) || headers.length === 0) return undefined;
   return findColumnBySemantic(headers, 'email', customAliases)
-    || headers.find(h => /email|e-mail|correo|mail/i.test(h));
+    || headers.find(h => h && /email|e-mail|correo|mail/i.test(String(h)));
 }
 

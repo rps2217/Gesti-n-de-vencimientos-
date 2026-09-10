@@ -38,7 +38,7 @@ interface DashboardTopNavProps {
   policies: any[];
   handlePrintTicket: (items: InventoryItem[], mode?: 'standard' | 'barcode') => void;
   isOffline: boolean;
-  lastCachedAt: number | null;
+  lastCachedAt?: number | string | null;
   isSyncing?: boolean;
   offlineQueue: any[];
   handleSyncOfflineQueue: () => void;

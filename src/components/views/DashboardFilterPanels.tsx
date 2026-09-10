@@ -13,8 +13,8 @@ interface DashboardFilterPanelsProps {
   activeView: string;
   activeSheet: SheetProperties | null;
   items: InventoryItem[];
-  eventResolutionFilter: ('pending' | 'completed')[];
-  setEventResolutionFilter: React.Dispatch<React.SetStateAction<('pending' | 'completed')[]>>;
+  eventResolutionFilter: string[];
+  setEventResolutionFilter: React.Dispatch<React.SetStateAction<string[]>>;
   handleFilterToggle: <T>(prev: T[], val: T, isMulti: boolean) => T[];
   eventResolutionMetrics: any;
   eventFilter: any[];

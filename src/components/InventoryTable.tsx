@@ -14,7 +14,7 @@ interface InventoryTableProps {
   headers: string[];
   visibleHeaders: string[];
   visibleColumnMeta: ColumnMetadata[];
-  activeView: 'main' | 'events' | 'products' | 'policies';
+  activeView: string;
   tableContainerRef: React.RefObject<HTMLDivElement>;
   getColWidth: (headerId: string, label: string, type?: string) => number;
   handleStartResize: (colId: string, startWidth: number, e: React.MouseEvent) => void;

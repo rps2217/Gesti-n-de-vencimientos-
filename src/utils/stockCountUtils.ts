@@ -860,16 +860,10 @@ export function computeCampaignConsolidationMatrix(
       }
     } else {
       // 0 physical readings across all sessions!
-      if (stockTeorico === 0) {
-        // Was theoretical 0 and physical 0 -> naturally square
-        row.estadoGlobal = 'VALIDADO_OK';
-        cuadrados.push(row);
-        totalSkusAuditados++;
-      } else {
-        // Theoretical > 0 but NEVER SCANNED in any session!
-        row.estadoGlobal = 'NUNCA_PISTOLEADO';
-        nuncaPistoleados.push(row);
-      }
+      // Even if theoretical stock in ERP is 0, this SKU has NEVER been pistoleado/audited
+      // in any session. It must remain in NUNCA_PISTOLEADO until an operator audits it.
+      row.estadoGlobal = 'NUNCA_PISTOLEADO';
+      nuncaPistoleados.push(row);
     }
   }
 

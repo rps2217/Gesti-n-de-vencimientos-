@@ -229,19 +229,57 @@ export async function appendRow(sheetName: string, values: any[]) {
   return fetchFromScript({ action: 'appendRow', sheetName, values, spreadsheetId: SPREADSHEET_ID });
 }
 
-export async function updateRow(sheetName: string, rowIndex: number, values: any[]) {
+export async function updateRow(
+  sheetName: string, 
+  rowIndex: number | null | undefined, 
+  values: any[],
+  extraKeys?: { entityKey?: string; keyValue?: string; entityKeyCol?: string; keyColumn?: string }
+) {
   clearSheetsCache(sheetName);
-  return fetchFromScript({ action: 'updateRow', sheetName, rowIndex, values, spreadsheetId: SPREADSHEET_ID });
+  const parsedRowIndex = typeof rowIndex === 'number' && !isNaN(rowIndex) && rowIndex >= 1 
+    ? Math.floor(rowIndex) 
+    : (typeof rowIndex === 'string' && !isNaN(parseInt(rowIndex, 10)) && parseInt(rowIndex, 10) >= 1 ? parseInt(rowIndex, 10) : null);
+
+  const entityKey = extraKeys?.entityKey || extraKeys?.keyValue;
+
+  if (!parsedRowIndex && !entityKey) {
+    throw new Error(`Índice de fila inválido (${rowIndex}) para actualizar en "${sheetName}". Se requiere un número de fila válido o una clave de entidad.`);
+  }
+
+  return fetchFromScript({ 
+    action: 'updateRow', 
+    sheetName, 
+    rowIndex: parsedRowIndex, 
+    entityKey: entityKey || undefined,
+    values, 
+    spreadsheetId: SPREADSHEET_ID 
+  });
 }
 
-export async function deleteRow(sheetId: number, rowIndex: number, sheetName?: string) {
+export async function deleteRow(sheetId: number, rowIndex: number | null | undefined, sheetName?: string) {
   clearSheetsCache(sheetName);
-  return fetchFromScript({ action: 'deleteRow', sheetId, rowIndex, sheetName, spreadsheetId: SPREADSHEET_ID });
+  const parsedRowIndex = typeof rowIndex === 'number' && !isNaN(rowIndex) && rowIndex >= 1 
+    ? Math.floor(rowIndex) 
+    : (typeof rowIndex === 'string' && !isNaN(parseInt(rowIndex, 10)) && parseInt(rowIndex, 10) >= 1 ? parseInt(rowIndex, 10) : null);
+
+  if (!parsedRowIndex) {
+    throw new Error(`Índice de fila inválido (${rowIndex}) para eliminar en "${sheetName || sheetId}".`);
+  }
+
+  return fetchFromScript({ action: 'deleteRow', sheetId, rowIndex: parsedRowIndex, sheetName, spreadsheetId: SPREADSHEET_ID });
 }
 
-export async function deleteRows(sheetId: number, rowIndexes: number[], sheetName?: string) {
+export async function deleteRows(sheetId: number, rowIndexes: (number | string)[], sheetName?: string) {
   clearSheetsCache(sheetName);
-  return fetchFromScript({ action: 'deleteRows', sheetId, rowIndexes, sheetName, spreadsheetId: SPREADSHEET_ID });
+  const validIndexes = (rowIndexes || [])
+    .map(idx => typeof idx === 'number' ? idx : parseInt(String(idx), 10))
+    .filter(idx => !isNaN(idx) && idx >= 1);
+
+  if (validIndexes.length === 0) {
+    throw new Error(`No hay índices de fila válidos para eliminar en "${sheetName || sheetId}".`);
+  }
+
+  return fetchFromScript({ action: 'deleteRows', sheetId, rowIndexes: validIndexes, sheetName, spreadsheetId: SPREADSHEET_ID });
 }
 
 /**
@@ -661,26 +699,64 @@ function doPost(e) {
 
     // 5. ACTUALIZAR FILA
     if (action === 'updateRow') {
-      const sheet = ss.getSheetByName(payload.sheetName);
-      if (!sheet) return responseJson({ error: 'Hoja no encontrada' });
-      sheet.getRange(payload.rowIndex, 1, 1, payload.values.length).setValues([payload.values]);
-      return responseJson({ success: true });
+      var sheet = ss.getSheetByName(payload.sheetName);
+      if (!sheet) return responseJson({ error: 'Hoja no encontrada: ' + payload.sheetName });
+      
+      var targetRow = parseInt(payload.rowIndex, 10);
+      
+      // Auto-recuperación si rowIndex es null o inválido: buscar por clave de entidad/CU_VC/SKU
+      if (isNaN(targetRow) || targetRow < 1) {
+        var searchKey = String(payload.entityKey || payload.keyValue || '').trim().toUpperCase();
+        if (searchKey) {
+          var allData = sheet.getDataRange().getValues();
+          if (allData && allData.length > 1) {
+            for (var r = 1; r < allData.length; r++) {
+              for (var c = 0; c < allData[r].length; c++) {
+                if (String(allData[r][c]).trim().toUpperCase() === searchKey) {
+                  targetRow = r + 1;
+                  break;
+                }
+              }
+              if (!isNaN(targetRow) && targetRow > 1) break;
+            }
+          }
+        }
+      }
+
+      if (isNaN(targetRow) || targetRow < 1) {
+        return responseJson({ error: 'Índice de fila no válido (' + payload.rowIndex + ') y no se pudo resolver por clave para actualización en ' + payload.sheetName });
+      }
+
+      if (!payload.values || !payload.values.length) {
+        return responseJson({ error: 'No se enviaron valores para actualizar la fila ' + targetRow });
+      }
+
+      sheet.getRange(targetRow, 1, 1, payload.values.length).setValues([payload.values]);
+      return responseJson({ success: true, updatedRow: targetRow });
     }
 
     // 6. ELIMINAR FILA O FILAS
     if (action === 'deleteRow' || action === 'deleteRows') {
-      let sheet = payload.sheetId !== undefined ? ss.getSheets().find(s => s.getSheetId() === payload.sheetId) : null;
+      var sheet = payload.sheetId !== undefined ? ss.getSheets().find(function(s) { return s.getSheetId() === payload.sheetId; }) : null;
       if (!sheet && payload.sheetName) {
         sheet = ss.getSheetByName(payload.sheetName);
       }
       if (!sheet) return responseJson({ error: 'Hoja no encontrada' });
 
-      var indexes = action === 'deleteRows' ? (payload.rowIndexes || []) : [payload.rowIndex];
-      if (!indexes || !indexes.length) return responseJson({ error: 'No se especificaron filas para eliminar' });
+      var rawIndexes = action === 'deleteRows' ? (payload.rowIndexes || []) : [payload.rowIndex];
+      var validIndexes = [];
+      for (var i = 0; i < rawIndexes.length; i++) {
+        var num = parseInt(rawIndexes[i], 10);
+        if (!isNaN(num) && num > 1) {
+          validIndexes.push(num);
+        }
+      }
 
-      var sortedIndexes = indexes.slice().sort(function(a, b) { return b - a; });
-      for (var i = 0; i < sortedIndexes.length; i++) {
-        sheet.deleteRow(sortedIndexes[i]);
+      if (!validIndexes.length) return responseJson({ error: 'No se especificaron filas válidas para eliminar' });
+
+      var sortedIndexes = validIndexes.slice().sort(function(a, b) { return b - a; });
+      for (var j = 0; j < sortedIndexes.length; j++) {
+        sheet.deleteRow(sortedIndexes[j]);
       }
       return responseJson({ success: true });
     }

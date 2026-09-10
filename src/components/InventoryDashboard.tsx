@@ -1166,21 +1166,30 @@ export const InventoryDashboard: React.FC = () => {
   const handleSaveQuickTraspaso = async (targetItem: InventoryItem, traspasoNumber: string) => {
     const traspasoCol = findColumnBySemantic(headers, 'n_traspaso') || 'N_TRASPASO';
     const updatedItem = { ...targetItem, [traspasoCol]: traspasoNumber };
+    const identity = resolveItemIdentity(updatedItem, headers, activeSheet?.title);
 
     // Update local state immediately for instant feedback
     setItems(prev => prev.map(it => (it._rowIndex === targetItem._rowIndex ? updatedItem : it)));
 
     // If online and connected to Apps Script, sync changes to cloud
-    if (activeSheet && updatedItem._rowIndex) {
+    if (activeSheet && updatedItem._rowIndex && updatedItem._rowIndex > 1) {
       const rowValues = headers.map(h => updatedItem[h] || '');
       try {
-        await updateRow(activeSheet.title, updatedItem._rowIndex, rowValues);
+        await updateRow(activeSheet.title, updatedItem._rowIndex, rowValues, {
+          entityKey: identity.keyValue,
+          keyValue: identity.keyValue
+        });
       } catch (saveErr) {
         console.warn('Network error during quick transfer save, adding to offline queue:', saveErr);
         await enqueueMutation({
           type: 'update',
           sheetTitle: activeSheet.title,
           rowIndex: updatedItem._rowIndex,
+          entityKey: identity.keyValue,
+          entityKeyCol: identity.keyColumn || undefined,
+          keyValue: identity.keyValue,
+          keyColumn: identity.keyColumn || undefined,
+          headers,
           values: rowValues
         });
       }
@@ -1769,22 +1778,29 @@ export const InventoryDashboard: React.FC = () => {
       }
       handleCloseModal();
 
+      const isUpdate = Boolean(targetExistingItem && targetExistingItem._rowIndex && targetExistingItem._rowIndex > 1);
+      const targetRowIndex = isUpdate ? targetExistingItem!._rowIndex : undefined;
+      const identityInfo = resolveItemIdentity(newItem, headers, activeSheet.title);
+
       try {
-        if (targetExistingItem && targetExistingItem._rowIndex) {
-          await updateRow(activeSheet.title, targetExistingItem._rowIndex, rowValues);
+        if (isUpdate && targetRowIndex) {
+          await updateRow(activeSheet.title, targetRowIndex, rowValues, {
+            entityKey: identityInfo.keyValue,
+            keyValue: identityInfo.keyValue
+          });
         } else {
           await appendRow(activeSheet.title, rowValues);
         }
       } catch (saveErr) {
         console.warn('Network error during save, adding to offline queue:', saveErr);
         await enqueueMutation({
-          type: targetExistingItem ? 'update' : 'append',
+          type: isUpdate ? 'update' : 'append',
           sheetTitle: activeSheet.title,
-          rowIndex: targetExistingItem ? targetExistingItem._rowIndex : undefined,
-          entityKey: targetExistingItem?._entityKey,
-          entityKeyCol: targetExistingItem?._entityKeyCol,
-          keyValue: targetExistingItem?._entityKey,
-          keyColumn: targetExistingItem?._entityKeyCol,
+          rowIndex: targetRowIndex,
+          entityKey: identityInfo.keyValue,
+          entityKeyCol: identityInfo.keyColumn || undefined,
+          keyValue: identityInfo.keyValue,
+          keyColumn: identityInfo.keyColumn || undefined,
           headers,
           values: rowValues
         });
@@ -1836,6 +1852,7 @@ export const InventoryDashboard: React.FC = () => {
       if (isDemo) {
         showToast('Registro eliminado en modo demostración', 'success', 'Eliminación Completada');
       } else {
+        const ident = resolveItemIdentity(item, headers, activeSheet.title);
         try {
           await deleteRow(activeSheet.sheetId, item._rowIndex as number, activeSheet.title);
           showToast('Registro eliminado de Google Sheets', 'success', 'Eliminación Completada');
@@ -1846,10 +1863,10 @@ export const InventoryDashboard: React.FC = () => {
             sheetId: activeSheet.sheetId,
             sheetTitle: activeSheet.title,
             rowIndex: item._rowIndex as number,
-            entityKey: item._entityKey,
-            entityKeyCol: item._entityKeyCol,
-            keyValue: item._entityKey,
-            keyColumn: item._entityKeyCol,
+            entityKey: ident.keyValue,
+            entityKeyCol: ident.keyColumn || undefined,
+            keyValue: ident.keyValue,
+            keyColumn: ident.keyColumn || undefined,
             headers
           });
           showToast('Sin conexión. La eliminación se guardó localmente en cola offline.', 'info', 'Modo Offline');
@@ -1968,22 +1985,29 @@ export const InventoryDashboard: React.FC = () => {
       const toastId = showToast(`Actualizando registros... ${totalEdit} restantes`, 'loading', 'Edición Masiva', 0);
       let remainingEdit = totalEdit;
 
-      for (const rowIndex of selectedRowIds) {
+      for (const rawRowIndex of selectedRowIds) {
+        const rowIndex = typeof rawRowIndex === 'number' ? rawRowIndex : parseInt(String(rawRowIndex), 10);
+        if (!rowIndex || isNaN(rowIndex) || rowIndex < 2) continue;
+
         const itemToUpdate = updatedItems.find(i => i._rowIndex === rowIndex);
         if (itemToUpdate) {
           const rowValues = currentHeaders.map(h => itemToUpdate[h] || '');
+          const ident = resolveItemIdentity(itemToUpdate, currentHeaders, activeSheet.title);
           try {
-            await updateRow(activeSheet.title, rowIndex, rowValues);
+            await updateRow(activeSheet.title, rowIndex, rowValues, {
+              entityKey: ident.keyValue,
+              keyValue: ident.keyValue
+            });
           } catch (err) {
             console.warn(`Error updating row ${rowIndex} in cloud, adding to offline queue`, err);
             await enqueueMutation({
               type: 'update',
               sheetTitle: activeSheet.title,
               rowIndex,
-              entityKey: itemToUpdate._entityKey,
-              entityKeyCol: itemToUpdate._entityKeyCol,
-              keyValue: itemToUpdate._entityKey,
-              keyColumn: itemToUpdate._entityKeyCol,
+              entityKey: ident.keyValue,
+              entityKeyCol: ident.keyColumn || undefined,
+              keyValue: ident.keyValue,
+              keyColumn: ident.keyColumn || undefined,
               headers: currentHeaders,
               values: rowValues
             });
@@ -2051,6 +2075,7 @@ export const InventoryDashboard: React.FC = () => {
           let remainingDelete = count;
           for (const rowIndex of sortedRowIds) {
             const itemToDelete = originalItems.find(i => i._rowIndex === rowIndex);
+            const ident = itemToDelete ? resolveItemIdentity(itemToDelete, headers, activeSheet.title) : null;
             try {
               await deleteRow(activeSheet.sheetId, rowIndex, activeSheet.title);
             } catch (err) {
@@ -2060,10 +2085,10 @@ export const InventoryDashboard: React.FC = () => {
                 sheetId: activeSheet.sheetId,
                 sheetTitle: activeSheet.title,
                 rowIndex,
-                entityKey: itemToDelete?._entityKey,
-                entityKeyCol: itemToDelete?._entityKeyCol,
-                keyValue: itemToDelete?._entityKey,
-                keyColumn: itemToDelete?._entityKeyCol,
+                entityKey: ident?.keyValue,
+                entityKeyCol: ident?.keyColumn || undefined,
+                keyValue: ident?.keyValue,
+                keyColumn: ident?.keyColumn || undefined,
                 headers
               });
             }

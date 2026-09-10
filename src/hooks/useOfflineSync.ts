@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { indexedDbService, OfflineMutation, AuditLogEntry } from '../db/indexedDbService';
 import { appendRow, updateRow, deleteRow, getSheetData, pingGoogleSheets } from '../lib/sheets';
 import { matchRowIndexByIdentity, buildRowIdentityIndex } from '../utils/entityIdentityResolver';
+import { findColumnBySemantic } from '../utils/columnAliases';
 import { backendMirrorService } from '../services/backendMirrorService';
 
 export type ConnectionHealthStatus = 'connected' | 'syncing' | 'offline' | 'unconfigured' | 'error';
@@ -251,57 +252,90 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
           if (mutation.type === 'append') {
             await appendRow(mutation.sheetTitle, mutation.values);
           } else if (mutation.type === 'update') {
-            let targetRowIndex = mutation.rowIndex;
+            let targetRowIndex: number | null = (typeof mutation.rowIndex === 'number' && !isNaN(mutation.rowIndex) && mutation.rowIndex > 1) 
+              ? Math.floor(mutation.rowIndex) 
+              : null;
 
-            // Re-resolve rowIndex by entity key if available to prevent corrupting shifted rows
-            if (mutation.keyValue && mutation.headers && mutation.headers.length > 0) {
-              try {
-                let currentRows = freshSheetsCache.get(mutation.sheetTitle);
-                let currentIndex = freshIndexesCache.get(mutation.sheetTitle);
+            // Re-resolve rowIndex by entity key if available to prevent corrupting shifted rows or fixing null indexes
+            const entityKey = mutation.keyValue || mutation.entityKey;
+            try {
+              let currentRows = freshSheetsCache.get(mutation.sheetTitle);
+              let currentIndex = freshIndexesCache.get(mutation.sheetTitle);
 
-                if (!currentRows) {
-                  currentRows = await getSheetData(mutation.sheetTitle, true);
-                  if (currentRows && currentRows.length > 0) {
-                    freshSheetsCache.set(mutation.sheetTitle, currentRows);
-                    currentIndex = buildRowIdentityIndex(currentRows, mutation.headers);
-                    freshIndexesCache.set(mutation.sheetTitle, currentIndex);
+              if (!currentRows) {
+                currentRows = await getSheetData(mutation.sheetTitle, true);
+                if (currentRows && currentRows.length > 0) {
+                  freshSheetsCache.set(mutation.sheetTitle, currentRows);
+                  const effectiveHeaders = (mutation.headers && mutation.headers.length > 0) 
+                    ? mutation.headers 
+                    : (currentRows[0] || []).map(String);
+                  currentIndex = buildRowIdentityIndex(currentRows, effectiveHeaders);
+                  freshIndexesCache.set(mutation.sheetTitle, currentIndex);
+                }
+              }
+
+              if (currentRows && currentRows.length > 0) {
+                const effectiveHeaders = (mutation.headers && mutation.headers.length > 0) 
+                  ? mutation.headers 
+                  : (currentRows[0] || []).map(String);
+
+                // If no direct entityKey was stored, try to extract it from the values array
+                let searchKey = entityKey;
+                if (!searchKey && mutation.values && Array.isArray(mutation.values)) {
+                  // Check if any column is SKU or CU_VC
+                  const skuCol = findColumnBySemantic(effectiveHeaders, 'sku');
+                  const cuCol = effectiveHeaders.find(h => /^cu(_|\s)?(vc|calculado)?$/i.test(h.trim()));
+                  if (cuCol) {
+                    const cIdx = effectiveHeaders.indexOf(cuCol);
+                    if (cIdx >= 0 && mutation.values[cIdx]) searchKey = String(mutation.values[cIdx]).trim();
+                  } else if (skuCol) {
+                    const sIdx = effectiveHeaders.indexOf(skuCol);
+                    if (sIdx >= 0 && mutation.values[sIdx]) searchKey = String(mutation.values[sIdx]).trim();
                   }
                 }
 
-                if (currentRows && currentRows.length > 0) {
+                if (searchKey) {
                   const resolvedRowIndex = matchRowIndexByIdentity(
                     {
                       keyColumn: mutation.keyColumn || mutation.entityKeyCol || null,
-                      keyValue: mutation.keyValue || mutation.entityKey || '',
+                      keyValue: searchKey,
                       isSynthetic: false,
-                      rowIndex: mutation.rowIndex || 0
+                      rowIndex: targetRowIndex || 0
                     },
                     currentRows,
-                    mutation.headers,
+                    effectiveHeaders,
                     currentIndex
                   );
                   if (resolvedRowIndex && resolvedRowIndex > 1) {
                     targetRowIndex = resolvedRowIndex;
                   }
                 }
-              } catch (e) {
-                console.warn('[OfflineSync] Could not re-resolve rowIndex by key, fallback to original rowIndex:', e);
               }
+            } catch (e) {
+              console.warn('[OfflineSync] Could not re-resolve rowIndex by key, fallback to available rowIndex:', e);
             }
 
             if (targetRowIndex && targetRowIndex > 1) {
-              await updateRow(mutation.sheetTitle, targetRowIndex, mutation.values);
+              await updateRow(mutation.sheetTitle, targetRowIndex, mutation.values, {
+                entityKey: entityKey,
+                keyValue: entityKey
+              });
               // Invalidate cached sheet so next mutation fetches updated state
               freshSheetsCache.delete(mutation.sheetTitle);
               freshIndexesCache.delete(mutation.sheetTitle);
             } else {
-              throw new Error(`Índice de fila inválido para actualización (${targetRowIndex})`);
+              // Fallback: If row could not be found to update, append it so data is never lost
+              console.warn(`[OfflineSync] Row index could not be located for update in "${mutation.sheetTitle}". Appending instead to preserve data.`);
+              await appendRow(mutation.sheetTitle, mutation.values);
             }
           } else if (mutation.type === 'delete') {
-            let targetRowIndex = mutation.rowIndex;
+            let targetRowIndex: number | null = (typeof mutation.rowIndex === 'number' && !isNaN(mutation.rowIndex) && mutation.rowIndex > 1) 
+              ? Math.floor(mutation.rowIndex) 
+              : null;
 
             // Re-resolve rowIndex by entity key if available
-            if (mutation.keyValue && mutation.headers && mutation.headers.length > 0) {
+            const entityKey = mutation.keyValue || mutation.entityKey;
+            if (entityKey) {
               try {
                 let currentRows = freshSheetsCache.get(mutation.sheetTitle);
                 let currentIndex = freshIndexesCache.get(mutation.sheetTitle);
@@ -310,21 +344,28 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
                   currentRows = await getSheetData(mutation.sheetTitle, true);
                   if (currentRows && currentRows.length > 0) {
                     freshSheetsCache.set(mutation.sheetTitle, currentRows);
-                    currentIndex = buildRowIdentityIndex(currentRows, mutation.headers);
+                    const effectiveHeaders = (mutation.headers && mutation.headers.length > 0) 
+                      ? mutation.headers 
+                      : (currentRows[0] || []).map(String);
+                    currentIndex = buildRowIdentityIndex(currentRows, effectiveHeaders);
                     freshIndexesCache.set(mutation.sheetTitle, currentIndex);
                   }
                 }
 
                 if (currentRows && currentRows.length > 0) {
+                  const effectiveHeaders = (mutation.headers && mutation.headers.length > 0) 
+                    ? mutation.headers 
+                    : (currentRows[0] || []).map(String);
+
                   const resolvedRowIndex = matchRowIndexByIdentity(
                     {
                       keyColumn: mutation.keyColumn || mutation.entityKeyCol || null,
-                      keyValue: mutation.keyValue || mutation.entityKey || '',
+                      keyValue: entityKey,
                       isSynthetic: false,
-                      rowIndex: mutation.rowIndex || 0
+                      rowIndex: targetRowIndex || 0
                     },
                     currentRows,
-                    mutation.headers,
+                    effectiveHeaders,
                     currentIndex
                   );
                   if (resolvedRowIndex && resolvedRowIndex > 1) {
@@ -342,7 +383,7 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
               freshSheetsCache.delete(mutation.sheetTitle);
               freshIndexesCache.delete(mutation.sheetTitle);
             } else {
-              throw new Error(`Índice de fila inválido para eliminación (${targetRowIndex})`);
+              console.warn(`[OfflineSync] Row for deletion not found in "${mutation.sheetTitle}", skipping.`);
             }
           }
 

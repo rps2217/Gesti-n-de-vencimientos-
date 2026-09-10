@@ -6,7 +6,8 @@ import {
   Package, Search, Eye, EyeOff, Sparkles, Layers, FileSpreadsheet, 
   Tag, Barcode, Hash, MapPin, Sliders, ShieldCheck, Database,
   ArrowUpRight, ArrowDownRight, ChevronRight, HelpCircle,
-  Lock, Unlock, ListTodo, Zap, Copy, MessageSquare, CheckCheck, Share2, FileWarning, Store
+  Lock, Unlock, ListTodo, Zap, Copy, MessageSquare, CheckCheck, Share2, FileWarning, Store,
+  Camera, Smartphone
 } from 'lucide-react';
 import { 
   StockCountSession, 
@@ -35,6 +36,7 @@ import {
 } from '../../utils/stockCountUtils';
 import { saveAuditRowsToDedicatedSheet } from '../../lib/sheets';
 import { CampaignConsolidationDashboard } from './CampaignConsolidationDashboard';
+import { MobileCameraBarcodeScanner } from './MobileCameraBarcodeScanner';
 import { searchMasterProducts, findMasterProduct, getMasterProductSummary } from '../../utils/referenceResolver';
 import { formatLocaleNumber, parseLocaleNumber } from '../../utils/pureCalculations';
 import { copyTextToClipboard } from '../../utils/exportUtils';
@@ -170,6 +172,9 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
   const [catalogSearchResults, setCatalogSearchResults] = useState<any[]>([]);
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const skuInputRef = useRef<HTMLInputElement>(null);
+
+  // Mobile / PDA camera scanner state
+  const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
 
   // Reconciliation filter
   const [reconciliationFilter, setReconciliationFilter] = useState<'ALL' | 'DIF' | 'CUADRADO' | 'FALTANTE' | 'SOBRANTE' | 'NO_CATALOGADO'>('ALL');
@@ -365,6 +370,36 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
     setTimeout(() => {
       skuInputRef.current?.focus();
     }, 50);
+  };
+
+  // Direct scan handler for Mobile / PDA Camera Scanner
+  const handleCameraScanCode = (code: string) => {
+    if (!currentSession) return;
+    const cleanSku = code.trim();
+    if (!cleanSku) return;
+
+    // Fetch product info from catalog
+    const master = findMasterProduct(cleanSku, masterProducts);
+    const summary = master ? getMasterProductSummary(master) : null;
+    const finalDesc = summary ? summary.name : 'Producto sin descripción';
+    setSelectedProductDesc(finalDesc);
+
+    const qty = isBurstScanMode ? 1 : countQuantity;
+
+    if (currentSession.requiereVencimiento) {
+      const previousMatch = currentSession.conteos.find(c => c.sku === cleanSku && c.mm && c.yyyy);
+      if (previousMatch) {
+        commitCountEntry(cleanSku, previousMatch.mm, previousMatch.yyyy, false);
+      } else {
+        // Close camera scanner and ask for expiration date prompt
+        setIsCameraScannerOpen(false);
+        setExpiryPromptSku(cleanSku);
+        setTempMm('');
+        setTempYyyy('');
+      }
+    } else {
+      commitCountEntry(cleanSku, undefined, undefined, false);
+    }
   };
 
   const handleSkuScannedOrEntered = (e?: React.FormEvent) => {
@@ -1255,37 +1290,50 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                     
                     {/* SKU / Barcode input */}
                     <div className="relative">
-                      <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5 flex items-center justify-between">
-                        <span className="flex items-center gap-1.5">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
                           <Barcode className="w-4 h-4 text-blue-600" />
                           <span>Escanear Código / Digitar SKU</span>
-                        </span>
+                        </label>
                         {selectedProductDesc && (
-                          <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 truncate max-w-[250px]">
+                          <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 truncate max-w-[200px] sm:max-w-[280px]">
                             ✓ {selectedProductDesc}
                           </span>
                         )}
-                      </label>
+                      </div>
 
-                      <div className="relative">
-                        <input
-                          ref={skuInputRef}
-                          type="text"
-                          value={scannedSku}
-                          onChange={(e) => handleSkuChange(e.target.value)}
-                          placeholder="Ej: 2000210218569 o buscar por nombre..."
-                          className="w-full pl-4 pr-10 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-base font-bold text-slate-800 dark:text-slate-100 focus:border-blue-600 outline-none transition-all"
-                          autoComplete="off"
-                        />
-                        {scannedSku && (
-                          <button
-                            type="button"
-                            onClick={() => handleSkuChange('')}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        )}
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <input
+                            ref={skuInputRef}
+                            type="text"
+                            value={scannedSku}
+                            onChange={(e) => handleSkuChange(e.target.value)}
+                            placeholder="Ej: 2000210218569 o buscar por nombre..."
+                            className="w-full pl-4 pr-10 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-base font-bold text-slate-800 dark:text-slate-100 focus:border-blue-600 outline-none transition-all shadow-inner"
+                            autoComplete="off"
+                          />
+                          {scannedSku && (
+                            <button
+                              type="button"
+                              onClick={() => handleSkuChange('')}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Mobile Camera Scan Launcher Button */}
+                        <button
+                          type="button"
+                          onClick={() => setIsCameraScannerOpen(true)}
+                          className="px-3.5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl shadow-md shadow-blue-500/25 active:scale-95 transition-all flex items-center gap-1.5 font-bold text-xs shrink-0 cursor-pointer"
+                          title="Abrir lector con cámara de celular o PDA"
+                        >
+                          <Camera className="w-4 h-4" />
+                          <span className="hidden sm:inline">Cámara / PDA</span>
+                        </button>
                       </div>
 
                       {/* Autocomplete dropdown from master catalog */}
@@ -1853,6 +1901,17 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
             </div>
 
           </div>
+        )}
+
+        {/* Mobile Camera Barcode Scanner Modal for PDA / Cellphones */}
+        {currentSession && (
+          <MobileCameraBarcodeScanner
+            isOpen={isCameraScannerOpen}
+            onClose={() => setIsCameraScannerOpen(false)}
+            onScan={handleCameraScanCode}
+            activeLocation={countLocation || currentSession.ubicacion}
+            sessionName={currentSession.nombre}
+          />
         )}
       </div>
   );

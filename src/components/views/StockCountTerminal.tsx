@@ -176,6 +176,9 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
   // Mobile / PDA camera scanner state
   const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
 
+  // Readings view mode: 'GROUPED' (consolidated by SKU) vs 'CHRONO' (chronological individual log)
+  const [readingsViewMode, setReadingsViewMode] = useState<'GROUPED' | 'CHRONO'>('GROUPED');
+
   // Reconciliation filter
   const [reconciliationFilter, setReconciliationFilter] = useState<'ALL' | 'DIF' | 'CUADRADO' | 'FALTANTE' | 'SOBRANTE' | 'NO_CATALOGADO'>('ALL');
   const [isSyncingToSheet, setIsSyncingToSheet] = useState(false);
@@ -470,6 +473,125 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
     showToast('Lectura eliminada del conteo', 'info');
   };
 
+  // Group count entries by SKU for consolidated view on mobile/desktop
+  const groupedSkuEntries = useMemo(() => {
+    if (!currentSession) return [];
+    const map = new Map<string, {
+      sku: string;
+      descripcion: string;
+      totalCantidad: number;
+      readingsCount: number;
+      lastTimestamp: string;
+      ubicaciones: string[];
+      mm?: string;
+      yyyy?: string;
+      entries: StockCountEntry[];
+    }>();
+
+    for (const entry of currentSession.conteos) {
+      const existing = map.get(entry.sku);
+      if (!existing) {
+        map.set(entry.sku, {
+          sku: entry.sku,
+          descripcion: entry.descripcion,
+          totalCantidad: entry.cantidad,
+          readingsCount: 1,
+          lastTimestamp: entry.timestamp,
+          ubicaciones: entry.ubicacion ? [entry.ubicacion] : [],
+          mm: entry.mm,
+          yyyy: entry.yyyy,
+          entries: [entry]
+        });
+      } else {
+        existing.totalCantidad += entry.cantidad;
+        existing.readingsCount += 1;
+        if (entry.ubicacion && !existing.ubicaciones.includes(entry.ubicacion)) {
+          existing.ubicaciones.push(entry.ubicacion);
+        }
+        if (!existing.mm && entry.mm) {
+          existing.mm = entry.mm;
+          existing.yyyy = entry.yyyy;
+        }
+        existing.entries.push(entry);
+      }
+    }
+
+    return Array.from(map.values());
+  }, [currentSession]);
+
+  // Increment quantity for a specific SKU (+1) directly from the grouped card
+  const handleIncrementSkuQuantity = (sku: string) => {
+    if (!currentSession) return;
+    const existingEntries = currentSession.conteos.filter(c => c.sku === sku);
+    if (existingEntries.length === 0) return;
+    const latest = existingEntries[0];
+    const newEntry: StockCountEntry = {
+      ...latest,
+      id: generateShortVcId(),
+      cantidad: 1,
+      timestamp: new Date().toISOString()
+    };
+    setSessions(prev => prev.map(s => {
+      if (s.id === currentSession.id) {
+        return {
+          ...s,
+          conteos: [newEntry, ...s.conteos]
+        };
+      }
+      return s;
+    }));
+    playBeep('success');
+  };
+
+  // Decrement quantity for a specific SKU (-1) directly from the grouped card
+  const handleDecrementSkuQuantity = (sku: string) => {
+    if (!currentSession) return;
+    const existingEntries = currentSession.conteos.filter(c => c.sku === sku);
+    if (existingEntries.length === 0) return;
+    
+    const latest = existingEntries[0];
+    if (latest.cantidad > 1) {
+      setSessions(prev => prev.map(s => {
+        if (s.id === currentSession.id) {
+          return {
+            ...s,
+            conteos: s.conteos.map(c => c.id === latest.id ? { ...c, cantidad: c.cantidad - 1 } : c)
+          };
+        }
+        return s;
+      }));
+    } else {
+      setSessions(prev => prev.map(s => {
+        if (s.id === currentSession.id) {
+          return {
+            ...s,
+            conteos: s.conteos.filter(c => c.id !== latest.id)
+          };
+        }
+        return s;
+      }));
+    }
+    playBeep('skip');
+  };
+
+  // Remove all count entries for a specific SKU
+  const handleRemoveSkuAllEntries = (sku: string, desc: string) => {
+    if (!currentSession) return;
+    if (confirm(`¿Eliminar todas las lecturas registradas para el SKU ${sku} (${desc})?`)) {
+      setSessions(prev => prev.map(s => {
+        if (s.id === currentSession.id) {
+          return {
+            ...s,
+            conteos: s.conteos.filter(c => c.sku !== sku)
+          };
+        }
+        return s;
+      }));
+      playBeep('skip');
+      showToast(`Lecturas del SKU ${sku} eliminadas`, 'info');
+    }
+  };
+
   // Update adjustment for stock in motion
   const handleUpdateAdjustment = (itemKey: string, value: number) => {
     if (!activeSessionId) return;
@@ -759,76 +881,104 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
         {/* ======================================================== */}
         {/* HEADER                                                  */}
         {/* ======================================================== */}
-        <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-500/20">
-              <Barcode className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold tracking-tight">
-                  Módulo de Conteo de Existencias
-                </h2>
-                {currentSession && viewState !== 'CAMPAIGN' && (
-                  <span className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
-                    currentSession.modo === 'BLIND' 
-                      ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
-                      : 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
-                  }`}>
-                    {currentSession.modo === 'BLIND' ? 'Conteo a Ciegas' : 'Contra Documento'}
-                  </span>
-                )}
+        <div className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 shrink-0">
+          <div className="px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="p-2 sm:p-2.5 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-500/20 shrink-0">
+                <Barcode className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {viewState === 'CAMPAIGN' && 'Consolidación global de campaña, snapshots de ERP y cuadratura de farmacia.'}
-                {viewState === 'LIST' && 'Administra sesiones de conteo por mueble o pasillo.'}
-                {viewState === 'COUNTING' && `Sesión activa: ${currentSession?.nombre} • ${currentSession?.conteos.length || 0} lecturas registradas`}
-                {viewState === 'RECONCILIATION' && `Cuadratura de Sesión: ${currentSession?.nombre} • Comparativa Físico vs Teórico`}
-              </p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-sm sm:text-base md:text-lg font-bold tracking-tight truncate">
+                    Conteo de Existencias
+                  </h2>
+                  {currentSession && viewState !== 'CAMPAIGN' && (
+                    <span className={`text-[10px] sm:text-[11px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
+                      currentSession.modo === 'BLIND' 
+                        ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                        : 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+                    }`}>
+                      {currentSession.modo === 'BLIND' ? 'A Ciegas' : 'Contra Doc.'}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
+                  {viewState === 'CAMPAIGN' && 'Consolidación global, snapshots de ERP y cuadratura de farmacia.'}
+                  {viewState === 'LIST' && 'Administra sesiones de conteo por mueble o pasillo.'}
+                  {viewState === 'COUNTING' && `${currentSession?.nombre || 'Sesión activa'} • ${currentSession?.conteos.length || 0} lecturas`}
+                  {viewState === 'RECONCILIATION' && `Cuadratura: ${currentSession?.nombre || ''}`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => onClose ? onClose() : navigate('/')}
+                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                title="Cerrar módulo de conteo"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Sub-bar Navigation Pills (Horizontally Scrollable on Mobile) */}
+          <div className="px-3 sm:px-6 py-1.5 bg-slate-100/70 dark:bg-slate-900/60 border-t border-slate-200/70 dark:border-slate-800/70 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             {/* Tab: Campaña Farmacia */}
             <button
               onClick={() => setViewState('CAMPAIGN')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
                 viewState === 'CAMPAIGN'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
               }`}
             >
               <Store className="w-3.5 h-3.5" />
-              <span>Matriz Campaña Farmacia</span>
+              <span>Matriz Campaña</span>
             </button>
 
             {/* Tab: Sesiones por Mueble */}
             <button
               onClick={() => setViewState('LIST')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
                 viewState === 'LIST'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Sesiones por Mueble ({sessions.length})</span>
+              <span>Sesiones ({sessions.length})</span>
             </button>
 
-            {/* If in counting or reconciliation, show badge to jump back */}
-            {viewState === 'COUNTING' && (
-              <span className="px-2.5 py-1 text-xs font-bold bg-amber-500 text-white rounded-xl flex items-center gap-1">
-                <Play className="w-3 h-3" />
-                <span>Pistoleando</span>
-              </span>
+            {/* Tab: Active Pistoleo (if session exists) */}
+            {currentSession && (
+              <button
+                onClick={() => setViewState('COUNTING')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+                  viewState === 'COUNTING'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40'
+                }`}
+              >
+                <Play className="w-3.5 h-3.5" />
+                <span>Pistoleando ({currentSession.conteos.length})</span>
+              </button>
             )}
 
-            <button
-              onClick={() => onClose ? onClose() : navigate('/')}
-              className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            {/* Tab: Cuadratura (if session exists) */}
+            {currentSession && (
+              <button
+                onClick={() => setViewState('RECONCILIATION')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+                  viewState === 'RECONCILIATION'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+                }`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Cuadratura</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -1105,14 +1255,14 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
         {/* BODY - VIEW 2: ACTIVE COUNTING TERMINAL                  */}
         {/* ======================================================== */}
         {viewState === 'COUNTING' && currentSession && (
-          <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+          <div className="flex-1 overflow-hidden flex flex-col md:flex-row relative">
             
             {/* Left: Input & Keypad Terminal */}
-            <div className="flex-1 p-6 overflow-y-auto border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between">
+            <div className="flex-1 p-3.5 sm:p-5 md:p-6 overflow-y-auto border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between pb-24 md:pb-6">
               <div>
                 {/* Session Context & Location Bar */}
-                <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between flex-1">
+                <div className="flex flex-col sm:flex-row gap-2 mb-3.5 sm:mb-4">
+                  <div className="p-2.5 sm:p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between flex-1">
                     <div className="flex items-center gap-2 truncate pr-2">
                       <span className="text-xs font-bold text-slate-500 shrink-0">Sesión:</span>
                       <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{currentSession.nombre}</span>
@@ -1121,7 +1271,7 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                     <div className="flex items-center gap-2 shrink-0">
                       <button
                         onClick={() => setViewState('RECONCILIATION')}
-                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
+                        className="px-2.5 sm:px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span>Cuadratura</span>
@@ -1130,14 +1280,14 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                   </div>
 
                   {/* Active Location / Pasillo with Lock Toggle & Burst Mode */}
-                  <div className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-2">
+                  <div className="p-2 sm:p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 sm:gap-2">
                     <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
                     <input
                       type="text"
                       value={countLocation}
                       onChange={(e) => setCountLocation(e.target.value)}
-                      placeholder="Ubicación / Pasillo..."
-                      className="w-28 sm:w-36 bg-white dark:bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="Ubicación..."
+                      className="w-24 sm:w-36 bg-white dark:bg-slate-900 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:ring-1 focus:ring-blue-500"
                     />
                     <button
                       type="button"
@@ -1152,7 +1302,7 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                           ? 'bg-amber-500 text-white shadow-sm'
                           : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
                       }`}
-                      title={isLocationLocked ? 'Ubicación FIJA (se mantiene en cada escaneo)' : 'Ubicación LIBRE (se borra en cada escaneo)'}
+                      title={isLocationLocked ? 'Ubicación FIJA' : 'Ubicación LIBRE'}
                     >
                       {isLocationLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
                     </button>
@@ -1165,33 +1315,33 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                         const nextBurst = !isBurstScanMode;
                         setIsBurstScanMode(nextBurst);
                         playBeep('success');
-                        showToast(nextBurst ? 'Modo Ráfaga activado (+1 continuo)' : 'Modo Manual activado', 'info');
+                        showToast(nextBurst ? 'Modo Ráfaga activado (+1)' : 'Modo Manual activado', 'info');
                       }}
                       className={`px-2 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
                         isBurstScanMode
                           ? 'bg-indigo-600 text-white shadow-sm'
                           : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
                       }`}
-                      title={isBurstScanMode ? 'Modo Ráfaga: escaneo continuo con +1 automático' : 'Modo Manual: ajuste de cantidad previo'}
+                      title={isBurstScanMode ? 'Modo Ráfaga: escaneo continuo con +1 automático' : 'Modo Manual: ajuste de cantidad'}
                     >
                       <Zap className={`w-3.5 h-3.5 ${isBurstScanMode ? 'fill-current' : ''}`} />
-                      <span className="hidden sm:inline">{isBurstScanMode ? 'Ráfaga' : 'Manual'}</span>
+                      <span className="text-[11px] font-bold">{isBurstScanMode ? 'Ráfaga' : 'Manual'}</span>
                     </button>
                   </div>
                 </div>
 
                 {expiryPromptSku ? (
-                  <div className="bg-blue-50/70 dark:bg-slate-800 p-6 rounded-2xl border-2 border-blue-400 dark:border-blue-900 shadow-lg animate-in zoom-in-95 duration-150">
-                    <div className="flex items-start justify-between gap-3 mb-4">
+                  <div className="bg-blue-50/80 dark:bg-slate-800 p-4 sm:p-6 rounded-2xl border-2 border-blue-400 dark:border-blue-900 shadow-lg animate-in zoom-in-95 duration-150">
+                    <div className="flex items-start justify-between gap-3 mb-3 sm:mb-4">
                       <div>
                         <span className="text-[10px] font-extrabold uppercase tracking-widest text-blue-600 dark:text-blue-400 block">
-                          Asistente de Vencimiento Requerido
+                          Asistente de Vencimiento
                         </span>
-                        <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100 mt-1">
+                        <h3 className="text-sm sm:text-base font-extrabold text-slate-800 dark:text-slate-100 mt-0.5">
                           ¿Cuándo vence {selectedProductDesc || 'este producto'}?
                         </h3>
-                        <p className="text-xs text-slate-500 font-mono mt-0.5">
-                          SKU: {expiryPromptSku} • Cantidad: {countQuantity} {countLocation ? `• Ubicador: ${countLocation}` : ''}
+                        <p className="text-[11px] sm:text-xs text-slate-500 font-mono mt-0.5">
+                          SKU: {expiryPromptSku} • Cantidad: {countQuantity} {countLocation ? `• Ubic: ${countLocation}` : ''}
                         </p>
                       </div>
                       <button
@@ -1200,17 +1350,17 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                           setExpiryPromptSku(null);
                           playBeep('skip');
                         }}
-                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-slate-400 hover:text-slate-600 transition-colors"
+                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
                       >
                         <X className="w-5 h-5" />
                       </button>
                     </div>
 
                     {/* Expiry Selector (Mes / Año) */}
-                    <div className="flex flex-col gap-4 mb-5">
-                      {/* Year Selector First (Or Month) */}
+                    <div className="flex flex-col gap-3 sm:gap-4 mb-4">
+                      {/* Year Selector */}
                       <div>
-                        <span className="text-xs font-bold text-slate-500 mb-2 block">1. Selecciona el Año de Vencimiento</span>
+                        <span className="text-xs font-bold text-slate-500 mb-1.5 block">1. Selecciona Año</span>
                         <div className="flex flex-wrap gap-1.5">
                           {yearsList.map(y => {
                             const isSelected = tempYyyy === y;
@@ -1220,14 +1370,13 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                                 type="button"
                                 onClick={() => {
                                   setTempYyyy(y);
-                                  // Auto-commit if month is already selected
                                   if (tempMm) {
                                     commitCountEntry(expiryPromptSku, tempMm, y, false);
                                   } else {
-                                    showToast('Ahora selecciona el mes de vencimiento', 'info');
+                                    showToast('Ahora selecciona el mes', 'info');
                                   }
                                 }}
-                                className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all border cursor-pointer ${
+                                className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-extrabold transition-all border cursor-pointer ${
                                   isSelected
                                     ? 'bg-blue-600 border-blue-600 text-white shadow-md scale-[1.03]'
                                     : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -1242,7 +1391,7 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
 
                       {/* Month Selector */}
                       <div>
-                        <span className="text-xs font-bold text-slate-500 mb-2 block">2. Selecciona el Mes</span>
+                        <span className="text-xs font-bold text-slate-500 mb-1.5 block">2. Selecciona Mes</span>
                         <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
                           {MONTHS_LIST.map(m => {
                             const isSelected = tempMm === m.val;
@@ -1252,14 +1401,13 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                                 type="button"
                                 onClick={() => {
                                   setTempMm(m.val);
-                                  // Auto-commit if year is already selected
                                   if (tempYyyy) {
                                     commitCountEntry(expiryPromptSku, m.val, tempYyyy, false);
                                   } else {
-                                    showToast('Ahora selecciona el año de vencimiento', 'info');
+                                    showToast('Ahora selecciona el año', 'info');
                                   }
                                 }}
-                                className={`py-2.5 px-1.5 rounded-xl text-xs font-extrabold transition-all text-center border cursor-pointer ${
+                                className={`py-2 px-1 rounded-xl text-xs font-extrabold transition-all text-center border cursor-pointer ${
                                   isSelected
                                     ? 'bg-blue-600 border-blue-600 text-white shadow-md scale-[1.02]'
                                     : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -1273,30 +1421,29 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                      {/* Omitir Fecha Button */}
+                    <div className="flex gap-2 pt-2.5 border-t border-slate-200 dark:border-slate-700">
                       <button
                         type="button"
                         onClick={() => commitCountEntry(expiryPromptSku, undefined, undefined, true)}
-                        className="flex-1 py-3 px-4 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+                        className="flex-1 py-2.5 px-3 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                       >
-                        <Calendar className="w-4 h-4 text-slate-500" />
-                        <span>Omitir Fecha (No gestionar vencimiento)</span>
+                        <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Omitir Fecha (Sin Vencimiento)</span>
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <form onSubmit={handleSkuScannedOrEntered} className="flex flex-col gap-4">
+                  <form onSubmit={handleSkuScannedOrEntered} className="flex flex-col gap-3.5 sm:gap-4">
                     
                     {/* SKU / Barcode input */}
                     <div className="relative">
                       <div className="flex items-center justify-between mb-1.5">
                         <label className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
                           <Barcode className="w-4 h-4 text-blue-600" />
-                          <span>Escanear Código / Digitar SKU</span>
+                          <span>Escanear Código / SKU</span>
                         </label>
                         {selectedProductDesc && (
-                          <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 truncate max-w-[200px] sm:max-w-[280px]">
+                          <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 truncate max-w-[180px] sm:max-w-[280px]">
                             ✓ {selectedProductDesc}
                           </span>
                         )}
@@ -1309,15 +1456,15 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                             type="text"
                             value={scannedSku}
                             onChange={(e) => handleSkuChange(e.target.value)}
-                            placeholder="Ej: 2000210218569 o buscar por nombre..."
-                            className="w-full pl-4 pr-10 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-base font-bold text-slate-800 dark:text-slate-100 focus:border-blue-600 outline-none transition-all shadow-inner"
+                            placeholder="Escanear o buscar SKU..."
+                            className="w-full pl-3.5 pr-9 py-2.5 sm:py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-base font-bold text-slate-800 dark:text-slate-100 focus:border-blue-600 outline-none transition-all shadow-inner"
                             autoComplete="off"
                           />
                           {scannedSku && (
                             <button
                               type="button"
                               onClick={() => handleSkuChange('')}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
                             >
                               <X className="w-4 h-4" />
                             </button>
@@ -1328,7 +1475,7 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                         <button
                           type="button"
                           onClick={() => setIsCameraScannerOpen(true)}
-                          className="px-3.5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl shadow-md shadow-blue-500/25 active:scale-95 transition-all flex items-center gap-1.5 font-bold text-xs shrink-0 cursor-pointer"
+                          className="px-3.5 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl shadow-md shadow-blue-500/25 active:scale-95 transition-all flex items-center gap-1.5 font-bold text-xs shrink-0 cursor-pointer min-h-[44px]"
                           title="Abrir lector con cámara de celular o PDA"
                         >
                           <Camera className="w-4 h-4" />
@@ -1347,7 +1494,7 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                               key={prod.sku}
                               type="button"
                               onClick={() => handleSelectProductFromCatalog(prod)}
-                              className="w-full text-left px-3 py-2 rounded-lg hover:bg-blue-50 dark:hover:bg-slate-700 flex items-center justify-between text-xs transition-colors"
+                              className="w-full text-left px-3 py-2 rounded-lg hover:bg-blue-50 dark:hover:bg-slate-700 flex items-center justify-between text-xs transition-colors cursor-pointer"
                             >
                               <div className="truncate pr-2">
                                 <span className="font-bold text-blue-600 dark:text-blue-400 font-mono mr-2">{prod.sku}</span>
@@ -1362,10 +1509,10 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
 
                     {/* Expiry Status Indicator for Fast Scanners */}
                     {currentSession.requiereVencimiento && (
-                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 leading-tight flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 leading-tight flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-blue-500 shrink-0" />
                         <span>
-                          La fecha de vencimiento se solicitará de forma secuencial al registrar un SKU por primera vez. Para los siguientes escaneos del mismo SKU, se reutilizará de forma automática.
+                          Solicita vencimiento en la 1ra lectura por SKU y lo reutiliza de forma automática en los siguientes escaneos.
                         </span>
                       </div>
                     )}
@@ -1383,7 +1530,7 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                         <button
                           type="button"
                           onClick={() => setCountQuantity(Math.max(1, countQuantity - 1))}
-                          className="p-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl font-bold text-slate-700 dark:text-slate-200 transition-colors"
+                          className="p-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl font-bold text-slate-700 dark:text-slate-200 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
                         >
                           <Minus className="w-5 h-5" />
                         </button>
@@ -1393,13 +1540,13 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                           min="1"
                           value={countQuantity}
                           onChange={(e) => setCountQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                          className="flex-1 py-3 text-center rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xl font-extrabold text-blue-600 dark:text-blue-400 focus:border-blue-600 outline-none"
+                          className="flex-1 py-2.5 sm:py-3 text-center rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xl font-extrabold text-blue-600 dark:text-blue-400 focus:border-blue-600 outline-none"
                         />
 
                         <button
                           type="button"
                           onClick={() => setCountQuantity(countQuantity + 1)}
-                          className="p-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl font-bold text-slate-700 dark:text-slate-200 transition-colors"
+                          className="p-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl font-bold text-slate-700 dark:text-slate-200 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
                         >
                           <Plus className="w-5 h-5" />
                         </button>
@@ -1412,7 +1559,7 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                             key={inc}
                             type="button"
                             onClick={() => setCountQuantity(inc)}
-                            className="py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 rounded-lg transition-colors"
+                            className="py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 rounded-lg transition-colors cursor-pointer min-h-[38px]"
                           >
                             +{inc}
                           </button>
@@ -1423,7 +1570,7 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                     {/* Submit Button */}
                     <button
                       type="submit"
-                      className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer mt-1"
+                      className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer mt-0.5 min-h-[48px]"
                     >
                       <Plus className="w-5 h-5" />
                       <span>Registrar Lectura</span>
@@ -1432,8 +1579,8 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                 )}
               </div>
 
-              {/* Bottom Quick KPI */}
-              <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+              {/* Bottom Quick KPI (Desktop view) */}
+              <div className="hidden md:flex mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 items-center justify-between text-xs">
                 <span className="text-slate-500">Total en sesión:</span>
                 <span className="font-bold text-slate-800 dark:text-slate-100">
                   {currentSession.conteos.length} lecturas • {formatLocaleNumber(currentSession.conteos.reduce((a, b) => a + b.cantidad, 0))} unidades
@@ -1442,9 +1589,9 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
             </div>
 
             {/* Right: Readings History & Pending Checklist Tabs */}
-            <div className="w-full md:w-80 lg:w-96 bg-slate-50 dark:bg-slate-800/40 p-4 flex flex-col border-t md:border-t-0 border-slate-200 dark:border-slate-800">
+            <div className="w-full md:w-80 lg:w-96 bg-slate-50 dark:bg-slate-800/40 p-3 sm:p-4 flex flex-col border-t md:border-t-0 border-slate-200 dark:border-slate-800 pb-24 md:pb-4">
               {/* Tab Selector Header */}
-              <div className="flex items-center p-1 bg-slate-200/80 dark:bg-slate-900 rounded-xl mb-3">
+              <div className="flex items-center p-1 bg-slate-200/80 dark:bg-slate-900 rounded-xl mb-2.5">
                 <button
                   type="button"
                   onClick={() => setRightTab('READINGS')}
@@ -1478,51 +1625,154 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                   <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-slate-400">
                     <Barcode className="w-8 h-8 mb-2 opacity-40" />
                     <p className="text-xs font-semibold">Esperando primera lectura...</p>
-                    <p className="text-[11px] mt-1 text-slate-400">Escanea o ingresa un SKU a la izquierda para comenzar.</p>
+                    <p className="text-[11px] mt-1 text-slate-400">Escanea o ingresa un SKU para comenzar.</p>
                   </div>
                 ) : (
-                  <div className="flex-1 overflow-y-auto flex flex-col gap-2 pr-1">
-                    {currentSession.conteos.map(entry => (
-                      <div
-                        key={entry.id}
-                        className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between text-xs"
-                      >
-                        <div className="truncate pr-2">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{entry.sku}</span>
-                            {entry.mm && entry.yyyy && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300">
-                                {entry.mm}/{entry.yyyy}
-                              </span>
-                            )}
-                            {entry.ubicacion && (
-                              <span className="text-[9px] font-semibold text-slate-400 flex items-center gap-0.5">
-                                <MapPin className="w-2.5 h-2.5" /> {entry.ubicacion}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-slate-600 dark:text-slate-300 truncate font-medium mt-0.5">
-                            {entry.descripcion}
-                          </p>
-                          <span className="text-[10px] text-slate-400">
-                            {new Date(entry.timestamp).toLocaleTimeString('es-CL')}
-                          </span>
-                        </div>
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    {/* View Switcher: Agrupado por SKU vs Cronológico */}
+                    <div className="flex items-center justify-between mb-2 px-1">
+                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                        {readingsViewMode === 'GROUPED' ? `${groupedSkuEntries.length} SKUs Únicos` : `${currentSession.conteos.length} Lecturas`}
+                      </span>
 
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-sm text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-lg">
-                            +{entry.cantidad}
-                          </span>
-                          <button
-                            onClick={() => handleRemoveEntry(entry.id)}
-                            className="text-slate-400 hover:text-red-600 p-1 transition-colors"
-                            title="Eliminar lectura"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                      <div className="flex items-center bg-slate-200/80 dark:bg-slate-900 rounded-lg p-0.5 text-[11px] font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setReadingsViewMode('GROUPED')}
+                          className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                            readingsViewMode === 'GROUPED'
+                              ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs'
+                              : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          Agrupado
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReadingsViewMode('CHRONO')}
+                          className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                            readingsViewMode === 'CHRONO'
+                              ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs'
+                              : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          Historial
+                        </button>
                       </div>
-                    ))}
+                    </div>
+
+                    {/* Grouped View (Consolidated by SKU) */}
+                    {readingsViewMode === 'GROUPED' ? (
+                      <div className="flex-1 overflow-y-auto flex flex-col gap-2 pr-1">
+                        {groupedSkuEntries.map(group => (
+                          <div
+                            key={group.sku}
+                            className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between text-xs"
+                          >
+                            <div className="truncate pr-2 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{group.sku}</span>
+                                {group.mm && group.yyyy && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300">
+                                    {group.mm}/{group.yyyy}
+                                  </span>
+                                )}
+                                {group.ubicaciones.length > 0 && (
+                                  <span className="text-[9px] font-semibold text-slate-400 flex items-center gap-0.5">
+                                    <MapPin className="w-2.5 h-2.5" /> {group.ubicaciones.join(', ')}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-slate-700 dark:text-slate-200 truncate font-medium mt-0.5 text-xs">
+                                {group.descripcion}
+                              </p>
+                              <span className="text-[10px] text-slate-400">
+                                {group.readingsCount} {group.readingsCount === 1 ? 'escaneo' : 'escaneos'}
+                              </span>
+                            </div>
+
+                            {/* Quick Steppers & Actions */}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleDecrementSkuQuantity(group.sku)}
+                                className="w-7 h-7 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg font-extrabold text-slate-700 dark:text-slate-200 flex items-center justify-center cursor-pointer active:scale-95 transition-all text-xs"
+                                title="Reducir 1 unidad"
+                              >
+                                -
+                              </button>
+
+                              <span className="font-extrabold text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2 py-1 rounded-lg min-w-[36px] text-center">
+                                {group.totalCantidad}
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() => handleIncrementSkuQuantity(group.sku)}
+                                className="w-7 h-7 bg-blue-100 dark:bg-blue-900/60 hover:bg-blue-200 dark:hover:bg-blue-800/60 rounded-lg font-extrabold text-blue-700 dark:text-blue-300 flex items-center justify-center cursor-pointer active:scale-95 transition-all text-xs"
+                                title="Sumar 1 unidad (+1)"
+                              >
+                                +
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSkuAllEntries(group.sku, group.descripcion)}
+                                className="text-slate-400 hover:text-red-600 p-1 transition-colors ml-0.5 cursor-pointer"
+                                title="Eliminar todas las lecturas de este SKU"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      /* Chronological View (Individual Scans) */
+                      <div className="flex-1 overflow-y-auto flex flex-col gap-2 pr-1">
+                        {currentSession.conteos.map(entry => (
+                          <div
+                            key={entry.id}
+                            className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between text-xs"
+                          >
+                            <div className="truncate pr-2">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{entry.sku}</span>
+                                {entry.mm && entry.yyyy && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300">
+                                    {entry.mm}/{entry.yyyy}
+                                  </span>
+                                )}
+                                {entry.ubicacion && (
+                                  <span className="text-[9px] font-semibold text-slate-400 flex items-center gap-0.5">
+                                    <MapPin className="w-2.5 h-2.5" /> {entry.ubicacion}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-slate-600 dark:text-slate-300 truncate font-medium mt-0.5">
+                                {entry.descripcion}
+                              </p>
+                              <span className="text-[10px] text-slate-400">
+                                {new Date(entry.timestamp).toLocaleTimeString('es-CL')}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="font-extrabold text-sm text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-lg">
+                                +{entry.cantidad}
+                              </span>
+                              <button
+                                onClick={() => handleRemoveEntry(entry.id)}
+                                className="text-slate-400 hover:text-red-600 p-1 transition-colors cursor-pointer"
+                                title="Eliminar lectura"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )
               ) : (
@@ -1580,6 +1830,36 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                   )}
                 </div>
               )}
+            </div>
+
+            {/* Fixed Mobile Bottom Action Bar (visible on mobile screens during active count) */}
+            <div className="md:hidden fixed bottom-0 left-0 right-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 p-2.5 px-3 flex items-center justify-between gap-2 shadow-2xl safe-bottom">
+              <div className="truncate pr-1">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block leading-tight">Total Sesión</span>
+                <span className="text-xs font-extrabold text-slate-800 dark:text-slate-100 truncate block">
+                  {currentSession.conteos.length} lecturas • {formatLocaleNumber(currentSession.conteos.reduce((a, b) => a + b.cantidad, 0))} unids
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsCameraScannerOpen(true)}
+                  className="px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-1 cursor-pointer min-h-[40px]"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>Escanear</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setViewState('RECONCILIATION')}
+                  className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-500/20 active:scale-95 transition-all flex items-center gap-1 cursor-pointer min-h-[40px]"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Cuadratura</span>
+                </button>
+              </div>
             </div>
 
           </div>

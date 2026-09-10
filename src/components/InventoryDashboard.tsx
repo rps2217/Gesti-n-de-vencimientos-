@@ -855,6 +855,7 @@ export const InventoryDashboard: React.FC = () => {
   }, [items, headers, activeView]);
 
   const fetchData = async (currentConfig = sheetConfig, currentView = activeView, forceRefresh = false) => {
+    let hasRenderedCache = false;
     try {
       const scriptUrl = localStorage.getItem('appsheet_clone_scriptUrl');
       if (!scriptUrl || !scriptUrl.trim()) {
@@ -866,7 +867,6 @@ export const InventoryDashboard: React.FC = () => {
       // =========================================================================
       // FASE 1: STALE-WHILE-REVALIDATE (Renderizado Instantáneo desde IndexedDB - 0ms)
       // =========================================================================
-      let hasRenderedCache = false;
       const expectedTargetSheet = 
         (currentView === 'main' || currentView === 'analytics') ? (currentConfig.main || 'Vencimientos_Inventario') :
         currentView === 'events' ? (currentConfig.events || 'FRC') :
@@ -1113,9 +1113,10 @@ export const InventoryDashboard: React.FC = () => {
     } catch (err: any) {
       console.warn('Network or Apps Script error:', err);
 
-      // Si ya tenemos items renderizados desde caché, conservarlos y marcar estado offline
-      if (items.length > 0) {
+      // Si ya tenemos items renderizados desde caché IndexedDB o estado local, conservarlos y marcar estado offline
+      if (hasRenderedCache || items.length > 0) {
         setIsOffline(true);
+        setIsRelationalActive(true);
         return;
       }
 

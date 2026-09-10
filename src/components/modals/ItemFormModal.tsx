@@ -161,7 +161,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
 
   // Evaluate Show_If for all headers
   const evaluatedFields = headers.map(header => {
-    const colSchema = sheetConfig.schema?.[activeSheet.title]?.[header];
+    const colSchema = activeSheet?.title ? sheetConfig.schema?.[activeSheet.title]?.[header] : undefined;
     const isKey = colSchema?.isKey;
     const evaluation = evaluateShowIf(header, selectedEventCategory, formData, isKey, showAllFields);
     return {
@@ -275,7 +275,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 {editingItem ? 'Editar Registro' : 'Nuevo Registro'}
               </h3>
               <span className="text-[11px] font-mono font-bold bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800">
-                {activeSheet.title}
+                {activeSheet?.title || 'Hoja'}
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">

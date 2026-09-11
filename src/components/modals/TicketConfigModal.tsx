@@ -24,6 +24,7 @@ import {
   getDefaultColumnConfig 
 } from '../../utils/ticketUtils';
 import { findColumnBySemantic } from '../../utils/columnAliases';
+import { formatDisplayDate } from '../../utils/pureCalculations';
 
 interface TicketConfigModalProps {
   isOpen: boolean;
@@ -497,7 +498,8 @@ export const TicketConfigModal: React.FC<TicketConfigModalProps> = ({
                   {[previewItem].map((item, idx) => {
                     const skuVal = skuHeader ? String(item[skuHeader] || '780123456789').trim() : '';
                     const descVal = descHeader ? String(item[descHeader] || 'PRODUCTO DE MUESTRA 500G').trim() : '';
-                    const dateVal = dateHeader ? String(item[dateHeader] || '2026-10-31').trim() : '';
+                    const rawDateVal = dateHeader ? item[dateHeader] : '2026-10-31';
+                    const dateVal = rawDateVal ? formatDisplayDate(rawDateVal) : '';
                     const loteVal = loteHeader ? String(item[loteHeader] || 'L-98421').trim() : '';
                     const cantVal = cantHeader ? String(item[cantHeader] || '24').trim() : '';
 
@@ -555,7 +557,11 @@ export const TicketConfigModal: React.FC<TicketConfigModalProps> = ({
 
                         {/* Other custom fields */}
                         {otherConfiguredHeaders.map(h => {
-                          const val = item[h] || 'Valor';
+                          const rawVal = item[h] || 'Valor';
+                          const isDateColumn = findColumnBySemantic([h], 'fecha_vc') !== undefined 
+                            || findColumnBySemantic([h], 'fecha_retiro') !== undefined 
+                            || (/fecha/i.test(h) && !/evento|incidencia|tipo/i.test(h));
+                          const displayVal = isDateColumn && rawVal !== 'Valor' ? formatDisplayDate(rawVal) : String(rawVal);
                           const hConf = localColumns[h];
                           return (
                             <div 
@@ -564,7 +570,7 @@ export const TicketConfigModal: React.FC<TicketConfigModalProps> = ({
                               className={`mt-0.5 text-black ${hConf?.bold ? 'font-bold' : 'font-normal'}`}
                             >
                               <span className="opacity-80">{h}: </span>
-                              <span>{String(val)}</span>
+                              <span>{displayVal}</span>
                             </div>
                           );
                         })}

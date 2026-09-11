@@ -400,34 +400,34 @@ export function generateItemsHtmlTable(
 
       // Style cell based on type
       if (isTraspasoCol && displayVal !== '-') {
-        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center;"><span style="background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; padding: 3px 8px; border-radius: 6px; font-weight: bold; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 12px; display: inline-block;">${displayVal}</span></td>`;
+        return `<td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: center;"><span style="background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-family: Consolas, Monaco, monospace; font-size: 12px; display: inline-block;">${displayVal}</span></td>`;
       }
       if (isSkuCol) {
-        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-weight: bold; color: #0f172a; white-space: nowrap;">${displayVal}</td>`;
+        return `<td style="padding: 8px 12px; border: 1px solid #e2e8f0; font-family: Consolas, Monaco, monospace; font-weight: bold; color: #0f172a; white-space: nowrap;">${displayVal}</td>`;
       }
       if (isDescCol) {
-        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-weight: 600; color: #0f172a;">${displayVal}</td>`;
+        return `<td style="padding: 8px 12px; border: 1px solid #e2e8f0; font-weight: 500; color: #0f172a;">${displayVal}</td>`;
       }
       if (isLoteCol) {
-        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-family: monospace; color: #0f172a;">${displayVal}</td>`;
+        return `<td style="padding: 8px 12px; border: 1px solid #e2e8f0; font-family: Consolas, Monaco, monospace; color: #0f172a;">${displayVal}</td>`;
       }
       if (isDateCol) {
         const isVc = /venc|vc|caduc/i.test(header);
         const color = isVc ? '#dc2626' : '#d97706';
-        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; color: ${color}; font-weight: 600; white-space: nowrap;">${displayVal}</td>`;
+        return `<td style="padding: 8px 12px; border: 1px solid #e2e8f0; color: ${color}; font-weight: 600; white-space: nowrap; text-align: center;">${displayVal}</td>`;
       }
       if (isCantCol) {
-        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: center; font-weight: bold; color: #0f172a; white-space: nowrap;">${displayVal}</td>`;
+        return `<td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: center; font-weight: bold; color: #0f172a; white-space: nowrap;">${displayVal}</td>`;
       }
       if (isPriceCol) {
-        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: right; font-weight: 600; color: #0f172a; white-space: nowrap;">${displayVal.startsWith('$') ? displayVal : `$${displayVal}`}</td>`;
+        return `<td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; font-weight: 600; color: #0f172a; white-space: nowrap;">${displayVal.startsWith('$') ? displayVal : `$${displayVal}`}</td>`;
       }
       if (isEventCol) {
-        return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; font-size: 12px; font-weight: 600; color: #334155;">${displayVal}</td>`;
+        return `<td style="padding: 8px 12px; border: 1px solid #e2e8f0; font-size: 12px; font-weight: 500; color: #334155;">${displayVal}</td>`;
       }
 
       // Default normal cell
-      return `<td style="padding: 10px 12px; border: 1px solid #e2e8f0; color: #334155;">${displayVal}</td>`;
+      return `<td style="padding: 8px 12px; border: 1px solid #e2e8f0; color: #334155;">${displayVal}</td>`;
     }).join('');
 
     tableRows += `
@@ -443,14 +443,15 @@ export function generateItemsHtmlTable(
     const label = isVirtual ? formatVirtualHeaderLabel(header) : header;
     const isCant = findColumnBySemantic([header], 'cantidad', customAliases) !== null || /cant|stock|qty/i.test(header) || isVirtual;
     const isPrice = findColumnBySemantic([header], 'precio', customAliases) !== null || /precio|costo/i.test(header);
-    const align = isCant ? 'text-align: center;' : isPrice ? 'text-align: right;' : 'text-align: left;';
-    return `<th style="padding: 12px; border: 1px solid #1e293b; ${align} white-space: nowrap;">${escapeHtml(label)}</th>`;
+    const isDate = findColumnBySemantic([header], 'fecha_vc', customAliases) !== null || findColumnBySemantic([header], 'fecha_retiro', customAliases) !== null || /^fecha/i.test(header);
+    const align = isCant || isDate ? 'text-align: center;' : isPrice ? 'text-align: right;' : 'text-align: left;';
+    return `<th style="padding: 10px 12px; border: 1px solid #334155; ${align} white-space: nowrap; font-size: 12px; font-weight: bold; background-color: #0f172a; color: #ffffff;">${escapeHtml(label)}</th>`;
   }).join('');
 
   return `
-    <table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden;">
+    <table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-family: Arial, Helvetica, sans-serif; font-size: 13px; text-align: left; border: 1px solid #cbd5e1;">
       <thead>
-        <tr style="background-color: #0f172a; color: #ffffff; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">
+        <tr style="background-color: #0f172a; color: #ffffff; font-size: 12px;">
           ${headerThs}
         </tr>
       </thead>

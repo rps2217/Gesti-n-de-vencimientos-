@@ -134,12 +134,11 @@ export const GmailDraftModal: React.FC<GmailDraftModalProps> = ({
   const safeFooter = escapeHtml(footerText);
 
   const fullHtmlBody = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; color: #0f172a; max-width: 800px; margin: 0 auto; line-height: 1.6;">
-      <p style="white-space: pre-line; margin-bottom: 16px; color: #0f172a; font-size: 14px; line-height: 1.6;">${safeIntro}</p>
+    <div style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #111827; line-height: 1.5; text-align: left; margin: 0; padding: 0;">
+      <p style="white-space: pre-line; margin: 0 0 16px 0; color: #111827; font-size: 14px; line-height: 1.5; text-align: left;">${safeIntro}</p>
       ${tableHtml}
-      <p style="white-space: pre-line; margin-top: 20px; color: #0f172a; font-size: 14px; line-height: 1.6;">${safeFooter}</p>
-      <hr style="border: none; border-top: 1px solid #cbd5e1; margin-top: 30px; margin-bottom: 12px;" />
-      <p style="font-size: 11px; color: #64748b; font-style: italic;">Generado automáticamente desde el Gestor de Vencimientos e Incidencias.</p>
+      <p style="white-space: pre-line; margin: 16px 0 0 0; color: #111827; font-size: 14px; line-height: 1.5; text-align: left;">${safeFooter}</p>
+      <p style="margin: 24px 0 0 0; font-size: 11px; color: #94a3b8; font-style: italic; text-align: left;">Generado automáticamente desde el Gestor de Vencimientos e Incidencias.</p>
     </div>
   `;
 

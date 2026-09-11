@@ -3,6 +3,7 @@ import { InventoryItem, ViewTicketConfig, TicketColumnConfig } from '../../types
 import { findColumnBySemantic } from '../../utils/columnAliases';
 import { normalizeTicketConfig } from '../../utils/ticketUtils';
 import { generateBarcodeSvgString } from '../../utils/barcodeGenerator';
+import { formatDisplayDate } from '../../utils/pureCalculations';
 
 interface TicketPrintViewProps {
   items: InventoryItem[];
@@ -91,7 +92,10 @@ export const TicketPrintView: React.FC<TicketPrintViewProps> = ({
           // Fallback to CU_VC or ID if SKU is empty
           const skuVal = rawSku || String(item['CU_VC'] || item['ID_VC'] || item['ID'] || '').trim();
           const descVal = descHeader ? String(item[descHeader] || '').trim() : '';
-          const dateVal = dateHeader ? String(item[dateHeader] || '').trim() : '';
+          const rawDateVal = dateHeader ? item[dateHeader] : undefined;
+          const dateVal = rawDateVal !== undefined && rawDateVal !== null && String(rawDateVal).trim() !== ''
+            ? formatDisplayDate(rawDateVal)
+            : '';
           const loteVal = loteHeader ? String(item[loteHeader] || '').trim() : '';
           const cantVal = cantHeader ? String(item[cantHeader] || '').trim() : '';
           const ubiVal = ubiHeader ? String(item[ubiHeader] || '').trim() : '';
@@ -209,8 +213,12 @@ export const TicketPrintView: React.FC<TicketPrintViewProps> = ({
 
                 {/* Other custom visible headers */}
                 {otherVisibleHeaders.map(header => {
-                  const val = item[header];
-                  if (val === undefined || val === null || String(val).trim() === '') return null;
+                  const rawVal = item[header];
+                  if (rawVal === undefined || rawVal === null || String(rawVal).trim() === '') return null;
+                  const isDateColumn = findColumnBySemantic([header], 'fecha_vc') !== undefined 
+                    || findColumnBySemantic([header], 'fecha_retiro') !== undefined 
+                    || (/fecha/i.test(header) && !/evento|incidencia|tipo/i.test(header));
+                  const displayVal = isDateColumn ? formatDisplayDate(rawVal) : String(rawVal);
                   const hConf = colConfig[header] as TicketColumnConfig;
                   return (
                     <div 
@@ -219,7 +227,7 @@ export const TicketPrintView: React.FC<TicketPrintViewProps> = ({
                       className={`mt-0.5 text-black ${hConf?.bold ? 'font-bold' : 'font-normal'}`}
                     >
                       <span className="opacity-80">{header}: </span>
-                      <span>{String(val)}</span>
+                      <span>{displayVal}</span>
                     </div>
                   );
                 })}

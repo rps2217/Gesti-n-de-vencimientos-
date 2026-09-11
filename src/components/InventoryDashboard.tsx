@@ -10,7 +10,8 @@ import {
   saveCloudConfig,
   loadCloudConfig,
   getScriptPropertiesConfig,
-  saveScriptPropertiesConfig
+  saveScriptPropertiesConfig,
+  clearSheetsCache
 } from '../lib/sheets';
 import { 
   InventoryItem, 
@@ -1225,6 +1226,7 @@ export const InventoryDashboard: React.FC = () => {
     }
     try {
       setIsSaving(true);
+      const isDemo = !localStorage.getItem('appsheet_clone_scriptUrl')?.trim();
 
       const isVencimientosTable = activeView === 'main' || /vencimiento|caducidad|stock/i.test(activeSheet.title);
 
@@ -1248,44 +1250,67 @@ export const InventoryDashboard: React.FC = () => {
         );
 
         // 1. Process updates for matched rows
+        let updatedItemsList = [...items];
         for (const updateOp of reconciliation.rowsToUpdate) {
           const rowValues = headers.map(h => updateOp.updatedItem[h] !== undefined ? String(updateOp.updatedItem[h]) : '');
-          setItems(prev => prev.map(it => it._rowIndex === updateOp.rowIndex ? { ...it, ...updateOp.updatedItem } : it));
+          updatedItemsList = updatedItemsList.map(it => it._rowIndex === updateOp.rowIndex ? { ...it, ...updateOp.updatedItem } : it);
           
-          try {
-            await updateRow(activeSheet.title, updateOp.rowIndex, rowValues);
-          } catch (err) {
-            console.warn(`Error updating row ${updateOp.rowIndex} in cloud, adding to offline queue:`, err);
-            await enqueueMutation({
-              type: 'update',
-              sheetTitle: activeSheet.title,
-              rowIndex: updateOp.rowIndex,
-              entityKey: updateOp.cuVc,
-              entityKeyCol: 'CU_VC',
-              headers,
-              values: rowValues
-            });
+          if (!isDemo) {
+            try {
+              await updateRow(activeSheet.title, updateOp.rowIndex, rowValues);
+            } catch (err) {
+              console.warn(`Error updating row ${updateOp.rowIndex} in cloud, adding to offline queue:`, err);
+              await enqueueMutation({
+                type: 'update',
+                sheetTitle: activeSheet.title,
+                rowIndex: updateOp.rowIndex,
+                entityKey: updateOp.cuVc,
+                entityKeyCol: 'CU_VC',
+                headers,
+                values: rowValues
+              });
+            }
           }
         }
 
         // 2. Process appends for new unique rows
-        let nextRowIndex = items.length ? Math.max(...items.map(i => i._rowIndex || 2)) + 1 : 2;
+        const validRowIndexes = updatedItemsList.map(i => typeof i._rowIndex === 'number' ? i._rowIndex : parseInt(String(i._rowIndex || '0'), 10)).filter(n => !isNaN(n) && n > 0);
+        let nextRowIndex = validRowIndexes.length ? Math.max(...validRowIndexes) + 1 : 2;
+        
         for (const newRow of reconciliation.rowsToAppend) {
           const rowValues = headers.map(h => newRow[h] !== undefined ? String(newRow[h]) : '');
           const newItem: InventoryItem = { _rowIndex: nextRowIndex++, ...newRow };
-          setItems(prev => [...prev, newItem]);
+          const identityInfo = resolveItemIdentity(newItem, headers, activeSheet.title);
+          newItem._entityKey = identityInfo.keyValue;
+          newItem._entityKeyCol = identityInfo.keyColumn || undefined;
+          newItem._isSyntheticKey = identityInfo.isSynthetic;
+          updatedItemsList.push(newItem);
 
-          try {
-            await appendRow(activeSheet.title, rowValues);
-          } catch (err) {
-            console.warn('Error appending row in cloud, adding to offline queue:', err);
-            await enqueueMutation({
-              type: 'append',
-              sheetTitle: activeSheet.title,
-              headers,
-              values: rowValues
-            });
+          if (!isDemo) {
+            try {
+              await appendRow(activeSheet.title, rowValues);
+            } catch (err) {
+              console.warn('Error appending row in cloud, adding to offline queue:', err);
+              await enqueueMutation({
+                type: 'append',
+                sheetTitle: activeSheet.title,
+                headers,
+                values: rowValues
+              });
+            }
           }
+        }
+
+        setItems(updatedItemsList);
+        if (activeView === 'main') setAllMainItems(updatedItemsList);
+        saveStoredDemoItems(activeView, updatedItemsList);
+        if (activeView === 'main') saveStoredDemoItems('main', updatedItemsList);
+
+        try {
+          const cachedRows = [headers, ...updatedItemsList.map(it => headers.map(h => it[h] !== undefined && it[h] !== null ? String(it[h]) : ''))];
+          await indexedDbService.saveCachedSheet(activeSheet.title, cachedRows);
+        } catch (cErr) {
+          console.warn('Error caching imported items in IndexedDB:', cErr);
         }
 
         showToast(
@@ -1296,30 +1321,57 @@ export const InventoryDashboard: React.FC = () => {
 
       } else {
         // Fallback / standard append mode for other views or explicit append
-        let nextRowIndex = items.length ? Math.max(...items.map(i => i._rowIndex || 2)) + 1 : 2;
+        const validRowIndexes = items.map(i => typeof i._rowIndex === 'number' ? i._rowIndex : parseInt(String(i._rowIndex || '0'), 10)).filter(n => !isNaN(n) && n > 0);
+        let nextRowIndex = validRowIndexes.length ? Math.max(...validRowIndexes) + 1 : 2;
+        let updatedItemsList = [...items];
+
         for (const item of mappedData) {
           const rowValues = headers.map(h => item[h] !== undefined ? String(item[h]) : '');
           const newItem: InventoryItem = { _rowIndex: nextRowIndex++ };
           headers.forEach((h, i) => newItem[h] = rowValues[i]);
+          const identityInfo = resolveItemIdentity(newItem, headers, activeSheet.title);
+          newItem._entityKey = identityInfo.keyValue;
+          newItem._entityKeyCol = identityInfo.keyColumn || undefined;
+          newItem._isSyntheticKey = identityInfo.isSynthetic;
+          updatedItemsList.push(newItem);
 
-          setItems(prev => [...prev, newItem]);
-
-          try {
-            await appendRow(activeSheet.title, rowValues);
-          } catch (saveErr) {
-            console.warn('Network error during bulk import append, adding to offline queue:', saveErr);
-            await enqueueMutation({
-              type: 'append',
-              sheetTitle: activeSheet.title,
-              values: rowValues
-            });
+          if (!isDemo) {
+            try {
+              await appendRow(activeSheet.title, rowValues);
+            } catch (saveErr) {
+              console.warn('Network error during bulk import append, adding to offline queue:', saveErr);
+              await enqueueMutation({
+                type: 'append',
+                sheetTitle: activeSheet.title,
+                values: rowValues
+              });
+            }
           }
+        }
+
+        setItems(updatedItemsList);
+        if (activeView === 'main') setAllMainItems(updatedItemsList);
+        if (activeView === 'products') setProducts(updatedItemsList);
+        if (activeView === 'policies') setPolicies(updatedItemsList);
+        saveStoredDemoItems(activeView, updatedItemsList);
+        if (activeView === 'main') saveStoredDemoItems('main', updatedItemsList);
+        if (activeView === 'products') saveStoredDemoItems('products', updatedItemsList);
+        if (activeView === 'policies') saveStoredDemoItems('policies', updatedItemsList);
+
+        try {
+          const cachedRows = [headers, ...updatedItemsList.map(it => headers.map(h => it[h] !== undefined && it[h] !== null ? String(it[h]) : ''))];
+          await indexedDbService.saveCachedSheet(activeSheet.title, cachedRows);
+        } catch (cErr) {
+          console.warn('Error caching imported items in IndexedDB:', cErr);
         }
 
         showToast(`Se importaron ${mappedData.length} registros exitosamente en "${activeSheet.title}".`, 'success', 'Importación Exitosa');
       }
 
-      await fetchData(sheetConfig, activeView, true);
+      if (!isDemo) {
+        clearSheetsCache(activeSheet.title);
+        await fetchData(sheetConfig, activeView, true);
+      }
     } catch (err: any) {
       showToast(`Error al importar registros: ${err.message}`, 'error', 'Error de Importación');
     } finally {
@@ -1521,8 +1573,9 @@ export const InventoryDashboard: React.FC = () => {
       // Type specific validation
       if (effectiveType === 'number' || /^cant|unidades|stock|dias|precio/i.test(header)) {
         fieldSchema = fieldSchema.refine((val: any) => {
-          if (!isRequired && (!val || val === '' || val === '-')) return true;
-          return !isNaN(Number(val));
+          if (!isRequired && (!val || String(val).trim() === '' || String(val).trim() === '-')) return true;
+          const num = parseLocaleNumber(val);
+          return !isNaN(num);
         }, 'Debe ser un número válido.');
       } else if (effectiveType === 'date' || /fecha|vencimiento|vence|retiro/i.test(header)) {
         fieldSchema = fieldSchema.refine((val: any) => {
@@ -1541,14 +1594,14 @@ export const InventoryDashboard: React.FC = () => {
         if (/^MM$/i.test(header.trim())) {
           fieldSchema = fieldSchema.refine((val: any) => {
             if (!val && !isRequired) return true;
-            const num = parseInt(val as string, 10);
+            const num = parseInt(String(val).trim(), 10);
             return !isNaN(num) && num >= 1 && num <= 12;
           }, 'El mes debe estar entre 1 y 12.');
         } else if (/^YYYY$/i.test(header.trim())) {
           fieldSchema = fieldSchema.refine((val: any) => {
             if (!val && !isRequired) return true;
-            const num = parseInt(val as string, 10);
-            return !isNaN(num) && num >= 2000 && num <= 2100;
+            const num = parseInt(String(val).trim(), 10);
+            return !isNaN(num) && num >= 1990 && num <= 2100;
           }, 'El año debe ser válido (ej. 2026).');
         }
       }
@@ -1744,6 +1797,7 @@ export const InventoryDashboard: React.FC = () => {
 
     const originalItems = [...items];
     const originalMainItems = [...allMainItems];
+    const isDemo = !localStorage.getItem('appsheet_clone_scriptUrl')?.trim();
     
     try {
       setIsSaving(true);
@@ -1774,7 +1828,7 @@ export const InventoryDashboard: React.FC = () => {
       }
 
       const rowValues = headers.map(h => {
-        const val = mergedFormData[h] || '';
+        const val = mergedFormData[h] !== undefined && mergedFormData[h] !== null ? String(mergedFormData[h]) : '';
         const colSchema = sheetConfig.schema?.[activeSheet.title]?.[h];
         if (!val && (colSchema?.type === 'datetime' || /timestamp|created_at|fecha_creaci[oó]n|fecha_registro/i.test(h))) {
           return currentFormattedDateTime;
@@ -1782,24 +1836,60 @@ export const InventoryDashboard: React.FC = () => {
         return val;
       });
       
+      // Calculate row index safely
+      const validRowIndexes = items.map(i => typeof i._rowIndex === 'number' ? i._rowIndex : parseInt(String(i._rowIndex || '0'), 10)).filter(n => !isNaN(n) && n > 0);
+      const nextRowIndex = targetExistingItem ? (targetExistingItem._rowIndex || 2) : (validRowIndexes.length ? Math.max(...validRowIndexes) + 1 : 2);
+
       // Optimistic update
       const newItem: InventoryItem = { 
-        _rowIndex: targetExistingItem ? targetExistingItem._rowIndex : (items.length ? Math.max(...items.map(i => i._rowIndex || 0)) + 1 : 2) 
+        _rowIndex: nextRowIndex 
       };
       headers.forEach((h, i) => newItem[h] = rowValues[i]);
+
+      const identityInfo = resolveItemIdentity(newItem, headers, activeSheet.title);
+      newItem._entityKey = identityInfo.keyValue;
+      newItem._entityKeyCol = identityInfo.keyColumn || undefined;
+      newItem._isSyntheticKey = identityInfo.isSynthetic;
       
+      let nextItems: InventoryItem[];
       if (targetExistingItem) {
-        setItems(prev => prev.map(item => item._rowIndex === targetExistingItem!._rowIndex ? newItem : item));
-        if (activeView === 'main') setAllMainItems(prev => prev.map(item => item._rowIndex === targetExistingItem!._rowIndex ? newItem : item));
+        nextItems = items.map(item => item._rowIndex === targetExistingItem!._rowIndex ? newItem : item);
       } else {
-        setItems(prev => [...prev, newItem]);
-        if (activeView === 'main') setAllMainItems(prev => [...prev, newItem]);
+        nextItems = [...items, newItem];
       }
+
+      setItems(nextItems);
+      if (activeView === 'main') setAllMainItems(nextItems);
+      if (activeView === 'products') setProducts(nextItems);
+      if (activeView === 'policies') setPolicies(nextItems);
+
+      // Update persistent demo storage
+      saveStoredDemoItems(activeView, nextItems);
+      if (activeView === 'main') saveStoredDemoItems('main', nextItems);
+      if (activeView === 'products') saveStoredDemoItems('products', nextItems);
+      if (activeView === 'policies') saveStoredDemoItems('policies', nextItems);
+
+      // Save to IndexedDB cached sheet
+      try {
+        const cachedRows = [headers, ...nextItems.map(it => headers.map(h => it[h] !== undefined && it[h] !== null ? String(it[h]) : ''))];
+        await indexedDbService.saveCachedSheet(activeSheet.title, cachedRows);
+      } catch (cacheErr) {
+        console.warn('Error saving to IndexedDB:', cacheErr);
+      }
+
       handleCloseModal();
 
       const isUpdate = Boolean(targetExistingItem && targetExistingItem._rowIndex && targetExistingItem._rowIndex > 1);
       const targetRowIndex = isUpdate ? targetExistingItem!._rowIndex : undefined;
-      const identityInfo = resolveItemIdentity(newItem, headers, activeSheet.title);
+
+      if (isDemo) {
+        if (isConsolidatingWithExisting) {
+          showToast('Registro consolidado con éxito: Se sumó la cantidad al vencimiento existente (Modo Local)', 'success', 'Consolidación Inteligente');
+        } else {
+          showToast(isUpdate ? 'Registro actualizado con éxito (Modo Local)' : 'Registro guardado con éxito (Modo Local)', 'success', 'Operación Exitosa');
+        }
+        return;
+      }
 
       try {
         if (isUpdate && targetRowIndex) {
@@ -1809,6 +1899,12 @@ export const InventoryDashboard: React.FC = () => {
           });
         } else {
           await appendRow(activeSheet.title, rowValues);
+        }
+        clearSheetsCache(activeSheet.title);
+        if (isConsolidatingWithExisting) {
+          showToast('Registro consolidado con éxito: Se sumó la cantidad en Google Sheets.', 'success', 'Consolidación Inteligente');
+        } else {
+          showToast(isUpdate ? 'Registro actualizado en Google Sheets con éxito.' : 'Registro guardado en Google Sheets con éxito.', 'success', 'Guardado');
         }
       } catch (saveErr) {
         console.warn('Network error during save, adding to offline queue:', saveErr);
@@ -1825,12 +1921,6 @@ export const InventoryDashboard: React.FC = () => {
         });
         showToast('Sin conexión con Google Sheets. Los cambios se guardaron localmente en la cola offline.', 'info', 'Modo Offline');
       }
-
-      if (isConsolidatingWithExisting) {
-        showToast('Registro consolidado con éxito: Se sumó la cantidad a la fila existente con el mismo vencimiento (CU_VC).', 'success', 'Consolidación Inteligente');
-      }
-      
-      await fetchData(sheetConfig, activeView, true);
     } catch (err: any) {
       // Rollback
       setItems(originalItems);

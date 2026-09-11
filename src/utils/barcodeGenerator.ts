@@ -177,5 +177,5 @@ export function generateBarcodeSvgString(
     ? `<text x="${(svgWidth / 2).toFixed(2)}" y="${(height + fontSize + 1).toFixed(2)}" font-family="monospace" font-size="${fontSize}" font-weight="bold" text-anchor="middle" fill="${color}">${rawText}</text>`
     : "";
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgWidth.toFixed(2)} ${svgHeight.toFixed(2)}" width="${svgWidth.toFixed(2)}" height="${svgHeight.toFixed(2)}" style="background:${background};">${rects}${textElement}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgWidth.toFixed(2)} ${svgHeight.toFixed(2)}" width="${svgWidth.toFixed(2)}" height="${svgHeight.toFixed(2)}" style="max-width:100%;height:auto;background:${background};display:block;margin:0 auto;">${rects}${textElement}</svg>`;
 }

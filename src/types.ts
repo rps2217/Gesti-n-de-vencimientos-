@@ -148,6 +148,9 @@ export interface TicketGeneralSettings {
   showDateTime?: boolean;
   showTotalCount?: boolean;
   footerText?: string;
+  includeSkuBarcode?: boolean;
+  barcodeHeightMm?: number;
+  showBarcodeTextInReport?: boolean;
 }
 
 export interface ViewTicketSettings {

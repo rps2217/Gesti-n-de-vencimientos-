@@ -232,7 +232,7 @@ export const TicketPrintView: React.FC<TicketPrintViewProps> = ({
                   );
                 })}
 
-                {/* Expiration Date Line (At the very end of item block) */}
+                {/* Expiration Date Line */}
                 {showDate && dateVal && (
                   <div 
                     style={{ fontSize: `${dateConf?.size || 11}px` }}
@@ -240,6 +240,27 @@ export const TicketPrintView: React.FC<TicketPrintViewProps> = ({
                   >
                     <span>F.Venc: </span>
                     <span>{dateVal}</span>
+                  </div>
+                )}
+
+                {/* Optional SKU Barcode before record separator/jump */}
+                {general.includeSkuBarcode && skuVal && (
+                  <div className="mt-1.5 mb-0.5 w-full flex flex-col items-center justify-center overflow-hidden">
+                    <div 
+                      className="w-full flex justify-center items-center"
+                      style={{ height: `${general.barcodeHeightMm || 8}mm`, maxHeight: `${general.barcodeHeightMm || 8}mm` }}
+                      dangerouslySetInnerHTML={{
+                        __html: generateBarcodeSvgString(skuVal, {
+                          width: general.paperWidth === '58mm' ? 1.5 : 1.8,
+                          height: Math.round((general.barcodeHeightMm || 8) * 3.78),
+                          showText: general.showBarcodeTextInReport ?? false,
+                          fontSize: 9,
+                          quietZone: 4,
+                          color: '#000000',
+                          background: '#ffffff'
+                        })
+                      }}
+                    />
                   </div>
                 )}
 

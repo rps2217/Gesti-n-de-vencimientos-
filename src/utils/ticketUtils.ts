@@ -29,7 +29,10 @@ export function getDefaultTicketGeneralSettings(activeView: string = 'main'): Ti
     paperWidth: '80mm',
     showDateTime: true,
     showTotalCount: true,
-    footerText: '--- FIN DEL REPORTE ---'
+    footerText: '--- FIN DEL REPORTE ---',
+    includeSkuBarcode: false,
+    barcodeHeightMm: 8,
+    showBarcodeTextInReport: false,
   };
 }
 

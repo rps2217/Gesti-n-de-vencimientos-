@@ -10,7 +10,8 @@ import {
   RotateCcw,
   Receipt,
   FileText,
-  Sliders
+  Sliders,
+  Barcode
 } from 'lucide-react';
 import { 
   ViewTicketConfig, 
@@ -25,6 +26,7 @@ import {
 } from '../../utils/ticketUtils';
 import { findColumnBySemantic } from '../../utils/columnAliases';
 import { formatDisplayDate } from '../../utils/pureCalculations';
+import { generateBarcodeSvgString } from '../../utils/barcodeGenerator';
 
 interface TicketConfigModalProps {
   isOpen: boolean;
@@ -451,6 +453,67 @@ export const TicketConfigModal: React.FC<TicketConfigModalProps> = ({
                   <span>Incluir Total de Registros</span>
                 </label>
               </div>
+
+              {/* Barcode Option before Record Jump */}
+              <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-xl space-y-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 mt-0.5">
+                      <Barcode className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={localGeneral.includeSkuBarcode ?? false}
+                          onChange={(e) => setLocalGeneral(prev => ({ ...prev, includeSkuBarcode: e.target.checked }))}
+                          className="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span>Código de Barras de SKU por Registro</span>
+                      </label>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                        Genera el código 1D (Code 128) antes del salto de cada producto para escaneo láser en terreno con alto discreto (~8 mm).
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {localGeneral.includeSkuBarcode && (
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">
+                        Alto del Código:
+                      </span>
+                      <div className="flex rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5">
+                        {[6, 8, 10, 12].map(mm => (
+                          <button
+                            key={mm}
+                            type="button"
+                            onClick={() => setLocalGeneral(prev => ({ ...prev, barcodeHeightMm: mm }))}
+                            className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition-all ${
+                              (localGeneral.barcodeHeightMm || 8) === mm
+                                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
+                                : 'text-slate-600 dark:text-slate-400'
+                            }`}
+                          >
+                            {mm} mm {mm === 8 ? '(Recomendado)' : ''}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-600 dark:text-slate-400">
+                      <input
+                        type="checkbox"
+                        checked={localGeneral.showBarcodeTextInReport ?? false}
+                        onChange={(e) => setLocalGeneral(prev => ({ ...prev, showBarcodeTextInReport: e.target.checked }))}
+                        className="w-3 h-3 rounded text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span>Texto bajo barras</span>
+                    </label>
+                  </div>
+                )}
+              </div>
             </div>
 
           </div>
@@ -583,6 +646,30 @@ export const TicketConfigModal: React.FC<TicketConfigModalProps> = ({
                           >
                             <span>F.Venc: </span>
                             <span>{dateVal}</span>
+                          </div>
+                        )}
+
+                        {/* Barcode Preview before Item Jump */}
+                        {localGeneral.includeSkuBarcode && skuVal && (
+                          <div className="mt-1.5 mb-0.5 w-full flex flex-col items-center justify-center overflow-hidden">
+                            <div 
+                              className="w-full flex justify-center items-center"
+                              style={{ 
+                                height: `${localGeneral.barcodeHeightMm || 8}mm`, 
+                                maxHeight: `${localGeneral.barcodeHeightMm || 8}mm` 
+                              }}
+                              dangerouslySetInnerHTML={{
+                                __html: generateBarcodeSvgString(skuVal, {
+                                  width: localGeneral.paperWidth === '58mm' ? 1.4 : 1.7,
+                                  height: Math.round((localGeneral.barcodeHeightMm || 8) * 3.78),
+                                  showText: localGeneral.showBarcodeTextInReport ?? false,
+                                  fontSize: 9,
+                                  quietZone: 4,
+                                  color: '#000000',
+                                  background: 'transparent'
+                                })
+                              }}
+                            />
                           </div>
                         )}
                       </div>

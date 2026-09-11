@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { indexedDbService, OfflineMutation, AuditLogEntry } from '../db/indexedDbService';
 import { appendRow, updateRow, deleteRow, getSheetData, pingGoogleSheets } from '../lib/sheets';
 import { matchRowIndexByIdentity, buildRowIdentityIndex } from '../utils/entityIdentityResolver';
@@ -220,12 +220,19 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
   );
 
   // Synchronize the queue of mutations with Google Sheets in FIFO order
-  const syncQueue = useCallback(async () => {
+  const syncQueue = useCallback(async (targetMutationId?: string) => {
     if (isSyncingRef.current) return { success: false, count: 0, errors: ['Sincronización en curso'] };
 
-    const currentQueue = await indexedDbService.getOfflineQueue();
+    let currentQueue = await indexedDbService.getOfflineQueue();
     if (currentQueue.length === 0) {
       return { success: true, count: 0, errors: [] };
+    }
+
+    if (targetMutationId) {
+      currentQueue = currentQueue.filter(m => m.id === targetMutationId);
+      if (currentQueue.length === 0) {
+        return { success: true, count: 0, errors: [] };
+      }
     }
 
     // Sort strictly FIFO
@@ -240,8 +247,8 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
 
     try {
       for (const mutation of currentQueue) {
-        // Skip mutations that have failed more than 4 times unless explicitly retried
-        if (mutation.attempts && mutation.attempts >= 5 && mutation.status === 'failed') {
+        // Skip mutations that have failed more than 4 times unless explicitly retried individually
+        if (!targetMutationId && mutation.attempts && mutation.attempts >= 5 && mutation.status === 'failed') {
           continue;
         }
 
@@ -426,6 +433,57 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
     await refreshAuditLog();
   }, [refreshQueue, refreshAuditLog]);
 
+  // Discard an individual mutation with audit log tracking (AppSheet-like but with full audit and data copy)
+  const discardMutation = useCallback(async (id: string, reason?: string) => {
+    const res = await indexedDbService.discardMutation(id, reason);
+    await refreshQueue();
+    await refreshAuditLog();
+    return res;
+  }, [refreshQueue, refreshAuditLog]);
+
+  // Discard all failed / conflict mutations at once
+  const discardAllFailedMutations = useCallback(async () => {
+    const count = await indexedDbService.discardAllFailedMutations();
+    await refreshQueue();
+    await refreshAuditLog();
+    return count;
+  }, [refreshQueue, refreshAuditLog]);
+
+  // Retry an individual failed mutation (resets attempts and retries sync)
+  const retryMutation = useCallback(async (id: string) => {
+    await indexedDbService.resetMutationForRetry(id);
+    await refreshQueue();
+    await refreshAuditLog();
+    return await syncQueue(id);
+  }, [refreshQueue, refreshAuditLog, syncQueue]);
+
+  // Retry all failed mutations
+  const retryAllFailedMutations = useCallback(async () => {
+    const queue = await indexedDbService.getOfflineQueue();
+    const failedList = queue.filter(m => m.status === 'failed' || (m.attempts && m.attempts >= 3));
+    for (const m of failedList) {
+      await indexedDbService.resetMutationForRetry(m.id);
+    }
+    await refreshQueue();
+    await refreshAuditLog();
+    return await syncQueue();
+  }, [refreshQueue, refreshAuditLog, syncQueue]);
+
+  // Convert an update mutation into an append (Save as New)
+  const forkMutationAsAppend = useCallback(async (id: string) => {
+    const res = await indexedDbService.forkMutationAsAppend(id);
+    await refreshQueue();
+    await refreshAuditLog();
+    if (res && navigator.onLine) {
+      syncQueue(res.id);
+    }
+    return res;
+  }, [refreshQueue, refreshAuditLog, syncQueue]);
+
+  const failedMutations = useMemo(() => {
+    return offlineQueue.filter(m => m.status === 'failed' || (m.attempts && m.attempts >= 3));
+  }, [offlineQueue]);
+
   // Clear all pending mutations in the queue
   const clearQueue = useCallback(async () => {
     await indexedDbService.clearOfflineQueue();
@@ -503,6 +561,13 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
     enqueueMutation,
     syncQueue,
     removeMutation,
+    discardMutation,
+    discardAllFailedMutations,
+    retryMutation,
+    retryAllFailedMutations,
+    forkMutationAsAppend,
+    failedMutations,
+    failedCount: failedMutations.length,
     clearQueue,
     refreshQueue,
     refreshAuditLog,

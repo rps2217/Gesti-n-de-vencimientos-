@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Menu, Search, X, FilterX, Scan, Download, ChevronDown, 
   Mail, Flame, FileSpreadsheet, Printer, Barcode, RefreshCw, MessageSquare, Sliders, Settings, CheckCircle2,
-  Database, Package, FileText, Sparkles, Plus, PieChart, Activity, Wifi, WifiOff, Upload
+  Database, Package, FileText, Sparkles, Plus, PieChart, Activity, Wifi, WifiOff, Upload, AlertTriangle
 } from 'lucide-react';
 import { InventoryItem, SheetConfig, SheetProperties } from '../../types';
 import { VIRTUAL_COLUMNS } from '../../utils/virtualColumns';
@@ -47,6 +47,7 @@ interface DashboardTopNavProps {
   latencyMs?: number | null;
   connectionStatus?: string;
   onOpenSyncAudit?: () => void;
+  failedCount?: number;
   // Executive Context & Actions props
   isRelationalActive?: boolean;
   activeSheet?: SheetProperties | null;
@@ -91,6 +92,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
   latencyMs,
   connectionStatus = 'connected',
   onOpenSyncAudit,
+  failedCount = 0,
   isRelationalActive = false,
   activeSheet,
   isModalOpen = false,
@@ -571,7 +573,19 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
             </span>
           )}
 
-          {offlineQueue.length > 0 ? (
+          {failedCount > 0 ? (
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenSyncAudit?.();
+              }}
+              className="ml-1 bg-rose-500 hover:bg-rose-600 text-white px-2 py-0.5 rounded-md text-[10px] font-bold transition-all animate-pulse flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-2xs"
+              title={`${failedCount} conflicto(s) de conciliación detectado(s). Clic para resolver o descartar.`}
+            >
+              <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+              <span>{failedCount} Conflicto{failedCount > 1 ? 's' : ''}</span>
+            </button>
+          ) : offlineQueue.length > 0 ? (
             <button 
               onClick={(e) => {
                 e.stopPropagation();

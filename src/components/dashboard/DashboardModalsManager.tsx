@@ -169,6 +169,11 @@ export interface DashboardModalsManagerProps {
   testConnectionHealth: () => Promise<any>;
   syncQueue: () => Promise<any>;
   removeMutation: (id: string) => Promise<void>;
+  discardMutation?: (id: string, reason?: string) => Promise<any>;
+  discardAllFailedMutations?: () => Promise<number>;
+  retryMutation?: (id: string) => Promise<any>;
+  retryAllFailedMutations?: () => Promise<any>;
+  forkMutationAsAppend?: (id: string) => Promise<any>;
   clearQueue: () => Promise<void>;
   clearAuditLog: () => Promise<void>;
 }
@@ -285,6 +290,11 @@ export const DashboardModalsManager: React.FC<DashboardModalsManagerProps> = ({
   testConnectionHealth,
   syncQueue,
   removeMutation,
+  discardMutation,
+  discardAllFailedMutations,
+  retryMutation,
+  retryAllFailedMutations,
+  forkMutationAsAppend,
   clearQueue,
   clearAuditLog,
 }) => {
@@ -538,6 +548,11 @@ export const DashboardModalsManager: React.FC<DashboardModalsManagerProps> = ({
         testConnectionHealth={testConnectionHealth}
         syncQueue={syncQueue}
         removeMutation={removeMutation}
+        discardMutation={discardMutation}
+        discardAllFailedMutations={discardAllFailedMutations}
+        retryMutation={retryMutation}
+        retryAllFailedMutations={retryAllFailedMutations}
+        forkMutationAsAppend={forkMutationAsAppend}
         clearQueue={clearQueue}
         clearAuditLog={clearAuditLog}
         showToast={showToast}

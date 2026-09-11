@@ -31,7 +31,7 @@ export interface OfflineMutation {
 
 export interface AuditLogEntry {
   id: string;
-  action: 'append' | 'update' | 'delete' | 'sync' | 'count' | 'import' | 'bulk_edit';
+  action: 'append' | 'update' | 'delete' | 'sync' | 'count' | 'import' | 'bulk_edit' | 'discard';
   sheetTitle: string;
   entityKey?: string;
   description: string;
@@ -437,6 +437,159 @@ class IndexedDbService {
     } catch {
       // Ignore
     }
+  }
+
+  /**
+   * Descarta un intento de sincronización específico con registro seguro en auditoría
+   */
+  async discardMutation(id: string, reason?: string): Promise<OfflineMutation | null> {
+    const queue = await this.getOfflineQueue();
+    const mutation = queue.find(m => m.id === id);
+    if (!mutation) return null;
+
+    // Registrar en auditoría con copia íntegra de los datos para evitar pérdida irreversible
+    await this.addAuditLogEntry({
+      action: 'discard',
+      sheetTitle: mutation.sheetTitle,
+      entityKey: mutation.entityKey || mutation.keyValue,
+      description: `Intento de sincronización descartado (${mutation.type.toUpperCase()}) en ${mutation.sheetTitle}${reason ? `: ${reason}` : ''}`,
+      status: 'failed',
+      mutationId: mutation.id,
+      errorMessage: mutation.lastError || reason || 'Descartado manualmente por el usuario',
+      details: {
+        type: mutation.type,
+        sheetTitle: mutation.sheetTitle,
+        entityKey: mutation.entityKey,
+        keyValue: mutation.keyValue,
+        values: mutation.values,
+        attempts: mutation.attempts,
+        lastError: mutation.lastError,
+        discardedAt: new Date().toISOString(),
+        reason: reason || 'Descarte por el usuario'
+      }
+    });
+
+    await this.removeMutation(id);
+    return mutation;
+  }
+
+  /**
+   * Descarta todos los intentos de sincronización que se encuentren en estado fallido o con conflicto
+   */
+  async discardAllFailedMutations(): Promise<number> {
+    const queue = await this.getOfflineQueue();
+    const failedList = queue.filter(m => m.status === 'failed' || (m.attempts && m.attempts >= 3));
+    for (const m of failedList) {
+      await this.discardMutation(m.id, 'Descarte masivo de conflictos de conciliación');
+    }
+    return failedList.length;
+  }
+
+  /**
+   * Restablece una mutación fallida para reintentar su sincronización
+   */
+  async resetMutationForRetry(id: string): Promise<boolean> {
+    try {
+      if (this.isSupported) {
+        const db = await this.getDB();
+        await new Promise<void>((resolve) => {
+          const tx = db.transaction(STORES.MUTATION_QUEUE, 'readwrite');
+          const store = tx.objectStore(STORES.MUTATION_QUEUE);
+          const getReq = store.get(id);
+
+          getReq.onsuccess = () => {
+            if (getReq.result) {
+              const updated: OfflineMutation = {
+                ...getReq.result,
+                status: 'pending',
+                attempts: 0
+              };
+              store.put(updated);
+            }
+            resolve();
+          };
+          getReq.onerror = () => resolve();
+        });
+      }
+    } catch (e) {
+      console.warn('Error resetting mutation for retry in IndexedDB:', e);
+    }
+
+    try {
+      const current = this.getLocalStorageQueue();
+      const item = current.find(m => m.id === id);
+      if (item) {
+        item.status = 'pending';
+        item.attempts = 0;
+        localStorage.setItem('appsheet_clone_offline_queue', JSON.stringify(current));
+      }
+    } catch {
+      // Ignore
+    }
+
+    return true;
+  }
+
+  /**
+   * Convierte una mutación de tipo 'update' en 'append' (Guardar como nuevo registro)
+   * Útil cuando el registro original fue eliminado o desplazado en Google Sheets por otro dispositivo
+   */
+  async forkMutationAsAppend(id: string): Promise<OfflineMutation | null> {
+    const queue = await this.getOfflineQueue();
+    const mutation = queue.find(m => m.id === id);
+    if (!mutation) return null;
+
+    const forked: OfflineMutation = {
+      ...mutation,
+      type: 'append',
+      rowIndex: undefined,
+      status: 'pending',
+      attempts: 0,
+      lastError: undefined,
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      if (this.isSupported) {
+        const db = await this.getDB();
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction(STORES.MUTATION_QUEUE, 'readwrite');
+          const store = tx.objectStore(STORES.MUTATION_QUEUE);
+          const putReq = store.put(forked);
+          putReq.onsuccess = () => resolve();
+          putReq.onerror = () => reject(putReq.error);
+        });
+      }
+    } catch (e) {
+      console.warn('Error forking mutation in IndexedDB:', e);
+    }
+
+    try {
+      const current = this.getLocalStorageQueue();
+      const idx = current.findIndex(m => m.id === id);
+      if (idx >= 0) {
+        current[idx] = forked;
+        localStorage.setItem('appsheet_clone_offline_queue', JSON.stringify(current));
+      }
+    } catch {
+      // Ignore
+    }
+
+    await this.addAuditLogEntry({
+      action: 'append',
+      sheetTitle: forked.sheetTitle,
+      entityKey: forked.entityKey || forked.keyValue,
+      description: `Registro re-encolado como nuevo (Append) tras conflicto de actualización en ${forked.sheetTitle}`,
+      status: 'pending',
+      mutationId: forked.id,
+      details: {
+        originalType: mutation.type,
+        newType: 'append',
+        previousError: mutation.lastError
+      }
+    });
+
+    return forked;
   }
 
   // ==========================================

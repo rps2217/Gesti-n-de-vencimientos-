@@ -170,6 +170,13 @@ export const InventoryDashboard: React.FC = () => {
     enqueueMutation,
     syncQueue,
     removeMutation,
+    discardMutation,
+    discardAllFailedMutations,
+    retryMutation,
+    retryAllFailedMutations,
+    forkMutationAsAppend,
+    failedMutations,
+    failedCount,
     clearQueue,
     clearAuditLog
   } = useOfflineSync(async () => {
@@ -2255,6 +2262,7 @@ export const InventoryDashboard: React.FC = () => {
             latencyMs={latencyMs}
             connectionStatus={connectionStatus}
             onOpenSyncAudit={() => setIsSyncAuditOpen(true)}
+            failedCount={failedCount}
             isRelationalActive={isRelationalActive}
             activeSheet={activeSheet}
             isModalOpen={isModalOpen}
@@ -2661,6 +2669,11 @@ export const InventoryDashboard: React.FC = () => {
         testConnectionHealth={testConnectionHealth}
         syncQueue={syncQueue}
         removeMutation={removeMutation}
+        discardMutation={discardMutation}
+        discardAllFailedMutations={discardAllFailedMutations}
+        retryMutation={retryMutation}
+        retryAllFailedMutations={retryAllFailedMutations}
+        forkMutationAsAppend={forkMutationAsAppend}
         clearQueue={clearQueue}
         clearAuditLog={clearAuditLog}
       />

@@ -102,63 +102,84 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
       className={`transition-colors group cursor-pointer ${rowBgClass} md:border-b border-transparent md:border-slate-100 dark:md:border-slate-800 block md:table-row w-full bg-transparent md:bg-white dark:md:bg-slate-900`}
       title="Haz clic para ver detalles del registro"
     >
-      {/* 📱 TRUE MOBILE CARD VIEW (Only visible on small screens) */}
-      <td className="md:hidden p-4 relative block w-full bg-white dark:bg-slate-900 rounded-2xl mb-3 shadow-sm border border-slate-200 dark:border-slate-800" colSpan={visibleColumnMeta.length + 4} onClick={(e) => { e.stopPropagation(); onClickItem(item); }}>
-        <div className="flex flex-col gap-2 relative">
-          <div className="flex justify-between items-start pr-8">
-            <div className="flex flex-col gap-1.5">
-              {/* Badge Area */}
+      {/* 📱 TRUE MOBILE CARD VIEW (iOS Inset Grouped Card with Generous Touch Targets) */}
+      <td className="md:hidden p-3 sm:p-4 relative block w-full bg-white dark:bg-slate-900 rounded-3xl mb-3.5 shadow-sm border border-slate-200/90 dark:border-slate-800 transition-all active:scale-[0.99]" colSpan={visibleColumnMeta.length + 4} onClick={(e) => { e.stopPropagation(); onClickItem(item); }}>
+        <div className="flex flex-col gap-2.5 relative">
+          
+          {/* Header Row: Badges + Checkbox */}
+          <div className="flex justify-between items-start gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
               {activeView === 'main' ? (
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${status.color} border w-fit`}>
-                  {status.icon} {status.label}
-                </span>
+                <>
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${status.color} border shadow-2xs`}>
+                    {status.icon} {status.label}
+                  </span>
+                  {status.actionType === 'CANJE_PROVEEDOR' && (status.code === 'EXPIRED' || status.code === 'RETIRE_NOW' || status.code === 'UPCOMING') && (
+                    <span className="text-[10px] uppercase font-black tracking-wider px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-800">
+                      Canje
+                    </span>
+                  )}
+                  {status.actionType === 'MERMA_DIRECTA' && (status.code === 'EXPIRED' || status.code === 'RETIRE_NOW') && (
+                    <span className="text-[10px] uppercase font-black tracking-wider px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800">
+                      Merma
+                    </span>
+                  )}
+                </>
               ) : (
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border w-fit ${eventCategory ? EVENT_CATEGORIES[eventCategory]?.badgeBg + ' ' + EVENT_CATEGORIES[eventCategory]?.badgeText + ' ' + EVENT_CATEGORIES[eventCategory]?.badgeBorder : 'bg-slate-100 text-slate-700'}`}>
-                  {eventCategory && renderEventIcon(eventCategory, 'w-3 h-3')} {eventCategory || 'Evento'}
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border shadow-2xs ${eventCategory ? EVENT_CATEGORIES[eventCategory]?.badgeBg + ' ' + EVENT_CATEGORIES[eventCategory]?.badgeText + ' ' + EVENT_CATEGORIES[eventCategory]?.badgeBorder : 'bg-slate-100 text-slate-700'}`}>
+                  {eventCategory && renderEventIcon(eventCategory, 'w-3.5 h-3.5')} {eventCategory || 'Evento'}
                 </span>
               )}
-              {/* SKU Title */}
-              <span className="font-mono text-base font-black text-slate-900 dark:text-slate-100">
-                {skuCol && item[skuCol] ? String(item[skuCol]) : 'Sin SKU'}
-              </span>
             </div>
             
-            {/* Checkbox (Absolute positioning so it doesn't shift the flex layout) */}
-            <div className="absolute top-0 right-0 p-1" onClick={(e) => e.stopPropagation()}>
+            {/* Generous Checkbox Tap Target */}
+            <div 
+              className="p-2 -mr-1.5 -mt-1.5 flex items-center justify-center cursor-pointer min-w-[44px] min-h-[44px]" 
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectRow(item._rowIndex as number, !isSelected);
+              }}
+            >
               <input
                 type="checkbox"
-                className="w-5 h-5 text-blue-600 rounded border-slate-300 dark:border-slate-700 dark:bg-slate-800 focus:ring-blue-500 cursor-pointer shadow-sm"
+                className="w-5 h-5 text-blue-600 rounded-lg border-slate-300 dark:border-slate-700 dark:bg-slate-800 focus:ring-blue-500 cursor-pointer shadow-2xs"
                 checked={isSelected}
                 onChange={(e) => onSelectRow(item._rowIndex as number, e.target.checked)}
+                onClick={(e) => e.stopPropagation()}
               />
             </div>
           </div>
 
-          {/* Description / Item Name */}
-          <div className="text-sm text-slate-700 dark:text-slate-300 leading-snug line-clamp-2 pr-4 font-medium">
-            {descCol && item[descCol] ? String(item[descCol]) : 'Sin descripción'}
+          {/* SKU & Title */}
+          <div>
+            <div className="font-mono text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 tracking-tight">
+              {skuCol && item[skuCol] ? String(item[skuCol]) : 'Sin SKU'}
+            </div>
+            <div className="text-sm text-slate-600 dark:text-slate-300 leading-snug line-clamp-2 mt-0.5 font-medium">
+              {descCol && item[descCol] ? String(item[descCol]) : 'Sin descripción'}
+            </div>
           </div>
 
-          {/* Core Metrics Grid */}
-          <div className="grid grid-cols-2 gap-2 mt-1.5 p-2 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800/80">
-            {qtyCol && item[qtyCol] && (
+          {/* iOS Inset Metrics Strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-2.5 bg-slate-50/90 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-800 text-xs">
+            {qtyCol && item[qtyCol] !== undefined && (
               <div className="flex flex-col">
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">CANTIDAD</span>
-                <span className="font-mono text-sm font-semibold text-slate-700 dark:text-slate-300">{String(item[qtyCol])}</span>
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Cantidad</span>
+                <span className="font-mono text-sm font-extrabold text-slate-800 dark:text-slate-200">{String(item[qtyCol])}</span>
               </div>
             )}
             {dateCol && item[dateCol] && (
               <div className="flex flex-col">
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">FECHA</span>
-                <span className="font-mono text-sm font-semibold text-slate-700 dark:text-slate-300">
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Fecha</span>
+                <span className="font-mono text-sm font-extrabold text-slate-800 dark:text-slate-200">
                   {formatDisplayDate(item[dateCol])}
                 </span>
               </div>
             )}
             {activeView === 'events' && eventResStatus && (
-              <div className="flex flex-col col-span-2">
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">ESTADO GESTIÓN</span>
-                <span className={`font-semibold text-sm flex items-center gap-1 ${eventResStatus.isResolved ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+              <div className="flex flex-col col-span-2 sm:col-span-1">
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Gestión</span>
+                <span className={`font-bold text-xs flex items-center gap-1 mt-0.5 ${eventResStatus.isResolved ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
                   {eventResStatus.isResolved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock3 className="w-3.5 h-3.5 animate-pulse" />}
                   {eventResStatus.isResolved ? 'Resuelto' : 'Pendiente'}
                 </span>
@@ -166,23 +187,39 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
             )}
           </div>
 
-          {/* Mobile Action Bar */}
-          <div className="mt-1 flex justify-between items-center px-1">
-            <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide flex items-center gap-1 group-hover:underline">
-              <Plus className="w-3 h-3" /> VER DETALLE
-            </span>
+          {/* Generous iOS Action Buttons (Minimum 44x44px touch targets) */}
+          <div className="flex justify-between items-center pt-1">
+            <button 
+              onClick={(e) => { e.stopPropagation(); onClickItem(item); }}
+              className="h-10 px-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer active:scale-95"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Ver Detalle</span>
+            </button>
             <div className="flex items-center gap-1">
               {hasEmail && isEmailEnabled && (
-                <button onClick={(e) => { e.stopPropagation(); onOpenEmail?.(item); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-full transition-colors">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); onOpenEmail?.(item); }} 
+                  className="w-10 h-10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-full transition-all active:scale-95 cursor-pointer"
+                  title="Enviar Email"
+                >
                   <Mail className="w-4 h-4"/>
                 </button>
               )}
               {hasPhone && isWhatsAppEnabled && (
-                <button onClick={(e) => { e.stopPropagation(); onOpenWhatsApp?.(item); }} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 rounded-full transition-colors">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); onOpenWhatsApp?.(item); }} 
+                  className="w-10 h-10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 rounded-full transition-all active:scale-95 cursor-pointer"
+                  title="Enviar WhatsApp"
+                >
                   <MessageSquare className="w-4 h-4"/>
                 </button>
               )}
-              <button onClick={(e) => { e.stopPropagation(); onDeleteRow(item); }} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-slate-800 rounded-full transition-colors">
+              <button 
+                onClick={(e) => { e.stopPropagation(); onDeleteRow(item); }} 
+                className="w-10 h-10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-slate-800 rounded-full transition-all active:scale-95 cursor-pointer"
+                title="Eliminar Registro"
+              >
                 <Trash2 className="w-4 h-4"/>
               </button>
             </div>

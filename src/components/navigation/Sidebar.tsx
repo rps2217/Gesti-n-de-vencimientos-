@@ -18,10 +18,10 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ icon, label, active, onClick,
     <button
       onClick={onClick}
       title={collapsed ? label : undefined}
-      className={`w-full flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3.5'} py-2.5 rounded-xl text-sm font-semibold transition-all relative ${
+      className={`w-full flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3.5'} min-h-[44px] py-2.5 rounded-2xl text-sm font-bold transition-all relative cursor-pointer active:scale-[0.98] ${
         active 
-          ? 'bg-blue-600 text-white shadow-sm shadow-blue-200 dark:shadow-none' 
-          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
+          ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/25 dark:shadow-none' 
+          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-slate-100'
       }`}
     >
       <div className={`${active ? 'text-white' : 'text-slate-400 dark:text-slate-500'} shrink-0`}>
@@ -29,12 +29,12 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ icon, label, active, onClick,
       </div>
       {!collapsed && <span className="truncate">{label}</span>}
       {badge && !collapsed && (
-        <span className="ml-auto text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300">
+        <span className="ml-auto text-[10px] font-black tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/70 dark:text-blue-200">
           {badge}
         </span>
       )}
       {active && !collapsed && !badge && (
-        <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white"></div>
+        <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white/90"></div>
       )}
     </button>
   );

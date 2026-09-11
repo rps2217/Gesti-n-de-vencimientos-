@@ -177,41 +177,41 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
   const viewMeta = getViewMeta();
 
   return (
-    <header className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 z-30 sticky top-0 shrink-0 px-3 sm:px-6 py-2 flex items-center justify-between gap-3 shadow-2xs">
+    <header className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 z-30 sticky top-0 shrink-0 px-3 sm:px-6 py-2.5 flex items-center justify-between gap-2.5 sm:gap-3 shadow-2xs">
       
       {/* LEFT: Mobile trigger & View Identity Context */}
-      <div className="flex items-center gap-2.5 shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
         <button
           onClick={() => setIsMobileMenuOpen(true)}
-          className="lg:hidden p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition-colors shrink-0 cursor-pointer"
+          className="lg:hidden h-10 w-10 flex items-center justify-center bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-2xl transition-all shrink-0 cursor-pointer active:scale-95"
           title="Abrir menú de navegación"
         >
-          <Menu className="w-4 h-4" />
+          <Menu className="w-5 h-5" />
         </button>
 
         {/* View Badge Pill */}
-        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-2xs">
+        <div className="flex items-center gap-2 h-10 px-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-2xs">
           <div className="shrink-0">
             {viewMeta.icon}
           </div>
           <span className="font-bold text-xs text-slate-800 dark:text-slate-100 whitespace-nowrap">
             {viewMeta.title}
           </span>
-          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-white dark:bg-slate-700 border border-slate-200/60 dark:border-slate-600/60 text-slate-600 dark:text-slate-300">
+          <span className="font-mono text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-white dark:bg-slate-700 border border-slate-200/60 dark:border-slate-600/60 text-slate-600 dark:text-slate-300">
             {filteredItems.length}
           </span>
           {isRelationalActive && activeView === 'main' && (
-            <span className="hidden xl:inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+            <span className="hidden xl:inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
               <Sparkles className="w-2.5 h-2.5 text-emerald-500" /> Relacional
             </span>
           )}
         </div>
       </div>
 
-      {/* CENTER: Zen-Inspired Sleek Search Bar */}
-      <div className="flex-1 flex justify-center max-w-2xl px-2">
+      {/* CENTER: iOS-Inspired Sleek Search Bar */}
+      <div className="flex-1 flex justify-center max-w-2xl px-1 sm:px-2">
         {(activeView !== 'schema' || searchableHeaders.length > 0) ? (
-          <div className="relative w-full flex items-center bg-slate-100/90 dark:bg-slate-800/80 hover:bg-slate-200/70 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 focus-within:bg-white dark:focus-within:bg-slate-900 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/15 rounded-xl transition-all shadow-2xs">
+          <div className="relative w-full h-10 flex items-center bg-slate-100/90 dark:bg-slate-800/80 hover:bg-slate-200/70 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 focus-within:bg-white dark:focus-within:bg-slate-900 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/15 rounded-2xl transition-all shadow-2xs">
             <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 ml-3 shrink-0" />
             
             <input
@@ -220,12 +220,12 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={activeView === 'analytics' ? "Buscar y filtrar métricas..." : `Buscar en ${searchableHeaders.length} columnas...`}
-              className="w-full bg-transparent pl-2.5 pr-2 py-1.5 text-xs font-medium text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none"
+              className="w-full bg-transparent pl-2.5 pr-2 py-2 text-xs font-medium text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none"
             />
 
             {/* Keyboard shortcut indicator */}
             {!searchTerm && (
-              <kbd className="hidden md:inline-block px-1.5 py-0.5 text-[9px] font-mono text-slate-400 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded mr-1.5 shadow-2xs">
+              <kbd className="hidden md:inline-block px-1.5 py-0.5 text-[9px] font-mono text-slate-400 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md mr-2 shadow-2xs">
                 ⌘K
               </kbd>
             )}
@@ -234,7 +234,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm('')}
-                className="p-1 mr-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700 rounded-md transition-colors cursor-pointer"
+                className="w-7 h-7 flex items-center justify-center mr-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700 rounded-full transition-colors cursor-pointer"
                 title="Limpiar búsqueda"
               >
                 <X className="w-3.5 h-3.5" />
@@ -245,7 +245,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
             {hasActiveFilters && (
               <button
                 onClick={clearAllFilters}
-                className="flex items-center gap-1 px-2 py-0.5 mr-1 text-[11px] font-bold text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 rounded-lg border border-red-200 dark:border-red-900/50 transition-colors whitespace-nowrap shrink-0"
+                className="flex items-center gap-1 px-2.5 py-1 mr-1.5 text-[11px] font-bold text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 rounded-xl border border-red-200 dark:border-red-900/50 transition-all whitespace-nowrap shrink-0 active:scale-95"
                 title="Limpiar todos los filtros aplicados"
               >
                 <FilterX className="w-3 h-3" />
@@ -256,10 +256,10 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
             {/* Barcode Camera Scanner */}
             <button
               onClick={() => setIsScannerOpen(true)}
-              className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-colors mr-1 shrink-0 cursor-pointer"
+              className="w-8 h-8 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all mr-1 shrink-0 cursor-pointer active:scale-95"
               title="Escanear código de barras o QR con la cámara"
             >
-              <Scan className="w-3.5 h-3.5" />
+              <Scan className="w-4 h-4" />
             </button>
           </div>
         ) : (
@@ -274,7 +274,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
         {activeView === 'events' && setIsBulkImportOpen && (
           <button
             onClick={() => setIsBulkImportOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-98"
+            className="h-10 flex items-center gap-1.5 px-3.5 rounded-2xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
             title="Importar masivamente Incidencias FRC desde Excel o Portapapeles"
           >
             <Upload className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
@@ -286,7 +286,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
         {activeView === 'schema' && setIsScriptModalOpen && (
           <button
             onClick={() => setIsScriptModalOpen(true)}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+            className="hidden sm:flex h-10 items-center gap-1.5 px-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
           >
             <Sliders className="w-3.5 h-3.5 text-blue-600" />
             <span>Apps Script</span>
@@ -298,10 +298,10 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
           <button 
             disabled={!activeSheet || isModalOpen}
             onClick={() => handleOpenModal()}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white text-xs font-bold shadow-xs shadow-blue-500/20 disabled:opacity-50 transition-all cursor-pointer shrink-0"
+            className="h-10 flex items-center gap-1.5 px-4 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold shadow-xs shadow-blue-500/20 disabled:opacity-50 transition-all cursor-pointer shrink-0"
             title={`Crear ${viewMeta.actionLabel}`}
           >
-            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <Plus className="w-4 h-4 stroke-[2.5]" />
             <span className="hidden sm:inline">{viewMeta.actionLabel}</span>
           </button>
         )}
@@ -309,7 +309,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
         {/* Conteo Físico Terminal */}
         <button
           onClick={() => navigate('/conteo')}
-          className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all shadow-2xs shrink-0 cursor-pointer"
+          className="hidden md:flex h-10 items-center gap-1.5 px-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all shadow-2xs shrink-0 cursor-pointer active:scale-95"
           title="Módulo de conteo masivo de existencias físicas"
         >
           <Barcode className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
@@ -322,7 +322,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
             <button
               id="actions-dropdown-btn"
               onClick={() => setIsActionsMenuOpen(!isActionsMenuOpen)}
-              className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer ${
+              className={`h-10 text-xs font-bold px-3.5 rounded-2xl border transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95 ${
                 isActionsMenuOpen
                   ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-transparent'
                   : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'

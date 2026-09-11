@@ -33,6 +33,7 @@ export function getDefaultTicketGeneralSettings(activeView: string = 'main'): Ti
     includeSkuBarcode: false,
     barcodeHeightMm: 8,
     showBarcodeTextInReport: false,
+    cutMarginMm: 2,
   };
 }
 
@@ -177,4 +178,123 @@ export function saveTicketConfigToStorage(config: GlobalTicketConfig): void {
   } catch (e) {
     console.error('Failed to save global ticket config to storage', e);
   }
+}
+
+export interface ThermalPrintOptions {
+  elementId?: string;
+  paperWidth?: '80mm' | '58mm';
+  cutMarginMm?: number;
+  onBeforePrint?: () => void;
+  onAfterPrint?: () => void;
+}
+
+/**
+ * Executes a clean thermal print job without leaving excessive blank paper.
+ * Measures the exact rendered height of the ticket DOM element, calculates
+ * exact millimeters, and injects a dynamic @page CSS rule so the printer
+ * cuts immediately after the ticket footer, avoiding wasteful 11-inch/A4 feeds.
+ */
+export function executeThermalPrint(options: ThermalPrintOptions = {}): void {
+  const {
+    elementId = 'thermal-ticket-root',
+    paperWidth = '80mm',
+    cutMarginMm = 2,
+    onBeforePrint,
+    onAfterPrint
+  } = options;
+
+  if (onBeforePrint) onBeforePrint();
+
+  // Give React 100ms to mount/update the ticket DOM if needed
+  setTimeout(() => {
+    const el = document.getElementById(elementId);
+    let calculatedHeightMm = 0;
+
+    if (el) {
+      // Temporarily measure if display is none
+      const prevDisplay = el.style.display;
+      const prevPosition = el.style.position;
+      const prevVisibility = el.style.visibility;
+      const prevLeft = el.style.left;
+
+      const isHidden = window.getComputedStyle(el).display === 'none';
+      if (isHidden) {
+        el.style.position = 'fixed';
+        el.style.left = '-9999px';
+        el.style.top = '0';
+        el.style.visibility = 'hidden';
+        el.style.display = 'block';
+      }
+
+      // Exact pixel height of the full ticket
+      const heightPx = Math.max(
+        el.scrollHeight || 0,
+        el.offsetHeight || 0,
+        Math.ceil(el.getBoundingClientRect().height || 0)
+      );
+
+      // Restore inline styles immediately
+      if (isHidden) {
+        el.style.display = prevDisplay;
+        el.style.position = prevPosition;
+        el.style.visibility = prevVisibility;
+        el.style.left = prevLeft;
+      }
+
+      // Convert standard CSS pixels (96 DPI) to millimeters: 1px = 25.4 / 96 = ~0.264583 mm
+      if (heightPx > 0) {
+        calculatedHeightMm = Math.ceil(heightPx * 0.264583) + Math.max(0, cutMarginMm);
+      }
+    }
+
+    // Inject or update dynamic page style tag in head
+    let styleTag = document.getElementById('thermal-print-dynamic-page-style') as HTMLStyleElement | null;
+    if (!styleTag) {
+      styleTag = document.createElement('style');
+      styleTag.id = 'thermal-print-dynamic-page-style';
+      document.head.appendChild(styleTag);
+    }
+
+    const effectiveMargin = Math.max(0, cutMarginMm);
+    const sizeRule = calculatedHeightMm > 10
+      ? `size: ${paperWidth} ${calculatedHeightMm}mm;`
+      : `size: ${paperWidth} auto;`;
+
+    styleTag.textContent = `
+      @media print {
+        @page {
+          ${sizeRule}
+          margin: 0mm;
+        }
+        html, body {
+          width: ${paperWidth} !important;
+          ${calculatedHeightMm > 10 ? `height: ${calculatedHeightMm}mm !important; max-height: ${calculatedHeightMm}mm !important;` : 'height: auto !important;'}
+          min-height: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          overflow: hidden !important;
+        }
+        #${elementId} {
+          padding-bottom: ${effectiveMargin}mm !important;
+          box-sizing: border-box !important;
+        }
+      }
+    `;
+
+    // Trigger browser print dialog
+    window.print();
+
+    // Clean up dynamic style element after printing
+    const cleanup = () => {
+      if (styleTag && styleTag.parentNode) {
+        styleTag.parentNode.removeChild(styleTag);
+      }
+      window.removeEventListener('afterprint', cleanup);
+      if (onAfterPrint) onAfterPrint();
+    };
+
+    window.addEventListener('afterprint', cleanup, { once: true });
+    // Safety fallback cleanup in case afterprint does not fire in some browsers
+    setTimeout(cleanup, 4000);
+  }, 120);
 }

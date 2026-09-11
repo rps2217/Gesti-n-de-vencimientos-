@@ -107,7 +107,8 @@ import { TicketPrintView } from './views/TicketPrintView';
 import { buildBulkActionContext, isActionEnabledForTable } from '../utils/bulkActionsRegistry';
 import { 
   loadTicketConfigFromStorage, 
-  saveTicketConfigToStorage 
+  saveTicketConfigToStorage,
+  executeThermalPrint
 } from '../utils/ticketUtils';
 import { GlobalTicketConfig, ViewTicketConfig, TableSlice } from '../types';
 import { SkeletonLoader } from './common/SkeletonLoader';
@@ -251,6 +252,7 @@ export const InventoryDashboard: React.FC = () => {
   });
   const [isTicketConfigOpen, setIsTicketConfigOpen] = useState(false);
   const [ticketPrintMode, setTicketPrintMode] = useState<'standard' | 'barcode'>('standard');
+  const [itemsToPrintList, setItemsToPrintList] = useState<InventoryItem[] | null>(null);
   const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
   const [gmailModalItems, setGmailModalItems] = useState<any[]>([]);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
@@ -312,11 +314,21 @@ export const InventoryDashboard: React.FC = () => {
       alert("No hay registros para imprimir.");
       return;
     }
+    setItemsToPrintList(itemsToPrint);
     setTicketPrintMode(mode);
-    // El renderizado de TicketPrintView se encarga de mostrar solo el ticket en modo @media print
-    setTimeout(() => {
-      window.print();
-    }, 150);
+
+    // Retrieve active thermal config to pass exact paperWidth and cutMarginMm
+    const activeConfig = (globalTicketConfig[activeView] || sheetConfig.ticketPrintConfig?.[activeView] || {}) as any;
+    const generalSettings = activeConfig.general || activeConfig;
+    const paperWidth = generalSettings.paperWidth || '80mm';
+    const cutMarginMm = generalSettings.cutMarginMm !== undefined ? Number(generalSettings.cutMarginMm) : 2;
+
+    // Execute thermal print with precise height calculation to avoid excessive blank tail
+    executeThermalPrint({
+      elementId: 'thermal-ticket-root',
+      paperWidth,
+      cutMarginMm
+    });
   };
 
   // Column Resizing Custom Hook
@@ -2682,7 +2694,7 @@ export const InventoryDashboard: React.FC = () => {
 
     {/* HIDDEN UNLESS PRINTING: TICKET PRINT VIEW */}
     <TicketPrintView 
-      items={selectedRowIds.length > 0 ? filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number)) : filteredItems} 
+      items={itemsToPrintList || (selectedRowIds.length > 0 ? filteredItems.filter(i => selectedRowIds.includes(i._rowIndex as number)) : filteredItems)} 
       headers={headers} 
       config={globalTicketConfig[activeView] || sheetConfig.ticketPrintConfig?.[activeView] || {}} 
       activeView={activeView}

@@ -151,6 +151,7 @@ export interface TicketGeneralSettings {
   includeSkuBarcode?: boolean;
   barcodeHeightMm?: number;
   showBarcodeTextInReport?: boolean;
+  cutMarginMm?: number; // Margen de corte final (0mm = corte al ras / ahorro máximo, 2mm = recomendado, 5mm = holgado)
 }
 
 export interface ViewTicketSettings {

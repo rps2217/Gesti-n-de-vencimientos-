@@ -66,10 +66,11 @@ export const TicketPrintView: React.FC<TicketPrintViewProps> = ({
 
   return (
     <div 
+      id="thermal-ticket-root"
       className={`hidden print:block text-black font-mono leading-tight print:bg-white print:text-black ${
         is58mm ? 'w-[56mm] p-1' : 'w-[76mm] p-2'
       }`}
-      style={{ margin: 0 }}
+      style={{ margin: 0, paddingBottom: `${general.cutMarginMm !== undefined ? general.cutMarginMm : 2}mm` }}
     >
       
       {/* TICKET HEADER */}
@@ -271,7 +272,7 @@ export const TicketPrintView: React.FC<TicketPrintViewProps> = ({
       </div>
 
       {/* TICKET FOOTER */}
-      <div className="text-center border-t border-dashed border-black mt-2.5 pt-1.5 text-[10px] font-bold pb-4">
+      <div className="text-center border-t border-dashed border-black mt-2 pt-1 text-[10px] font-bold pb-0.5">
         {general.footerText || (isBarcodeMode ? '--- FIN DE ETIQUETAS ---' : '--- FIN DEL REPORTE ---')}
       </div>
     </div>

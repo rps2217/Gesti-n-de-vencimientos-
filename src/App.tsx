@@ -140,7 +140,7 @@ export default function App() {
   return (
     <Router>
       <ToastProvider>
-        <div className="flex flex-col h-screen w-full bg-[#F8FAFC] dark:bg-slate-950 font-sans overflow-hidden transition-colors print:overflow-visible">
+        <div className="flex flex-col h-screen w-full bg-[#F8FAFC] dark:bg-slate-950 font-sans overflow-hidden transition-colors print:overflow-visible print:h-auto print:min-h-0 print:block">
           <Routes>
             <Route path="/" element={
               <>
@@ -250,7 +250,7 @@ export default function App() {
                     </button>
                   </div>
                 </nav>
-                <main className="flex-1 flex flex-col overflow-hidden print:overflow-visible">
+                <main className="flex-1 flex flex-col overflow-hidden print:overflow-visible print:h-auto print:min-h-0 print:block">
                   <InventoryDashboard />
                 </main>
               </>

@@ -11,7 +11,8 @@ import {
   Receipt,
   FileText,
   Sliders,
-  Barcode
+  Barcode,
+  Scissors
 } from 'lucide-react';
 import { 
   ViewTicketConfig, 
@@ -22,7 +23,8 @@ import {
 import { 
   normalizeTicketConfig, 
   getDefaultViewTicketSettings, 
-  getDefaultColumnConfig 
+  getDefaultColumnConfig,
+  executeThermalPrint 
 } from '../../utils/ticketUtils';
 import { findColumnBySemantic } from '../../utils/columnAliases';
 import { formatDisplayDate } from '../../utils/pureCalculations';
@@ -154,9 +156,12 @@ export const TicketConfigModal: React.FC<TicketConfigModalProps> = ({
       columns: localColumns,
       general: localGeneral
     });
-    setTimeout(() => {
-      window.print();
-    }, 150);
+
+    executeThermalPrint({
+      elementId: 'thermal-ticket-root',
+      paperWidth: localGeneral.paperWidth || '80mm',
+      cutMarginMm: localGeneral.cutMarginMm !== undefined ? Number(localGeneral.cutMarginMm) : 2
+    });
   };
 
   // Helper for live preview column values
@@ -430,6 +435,38 @@ export const TicketConfigModal: React.FC<TicketConfigModalProps> = ({
                     </button>
                   </div>
                 </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">
+                      Corte Final (Ahorro de Papel)
+                    </label>
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                      Sin colas en blanco
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5 p-0.5 rounded-xl bg-slate-200 dark:bg-slate-700">
+                    {[
+                      { value: 0, label: 'Al ras (0 mm)', tip: 'Corte inmediato, máximo ahorro de papel' },
+                      { value: 2, label: 'Mínimo (2 mm)', tip: 'Margen de seguridad recomendado' },
+                      { value: 5, label: 'Estándar (5 mm)', tip: 'Margen holgado para guillotina separada' },
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setLocalGeneral(prev => ({ ...prev, cutMarginMm: opt.value }))}
+                        className={`py-1 px-1.5 text-center rounded-lg transition-all text-xs font-bold ${
+                          (localGeneral.cutMarginMm ?? 2) === opt.value
+                            ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                        title={opt.tip}
+                      >
+                        <span className="block leading-tight">{opt.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-4 pt-1">
@@ -678,8 +715,17 @@ export const TicketConfigModal: React.FC<TicketConfigModalProps> = ({
                 </div>
 
                 {/* Footer */}
-                <div className="text-center border-t border-dashed border-black mt-2 pt-1.5 text-[10px] font-bold">
+                <div 
+                  className="text-center border-t border-dashed border-black mt-2 pt-1 text-[10px] font-bold"
+                  style={{ paddingBottom: `${localGeneral.cutMarginMm ?? 2}mm` }}
+                >
                   {localGeneral.footerText || '--- FIN DEL REPORTE ---'}
+                </div>
+
+                {/* Simulated Cut Indicator */}
+                <div className="mt-2 pt-1 border-t-2 border-dotted border-rose-500/60 flex items-center justify-center gap-1.5 text-[9px] font-bold text-rose-600">
+                  <Scissors className="w-3 h-3 rotate-90" />
+                  <span>CORTE TÉRMICO {(localGeneral.cutMarginMm ?? 2) > 0 ? `(+${localGeneral.cutMarginMm ?? 2}mm)` : '(AL RAS)'}</span>
                 </div>
               </div>
             </div>

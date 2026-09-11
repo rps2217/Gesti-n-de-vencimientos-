@@ -22,6 +22,7 @@ interface DashboardTopNavProps {
   hasActiveFilters: boolean;
   clearAllFilters: () => void;
   setIsScannerOpen: (open: boolean) => void;
+  setIsMobilePistoleoOpen?: (open: boolean) => void;
   isActionsMenuOpen: boolean;
   setIsActionsMenuOpen: (open: boolean) => void;
   setIsGmailModalOpen: (open: boolean) => void;
@@ -67,6 +68,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
   hasActiveFilters,
   clearAllFilters,
   setIsScannerOpen,
+  setIsMobilePistoleoOpen,
   isActionsMenuOpen,
   setIsActionsMenuOpen,
   setIsGmailModalOpen,
@@ -250,6 +252,18 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
               >
                 <FilterX className="w-3 h-3" />
                 <span className="hidden sm:inline">Limpiar</span>
+              </button>
+            )}
+
+            {/* Mobile Pistoleo Terminal Trigger */}
+            {setIsMobilePistoleoOpen && (
+              <button
+                onClick={() => setIsMobilePistoleoOpen(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-extrabold text-white bg-gradient-to-r from-red-700 to-rose-700 hover:from-red-600 hover:to-rose-600 rounded-xl shadow-xs transition-all mr-1 shrink-0 cursor-pointer active:scale-95"
+                title="Abrir Terminal de Pistoleo Móvil (Cámara / Láser PDA)"
+              >
+                <Barcode className="w-3.5 h-3.5 text-rose-200" />
+                <span className="hidden xs:inline text-[11px]">Pistoleo</span>
               </button>
             )}
 

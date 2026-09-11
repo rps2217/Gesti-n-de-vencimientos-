@@ -248,6 +248,7 @@ export const InventoryDashboard: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+  const [isMobilePistoleoOpen, setIsMobilePistoleoOpen] = useState(false);
   const [globalTicketConfig, setGlobalTicketConfig] = useState<GlobalTicketConfig>(() => {
     return loadTicketConfigFromStorage();
   });
@@ -1931,6 +1932,95 @@ export const InventoryDashboard: React.FC = () => {
     }
   };
 
+  const handleSavePistoleoItem = async (formPayload: Record<string, string>, targetExistingItem?: InventoryItem) => {
+    if (!activeSheet || headers.length === 0) return;
+    setIsSaving(true);
+    try {
+      const isDemo = !localStorage.getItem('appsheet_clone_scriptUrl')?.trim();
+      const now = new Date();
+      const currentFormattedDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 19).replace('T', ' ');
+
+      const rowValues = headers.map(h => {
+        const val = formPayload[h] !== undefined && formPayload[h] !== null ? String(formPayload[h]) : '';
+        const colSchema = sheetConfig.schema?.[activeSheet.title]?.[h];
+        if (!val && (colSchema?.type === 'datetime' || /timestamp|created_at|fecha_creaci[oó]n|fecha_registro/i.test(h))) {
+          return currentFormattedDateTime;
+        }
+        return val;
+      });
+
+      const validRowIndexes = items.map(i => typeof i._rowIndex === 'number' ? i._rowIndex : parseInt(String(i._rowIndex || '0'), 10)).filter(n => !isNaN(n) && n > 0);
+      const nextRowIndex = targetExistingItem ? (targetExistingItem._rowIndex || 2) : (validRowIndexes.length ? Math.max(...validRowIndexes) + 1 : 2);
+
+      const newItem: InventoryItem = { _rowIndex: nextRowIndex };
+      headers.forEach((h, i) => newItem[h] = rowValues[i]);
+
+      const identityInfo = resolveItemIdentity(newItem, headers, activeSheet.title);
+      newItem._entityKey = identityInfo.keyValue;
+      newItem._entityKeyCol = identityInfo.keyColumn || undefined;
+      newItem._isSyntheticKey = identityInfo.isSynthetic;
+
+      let nextItems: InventoryItem[];
+      if (targetExistingItem && targetExistingItem._rowIndex) {
+        nextItems = items.map(item => item._rowIndex === targetExistingItem._rowIndex ? newItem : item);
+      } else {
+        nextItems = [...items, newItem];
+      }
+
+      setItems(nextItems);
+      if (activeView === 'main') setAllMainItems(nextItems);
+      saveStoredDemoItems(activeView, nextItems);
+      if (activeView === 'main') saveStoredDemoItems('main', nextItems);
+
+      try {
+        const cachedRows = [headers, ...nextItems.map(it => headers.map(h => it[h] !== undefined && it[h] !== null ? String(it[h]) : ''))];
+        await indexedDbService.saveCachedSheet(activeSheet.title, cachedRows);
+      } catch (cacheErr) {
+        console.warn('Error saving pistoleo item to IndexedDB:', cacheErr);
+      }
+
+      if (isDemo) {
+        showToast(targetExistingItem ? 'Registro de pistoleo actualizado' : 'Nuevo registro de pistoleo guardado', 'success', 'Pistoleo Exitoso');
+        return;
+      }
+
+      if (targetExistingItem && targetExistingItem._rowIndex && targetExistingItem._rowIndex > 1) {
+        try {
+          await updateRow(activeSheet.title, targetExistingItem._rowIndex, rowValues, {
+            entityKey: identityInfo.keyValue,
+            keyValue: identityInfo.keyValue
+          });
+        } catch (err) {
+          await enqueueMutation({
+            type: 'update',
+            sheetTitle: activeSheet.title,
+            rowIndex: targetExistingItem._rowIndex,
+            entityKey: identityInfo.keyValue,
+            headers,
+            values: rowValues
+          });
+        }
+      } else {
+        try {
+          await appendRow(activeSheet.title, rowValues);
+        } catch (err) {
+          await enqueueMutation({
+            type: 'append',
+            sheetTitle: activeSheet.title,
+            entityKey: identityInfo.keyValue,
+            headers,
+            values: rowValues
+          });
+        }
+      }
+      showToast('Cambios de pistoleo guardados en la nube', 'success', 'Sincronización');
+    } catch (err: any) {
+      showToast(`Error al guardar pistoleo: ${err.message}`, 'error', 'Error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleDelete = async (item: InventoryItem) => {
     if (!activeSheet) return;
     const confirmed = window.confirm(`¿Estás seguro de que deseas eliminar la fila ${item._rowIndex}? Esta acción no se puede deshacer.`);
@@ -2339,6 +2429,7 @@ export const InventoryDashboard: React.FC = () => {
             hasActiveFilters={hasActiveFilters}
             clearAllFilters={clearAllFilters}
             setIsScannerOpen={setIsScannerOpen}
+            setIsMobilePistoleoOpen={setIsMobilePistoleoOpen}
             isActionsMenuOpen={isActionsMenuOpen}
             setIsActionsMenuOpen={setIsActionsMenuOpen}
             setIsGmailModalOpen={setIsGmailModalOpen}
@@ -2635,15 +2726,26 @@ export const InventoryDashboard: React.FC = () => {
             setSelectedRowIds={setSelectedRowIds}
           />
 
-          {/* MOBILE ONLY FAB (Floating Action Button) for New Record */}
+          {/* MOBILE ONLY FABs (Floating Action Buttons) */}
           {!isZenMode && activeView !== 'schema' && activeView !== 'analytics' && activeSheet && (
-            <button
-              onClick={() => handleOpenModal()}
-              className="md:hidden fixed bottom-6 right-6 z-40 bg-blue-600 text-white p-4 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-blue-500/20 active:scale-95 transition-transform"
-              title="Nuevo Registro"
-            >
-              <Plus className="w-6 h-6" />
-            </button>
+            <div className="md:hidden fixed bottom-6 right-5 z-40 flex flex-col items-end gap-2.5">
+              <button
+                onClick={() => setIsMobilePistoleoOpen(true)}
+                className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-red-800 via-rose-900 to-red-800 text-white font-extrabold text-xs rounded-full shadow-[0_8px_25px_rgba(153,27,27,0.45)] border border-red-500/40 active:scale-95 transition-all"
+                title="Abrir Terminal de Pistoleo Móvil (Cámara / Láser PDA)"
+              >
+                <Barcode className="w-4 h-4 text-rose-300 animate-pulse" />
+                <span>Pistoleo Móvil</span>
+              </button>
+
+              <button
+                onClick={() => handleOpenModal()}
+                className="bg-blue-600 text-white p-3 rounded-full shadow-[0_8px_25px_rgba(37,99,235,0.4)] border border-blue-500/20 active:scale-95 transition-all"
+                title="Nuevo Registro"
+              >
+                <Plus className="w-5 h-5 stroke-[2.5]" />
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -2688,6 +2790,9 @@ export const InventoryDashboard: React.FC = () => {
         isScannerOpen={isScannerOpen}
         setIsScannerOpen={setIsScannerOpen}
         setSearchTerm={setSearchTerm}
+        isMobilePistoleoOpen={isMobilePistoleoOpen}
+        setIsMobilePistoleoOpen={setIsMobilePistoleoOpen}
+        handleSavePistoleoItem={handleSavePistoleoItem}
         isBulkEditOpen={isBulkEditOpen}
         setIsBulkEditOpen={setIsBulkEditOpen}
         selectedRowIds={selectedRowIds}

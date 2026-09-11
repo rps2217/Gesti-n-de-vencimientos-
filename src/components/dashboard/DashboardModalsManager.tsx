@@ -6,6 +6,7 @@ import { ScriptCodeModal } from '../modals/ScriptCodeModal';
 import { ItemFormModal } from '../modals/ItemFormModal';
 import { GlobalConfigModal } from '../modals/GlobalConfigModal';
 import { BarcodeScannerModal } from '../modals/BarcodeScannerModal';
+import { MobilePistoleoTerminalModal } from '../modals/MobilePistoleoTerminalModal';
 import { BulkEditModal } from '../modals/BulkEditModal';
 import { GmailDraftModal } from '../modals/GmailDraftModal';
 import { WhatsAppModal } from '../modals/WhatsAppModal';
@@ -72,6 +73,11 @@ export interface DashboardModalsManagerProps {
   isScannerOpen: boolean;
   setIsScannerOpen: (open: boolean) => void;
   setSearchTerm: (code: string) => void;
+
+  // Mobile Pistoleo Terminal
+  isMobilePistoleoOpen: boolean;
+  setIsMobilePistoleoOpen: (open: boolean) => void;
+  handleSavePistoleoItem: (formData: Record<string, string>, targetExistingItem?: InventoryItem) => Promise<void>;
 
   // Bulk Edit
   isBulkEditOpen: boolean;
@@ -217,6 +223,9 @@ export const DashboardModalsManager: React.FC<DashboardModalsManagerProps> = ({
   isScannerOpen,
   setIsScannerOpen,
   setSearchTerm,
+  isMobilePistoleoOpen,
+  setIsMobilePistoleoOpen,
+  handleSavePistoleoItem,
   isBulkEditOpen,
   setIsBulkEditOpen,
   selectedRowIds,
@@ -374,6 +383,22 @@ export const DashboardModalsManager: React.FC<DashboardModalsManagerProps> = ({
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         onScanSuccess={(code) => setSearchTerm(code)}
+      />
+
+      {/* MOBILE PISTOLEO TERMINAL MODAL */}
+      <MobilePistoleoTerminalModal
+        isOpen={isMobilePistoleoOpen}
+        onClose={() => setIsMobilePistoleoOpen(false)}
+        items={items}
+        headers={headers}
+        masterProducts={products}
+        policies={policies}
+        activeSheetTitle={activeSheet?.title || activeView}
+        onSaveItem={handleSavePistoleoItem}
+        onOpenFullModal={(prod, prefillSku) => {
+          handleOpenModal(prod, prefillSku);
+        }}
+        showToast={showToast}
       />
 
       {/* BULK EDIT MODAL */}

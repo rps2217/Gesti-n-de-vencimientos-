@@ -7,7 +7,7 @@ import {
   Tag, Barcode, Hash, MapPin, Sliders, ShieldCheck, Database,
   ArrowUpRight, ArrowDownRight, ChevronRight, HelpCircle,
   Lock, Unlock, ListTodo, Zap, Copy, MessageSquare, CheckCheck, Share2, FileWarning, Store,
-  Camera, Smartphone
+  Camera, Smartphone, Cloud, CloudDownload, CloudUpload, Loader2, RefreshCw
 } from 'lucide-react';
 import { 
   StockCountSession, 
@@ -35,7 +35,7 @@ import {
   generateShortVcId,
   playBeep
 } from '../../utils/stockCountUtils';
-import { saveAuditRowsToDedicatedSheet } from '../../lib/sheets';
+import { saveAuditRowsToDedicatedSheet, saveCampaignsToCloud, loadCampaignsFromCloud } from '../../lib/sheets';
 import { CampaignConsolidationDashboard } from './CampaignConsolidationDashboard';
 import { MobileCameraBarcodeScanner } from './MobileCameraBarcodeScanner';
 import { 
@@ -86,6 +86,77 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
   // Campaigns list & active campaign
   const [campaigns, setCampaigns] = useState<InventoryCampaign[]>(() => loadCampaignsFromStorage());
   const [activeCampaignIdState, setActiveCampaignIdState] = useState<string | null>(() => getActiveCampaignId());
+
+  // Cloud Auto-Sync with Office PC & Google Sheets
+  const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
+  const [lastCloudSyncDate, setLastCloudSyncDate] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('app_last_campaign_cloud_sync');
+    } catch {
+      return null;
+    }
+  });
+
+  // Active campaign entity
+  const activeCampaign = useMemo(() => {
+    if (!activeCampaignIdState && campaigns.length > 0) {
+      return campaigns[0];
+    }
+    return campaigns.find(c => c.id === activeCampaignIdState) || null;
+  }, [campaigns, activeCampaignIdState]);
+
+  // Cloud sync handler
+  const handleCloudSync = async (silent: boolean = false) => {
+    setIsSyncingCloud(true);
+    try {
+      const cloudData = await loadCampaignsFromCloud();
+      if (cloudData && Array.isArray(cloudData.campaigns) && cloudData.campaigns.length > 0) {
+        setCampaigns(cloudData.campaigns);
+        saveCampaignsToStorage(cloudData.campaigns);
+
+        if (cloudData.sessions && Array.isArray(cloudData.sessions)) {
+          setSessions(cloudData.sessions);
+          saveStockCountSessionsToStorage(cloudData.sessions);
+        }
+
+        if (cloudData.activeCampaignId) {
+          setActiveCampaignIdState(cloudData.activeCampaignId);
+          setActiveCampaignId(cloudData.activeCampaignId);
+        }
+
+        const nowStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+        setLastCloudSyncDate(nowStr);
+        try {
+          localStorage.setItem('app_last_campaign_cloud_sync', nowStr);
+        } catch {}
+
+        const activeCamp = cloudData.campaigns.find((c: any) => c.id === (cloudData.activeCampaignId || cloudData.campaigns[0]?.id));
+        const totalSkus = activeCamp ? Object.keys(activeCamp.snapshotTeoricoActual || {}).length : 0;
+
+        if (!silent) {
+          playBeep('success');
+          showToast(
+            `¡Sincronizado con oficina! ${cloudData.campaigns.length} campaña(s) cargadas (${totalSkus} SKUs teóricos listos).`,
+            'success',
+            'Sincronización Exitosa'
+          );
+        }
+      } else if (!silent) {
+        showToast('No se encontraron campañas pendientes en la nube.', 'info');
+      }
+    } catch (e: any) {
+      if (!silent) {
+        showToast(`Error al consultar la nube: ${e.message}`, 'error');
+      }
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
+
+  // Auto-sync on mount to pull any fresh theoretical stock uploaded in the office PC
+  useEffect(() => {
+    handleCloudSync(true);
+  }, []);
 
   // Session list & active session
   const [sessions, setSessions] = useState<StockCountSession[]>(() => loadStockCountSessionsFromStorage());
@@ -193,10 +264,70 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
   const [reconciliationFilter, setReconciliationFilter] = useState<'ALL' | 'DIF' | 'CUADRADO' | 'FALTANTE' | 'SOBRANTE' | 'NO_CATALOGADO'>('ALL');
   const [isSyncingToSheet, setIsSyncingToSheet] = useState(false);
 
+  // Visual Flash Feedback State for high-visibility confirmation in noisy environments
+  const [visualFlash, setVisualFlash] = useState<'NONE' | 'SUCCESS' | 'WARNING' | 'ERROR'>('NONE');
+  const flashTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const triggerVisualFlash = (type: 'SUCCESS' | 'WARNING' | 'ERROR') => {
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    setVisualFlash(type);
+    flashTimerRef.current = setTimeout(() => {
+      setVisualFlash('NONE');
+    }, type === 'ERROR' ? 300 : 180);
+  };
+
+  // Mobile Numpad & Packaging Multiplier mode: 'NUMPAD' | 'CHIPS'
+  const [mobileEntryMode, setMobileEntryMode] = useState<'NUMPAD' | 'CHIPS'>('NUMPAD');
+  const [packMultiplierCategory, setPackMultiplierCategory] = useState<'UNITS' | 'PACKS'>('UNITS');
+
   // Master catalog pre-indexed for lightning-fast O(1) lookups on low-end PDAs
   const masterCatalogIndex = useMemo(() => {
     return buildMasterCatalogIndex(masterProducts);
   }, [masterProducts]);
+
+  // Industrial Numpad Digit Input
+  const handleNumpadDigit = (digit: string) => {
+    playBeep('skip');
+    setCountQuantity(prev => {
+      if (digit === '00') {
+        const next = prev * 100;
+        return next > 99999 ? prev : next;
+      }
+      if (prev === 1 || prev === 0) {
+        return parseInt(digit, 10) || 1;
+      }
+      const str = `${prev}${digit}`;
+      const parsed = parseInt(str, 10);
+      return isNaN(parsed) || parsed > 99999 ? prev : parsed;
+    });
+  };
+
+  // Industrial Numpad Backspace
+  const handleNumpadBackspace = () => {
+    playBeep('skip');
+    setCountQuantity(prev => {
+      const str = prev.toString();
+      if (str.length <= 1) return 1;
+      return parseInt(str.slice(0, -1), 10) || 1;
+    });
+  };
+
+  // Industrial Numpad Clear
+  const handleNumpadClear = () => {
+    playBeep('skip');
+    setCountQuantity(1);
+  };
+
+  // Presentation Multipliers (e.g. x6, x10, x20, x30, x50, x100)
+  const handleApplyPackagingMultiplier = (factor: number) => {
+    playBeep('success');
+    triggerVisualFlash('SUCCESS');
+    setCountQuantity(prev => {
+      if (prev === 1) return factor;
+      return prev * factor;
+    });
+    showToast(`Empaque ×${factor} aplicado`, 'info');
+  };
 
   const searchDebounceRef = useRef<any>(null);
 
@@ -382,12 +513,15 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
     // Dynamic beep and toast confirmation
     if (isOmitted) {
       playBeep('skip');
+      triggerVisualFlash('WARNING');
       showToast(`Registrado sin vencimiento: ${cleanSku} (+${qty})`, 'info');
     } else if (mmVal && yyyyVal) {
       playBeep('success');
+      triggerVisualFlash('SUCCESS');
       showToast(`Registrado con vencimiento ${mmVal}/${yyyyVal}: ${cleanSku} (+${qty})`, 'success');
     } else {
       playBeep('success');
+      triggerVisualFlash('SUCCESS');
       showToast(`Registrado: ${cleanSku} (+${qty})`, 'success');
     }
 
@@ -934,7 +1068,20 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
   };
 
   return (
-    <div className="flex-1 w-full h-full bg-white dark:bg-slate-900 flex flex-col overflow-hidden text-slate-800 dark:text-slate-100">
+    <div className="flex-1 w-full h-full bg-white dark:bg-slate-900 flex flex-col overflow-hidden text-slate-800 dark:text-slate-100 relative">
+        
+        {/* Visual Flash Feedback Overlay for Noisy Environments */}
+        {visualFlash !== 'NONE' && (
+          <div 
+            className={`fixed inset-0 pointer-events-none z-50 transition-all duration-100 ${
+              visualFlash === 'SUCCESS' 
+                ? 'border-[8px] sm:border-[12px] border-emerald-500 bg-emerald-500/15 shadow-[inset_0_0_50px_rgba(16,185,129,0.4)]' 
+                : visualFlash === 'WARNING'
+                ? 'border-[8px] sm:border-[12px] border-amber-500 bg-amber-500/15 shadow-[inset_0_0_50px_rgba(245,158,11,0.4)]'
+                : 'border-[8px] sm:border-[12px] border-rose-600 bg-rose-600/20 shadow-[inset_0_0_50px_rgba(225,29,72,0.45)]'
+            }`}
+          />
+        )}
         
         {/* ======================================================== */}
         {/* HEADER                                                  */}
@@ -970,6 +1117,29 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
+              {/* Cloud Sync Button */}
+              <button
+                type="button"
+                onClick={() => handleCloudSync(false)}
+                disabled={isSyncingCloud}
+                className="px-2.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
+                title="Sincronizar campañas y stock teórico desde el PC de oficina (Google Sheets)"
+              >
+                {isSyncingCloud ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600 dark:text-blue-400" />
+                ) : (
+                  <Cloud className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                )}
+                <span className="hidden sm:inline">
+                  {isSyncingCloud ? 'Sincronizando...' : 'Oficina / Nube'}
+                </span>
+                {lastCloudSyncDate && (
+                  <span className="text-[10px] text-blue-500/80 dark:text-blue-400/80 font-mono hidden md:inline">
+                    ({lastCloudSyncDate})
+                  </span>
+                )}
+              </button>
+
               <button
                 onClick={() => onClose ? onClose() : navigate('/')}
                 className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
@@ -1532,9 +1702,16 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
 
                         {/* Matched product title if found in catalog */}
                         {selectedProductDesc && (
-                          <div className="mt-1.5 p-2.5 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 flex items-center gap-2 text-xs text-emerald-800 dark:text-emerald-300 font-bold shadow-xs">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                            <span className="truncate flex-1">{selectedProductDesc}</span>
+                          <div className="mt-1.5 p-2.5 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 flex items-center justify-between gap-2 text-xs text-emerald-800 dark:text-emerald-300 font-bold shadow-xs">
+                            <div className="flex items-center gap-2 truncate flex-1">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span className="truncate">{selectedProductDesc}</span>
+                            </div>
+                            {activeCampaign?.snapshotTeoricoActual && activeCampaign.snapshotTeoricoActual[scannedSku.trim()] && (
+                              <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200 rounded-lg text-[10px] font-black shrink-0">
+                                ERP: {activeCampaign.snapshotTeoricoActual[scannedSku.trim()].stockTeorico} un
+                              </span>
+                            )}
                           </div>
                         )}
 
@@ -1558,70 +1735,253 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                         )}
                       </div>
 
-                      {/* Quantity Stepper & Quick Increment Pills */}
-                      <div className="bg-slate-50 dark:bg-slate-800/70 p-3 rounded-2xl border border-slate-200 dark:border-slate-700">
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="text-xs font-black text-slate-700 dark:text-slate-300">
-                            Cantidad a Registrar
-                          </label>
-                          <span className="text-xs font-mono text-blue-600 dark:text-blue-400 font-black">
-                            {countQuantity} {countQuantity === 1 ? 'unidad' : 'unidades'}
-                          </span>
+                      {/* Industrial Quantity Control & Multipliers */}
+                      <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                        {/* Header: Mode selector & Current Qty */}
+                        <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-200 dark:border-slate-700">
+                          <div className="flex items-center gap-1 bg-slate-200/80 dark:bg-slate-900/80 p-0.5 rounded-xl">
+                            <button
+                              type="button"
+                              onClick={() => setMobileEntryMode('NUMPAD')}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition-all cursor-pointer ${
+                                mobileEntryMode === 'NUMPAD'
+                                  ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs'
+                                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                              }`}
+                            >
+                              ⌨️ Teclado PDA
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMobileEntryMode('CHIPS')}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition-all cursor-pointer ${
+                                mobileEntryMode === 'CHIPS'
+                                  ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs'
+                                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                              }`}
+                            >
+                              ⚡ Rápido
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] uppercase font-bold text-slate-400">Total:</span>
+                            <span className="text-sm font-mono font-black text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-md">
+                              {countQuantity} un
+                            </span>
+                          </div>
                         </div>
 
-                        {/* Large Touch Stepper */}
+                        {/* Large Touch Stepper & Value Display */}
                         <div className="flex items-center gap-2 mb-2.5">
                           <button
                             type="button"
-                            onClick={() => setCountQuantity(Math.max(1, countQuantity - 1))}
-                            className="w-14 h-13 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-xl font-black text-xl text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 shadow-sm flex items-center justify-center cursor-pointer active:scale-90 transition-all min-h-[52px]"
+                            onClick={() => {
+                              setCountQuantity(Math.max(1, countQuantity - 1));
+                              playBeep('skip');
+                            }}
+                            className="w-13 h-12 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-xl font-black text-xl text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 shadow-xs flex items-center justify-center cursor-pointer active:scale-90 transition-all shrink-0"
+                            title="Descontar 1 unidad"
                           >
-                            <Minus className="w-6 h-6" />
+                            <Minus className="w-5 h-5" />
                           </button>
 
-                          <input
-                            type="number"
-                            min="1"
-                            value={countQuantity}
-                            onChange={(e) => setCountQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                            className="flex-1 py-2 text-center rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-2xl font-black text-blue-600 dark:text-blue-400 outline-none min-h-[52px]"
-                          />
+                          <div className="flex-1 py-1 px-3 text-center rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-inner flex items-center justify-center min-h-[48px]">
+                            <span className="text-2xl font-black font-mono text-blue-600 dark:text-blue-400 tracking-tight">
+                              {countQuantity}
+                            </span>
+                          </div>
 
                           <button
                             type="button"
-                            onClick={() => setCountQuantity(countQuantity + 1)}
-                            className="w-14 h-13 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-xl font-black text-xl text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 shadow-sm flex items-center justify-center cursor-pointer active:scale-90 transition-all min-h-[52px]"
+                            onClick={() => {
+                              setCountQuantity(countQuantity + 1);
+                              playBeep('skip');
+                            }}
+                            className="w-13 h-12 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-xl font-black text-xl text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 shadow-xs flex items-center justify-center cursor-pointer active:scale-90 transition-all shrink-0"
+                            title="Sumar 1 unidad"
                           >
-                            <Plus className="w-6 h-6" />
+                            <Plus className="w-5 h-5" />
                           </button>
                         </div>
 
-                        {/* Quick Increment Pills */}
-                        <div className="grid grid-cols-5 gap-1.5">
-                          {[1, 5, 10, 25, 50].map(inc => (
-                            <button
-                              key={inc}
-                              type="button"
-                              onClick={() => setCountQuantity(inc)}
-                              className={`py-2.5 text-xs font-black rounded-xl transition-all border cursor-pointer min-h-[40px] ${
-                                countQuantity === inc
-                                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
-                              }`}
-                            >
-                              +{inc}
-                            </button>
-                          ))}
+                        {/* Packaging Multipliers / Presets Selector */}
+                        <div className="mb-2.5">
+                          <div className="flex items-center justify-between mb-1.5 px-0.5">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                              {packMultiplierCategory === 'UNITS' ? 'Incremento por Unidades (+)' : 'Multiplicador por Empaque (×)'}
+                            </span>
+                            <div className="flex items-center gap-1 text-[10px] font-extrabold">
+                              <button
+                                type="button"
+                                onClick={() => setPackMultiplierCategory('UNITS')}
+                                className={`px-1.5 py-0.5 rounded ${packMultiplierCategory === 'UNITS' ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : 'text-slate-400 hover:text-slate-600'}`}
+                              >
+                                + Unids
+                              </button>
+                              <span className="text-slate-300">|</span>
+                              <button
+                                type="button"
+                                onClick={() => setPackMultiplierCategory('PACKS')}
+                                className={`px-1.5 py-0.5 rounded ${packMultiplierCategory === 'PACKS' ? 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300' : 'text-slate-400 hover:text-slate-600'}`}
+                              >
+                                × Cajas
+                              </button>
+                            </div>
+                          </div>
+
+                          {packMultiplierCategory === 'UNITS' ? (
+                            <div className="grid grid-cols-5 gap-1">
+                              {[1, 5, 10, 25, 50].map(inc => (
+                                <button
+                                  key={inc}
+                                  type="button"
+                                  onClick={() => {
+                                    setCountQuantity(inc);
+                                    playBeep('skip');
+                                  }}
+                                  className={`py-2 text-xs font-black rounded-xl transition-all border cursor-pointer ${
+                                    countQuantity === inc
+                                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                      : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                  }`}
+                                >
+                                  +{inc}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-4 gap-1">
+                              {[
+                                { factor: 6, label: '×6' },
+                                { factor: 10, label: '×10 Blíster' },
+                                { factor: 14, label: '×14' },
+                                { factor: 20, label: '×20 Caja' },
+                                { factor: 28, label: '×28 Mes' },
+                                { factor: 30, label: '×30 Estándar' },
+                                { factor: 50, label: '×50 Pack' },
+                                { factor: 100, label: '×100 Hosp' }
+                              ].map(pack => (
+                                <button
+                                  key={pack.factor}
+                                  type="button"
+                                  onClick={() => handleApplyPackagingMultiplier(pack.factor)}
+                                  className="py-1.5 px-1 text-[11px] font-black rounded-xl bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition-all cursor-pointer active:scale-95 text-center truncate"
+                                  title={`Multiplicar por ${pack.factor}`}
+                                >
+                                  {pack.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
+
+                        {/* On-Screen Industrial Numeric Keypad (PDA Touch-Optimized) */}
+                        {mobileEntryMode === 'NUMPAD' && (
+                          <div className="grid grid-cols-4 gap-1.5 pt-2 border-t border-slate-200 dark:border-slate-700">
+                            {/* Row 1 */}
+                            {['7', '8', '9'].map(d => (
+                              <button
+                                key={d}
+                                type="button"
+                                onClick={() => handleNumpadDigit(d)}
+                                className="h-12 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 font-mono font-black text-xl rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs active:bg-blue-50 dark:active:bg-blue-950/60 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                              >
+                                {d}
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={handleNumpadClear}
+                              className="h-12 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 font-black text-sm rounded-xl border border-rose-200 dark:border-rose-800 shadow-2xs active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                              title="Limpiar cantidad a 1"
+                            >
+                              C
+                            </button>
+
+                            {/* Row 2 */}
+                            {['4', '5', '6'].map(d => (
+                              <button
+                                key={d}
+                                type="button"
+                                onClick={() => handleNumpadDigit(d)}
+                                className="h-12 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 font-mono font-black text-xl rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs active:bg-blue-50 dark:active:bg-blue-950/60 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                              >
+                                {d}
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={handleNumpadBackspace}
+                              className="h-12 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 font-black text-base rounded-xl border border-amber-200 dark:border-amber-800 shadow-2xs active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                              title="Borrar último dígito"
+                            >
+                              ⌫
+                            </button>
+
+                            {/* Row 3 */}
+                            {['1', '2', '3'].map(d => (
+                              <button
+                                key={d}
+                                type="button"
+                                onClick={() => handleNumpadDigit(d)}
+                                className="h-12 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 font-mono font-black text-xl rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs active:bg-blue-50 dark:active:bg-blue-950/60 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                              >
+                                {d}
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => handleApplyPackagingMultiplier(10)}
+                              className="h-12 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-black text-xs rounded-xl border border-indigo-200 dark:border-indigo-800 shadow-2xs active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                              title="Multiplicar por 10"
+                            >
+                              ×10
+                            </button>
+
+                            {/* Row 4 */}
+                            <button
+                              type="button"
+                              onClick={() => handleNumpadDigit('0')}
+                              className="h-12 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 font-mono font-black text-xl rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs active:bg-blue-50 dark:active:bg-blue-950/60 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                            >
+                              0
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleNumpadDigit('00')}
+                              className="h-12 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 font-mono font-black text-base rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs active:bg-blue-50 dark:active:bg-blue-950/60 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                            >
+                              00
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCountQuantity(prev => prev + 1);
+                                playBeep('skip');
+                              }}
+                              className="h-12 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 font-black text-xs rounded-xl border border-emerald-200 dark:border-emerald-800 shadow-2xs active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                              title="Sumar 1 unidad"
+                            >
+                              +1
+                            </button>
+                            <button
+                              type="submit"
+                              className="h-12 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-black text-xs rounded-xl shadow-md shadow-blue-500/30 active:scale-95 transition-all flex items-center justify-center cursor-pointer uppercase tracking-tight"
+                            >
+                              ↵ OK
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {/* Primary Submit Button */}
                       <button
                         type="submit"
-                        className="w-full py-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-black text-base rounded-2xl shadow-lg shadow-blue-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[54px]"
+                        className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-black text-base rounded-2xl shadow-lg shadow-blue-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[52px]"
                       >
-                        <Plus className="w-6 h-6" />
-                        <span>REGISTRAR (+{countQuantity})</span>
+                        <Plus className="w-5 h-5" />
+                        <span>REGISTRAR (+{countQuantity} un)</span>
                       </button>
                     </form>
                   )}
@@ -2034,9 +2394,16 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                             <span>Escanear Código / SKU</span>
                           </label>
                           {selectedProductDesc && (
-                            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 truncate max-w-[280px]">
-                              ✓ {selectedProductDesc}
-                            </span>
+                            <div className="flex items-center gap-1.5 truncate max-w-[340px]">
+                              <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 truncate">
+                                ✓ {selectedProductDesc}
+                              </span>
+                              {activeCampaign?.snapshotTeoricoActual && activeCampaign.snapshotTeoricoActual[scannedSku.trim()] && (
+                                <span className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200 rounded text-[10px] font-black shrink-0">
+                                  ERP: {activeCampaign.snapshotTeoricoActual[scannedSku.trim()].stockTeorico} un
+                                </span>
+                              )}
+                            </div>
                           )}
                         </div>
 
@@ -2143,18 +2510,75 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                           </button>
                         </div>
 
-                        {/* Quick increment buttons */}
-                        <div className="grid grid-cols-5 gap-1.5 mt-2">
-                          {[1, 5, 10, 25, 50].map(inc => (
-                            <button
-                              key={inc}
-                              type="button"
-                              onClick={() => setCountQuantity(inc)}
-                              className="py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 rounded-lg transition-colors cursor-pointer min-h-[38px]"
-                            >
-                              +{inc}
-                            </button>
-                          ))}
+                        {/* Quick increment buttons & Packaging multipliers */}
+                        <div className="mt-2.5">
+                          <div className="flex items-center justify-between mb-1.5 px-0.5">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                              {packMultiplierCategory === 'UNITS' ? 'Incremento por Unidades (+)' : 'Multiplicador por Empaque (×)'}
+                            </span>
+                            <div className="flex items-center gap-1 text-[10px] font-extrabold">
+                              <button
+                                type="button"
+                                onClick={() => setPackMultiplierCategory('UNITS')}
+                                className={`px-1.5 py-0.5 rounded ${packMultiplierCategory === 'UNITS' ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : 'text-slate-400 hover:text-slate-600'}`}
+                              >
+                                + Unids
+                              </button>
+                              <span className="text-slate-300">|</span>
+                              <button
+                                type="button"
+                                onClick={() => setPackMultiplierCategory('PACKS')}
+                                className={`px-1.5 py-0.5 rounded ${packMultiplierCategory === 'PACKS' ? 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300' : 'text-slate-400 hover:text-slate-600'}`}
+                              >
+                                × Cajas
+                              </button>
+                            </div>
+                          </div>
+
+                          {packMultiplierCategory === 'UNITS' ? (
+                            <div className="grid grid-cols-5 gap-1.5">
+                              {[1, 5, 10, 25, 50].map(inc => (
+                                <button
+                                  key={inc}
+                                  type="button"
+                                  onClick={() => {
+                                    setCountQuantity(inc);
+                                    playBeep('skip');
+                                  }}
+                                  className={`py-2 text-xs font-bold rounded-lg transition-colors cursor-pointer min-h-[38px] ${
+                                    countQuantity === inc
+                                      ? 'bg-blue-600 text-white shadow-xs'
+                                      : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                                  }`}
+                                >
+                                  +{inc}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-4 gap-1.5">
+                              {[
+                                { factor: 6, label: '×6' },
+                                { factor: 10, label: '×10 Blíster' },
+                                { factor: 14, label: '×14' },
+                                { factor: 20, label: '×20 Caja' },
+                                { factor: 28, label: '×28 Mes' },
+                                { factor: 30, label: '×30 Estándar' },
+                                { factor: 50, label: '×50 Pack' },
+                                { factor: 100, label: '×100 Hosp' }
+                              ].map(pack => (
+                                <button
+                                  key={pack.factor}
+                                  type="button"
+                                  onClick={() => handleApplyPackagingMultiplier(pack.factor)}
+                                  className="py-1.5 px-1 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold rounded-lg transition-all cursor-pointer truncate text-center min-h-[38px]"
+                                  title={`Multiplicar por ${pack.factor}`}
+                                >
+                                  {pack.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
 

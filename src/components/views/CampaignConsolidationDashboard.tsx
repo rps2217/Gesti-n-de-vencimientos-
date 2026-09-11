@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   CheckCircle2, AlertTriangle, HelpCircle, Package, Search, 
   ArrowRight, Download, RefreshCw, UploadCloud, FileSpreadsheet, 
@@ -87,6 +87,45 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
     }
   });
 
+  // Background Auto-Sync to Google Sheets / Cloud so mobile PDAs get updates instantly
+  const autoSyncCampaignsToCloud = async (camps: InventoryCampaign[], actId: string | null) => {
+    try {
+      await saveCampaignsToCloud({
+        campaigns: camps,
+        activeCampaignId: actId,
+        sessions
+      });
+      const nowStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+      setLastCloudSyncDate(nowStr);
+      try {
+        localStorage.setItem('app_last_campaign_cloud_sync', nowStr);
+      } catch {}
+    } catch (err) {
+      console.warn('[Cloud AutoSync] Background sync to Google Sheets error:', err);
+    }
+  };
+
+  // Auto-fetch from cloud on initial mount if local campaigns is empty
+  useEffect(() => {
+    if (campaigns.length === 0) {
+      loadCampaignsFromCloud()
+        .then(cloudData => {
+          if (cloudData && Array.isArray(cloudData.campaigns) && cloudData.campaigns.length > 0) {
+            onUpdateCampaigns(cloudData.campaigns);
+            if (cloudData.activeCampaignId) {
+              onSelectCampaign(cloudData.activeCampaignId);
+            }
+            const nowStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+            setLastCloudSyncDate(nowStr);
+            try {
+              localStorage.setItem('app_last_campaign_cloud_sync', nowStr);
+            } catch {}
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
+
   // Active campaign entity
   const activeCampaign = useMemo(() => {
     if (!activeCampaignId && campaigns.length > 0) {
@@ -156,10 +195,11 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
     const updated = [newCamp, ...campaigns];
     onUpdateCampaigns(updated);
     onSelectCampaign(newCamp.id);
+    autoSyncCampaignsToCloud(updated, newCamp.id);
     setIsNewCampaignOpen(false);
     setNewCampaignName('');
     setNewCampaignLocal('');
-    showToast(`Campaña "${newCamp.nombre}" creada con éxito`, 'success');
+    showToast(`Campaña "${newCamp.nombre}" creada y respaldada en la nube`, 'success');
   };
 
   // Handle single SKU audit closure
@@ -169,6 +209,7 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
       const updated = reopenSkuInCampaign(activeCampaign, row.sku);
       const allUpdated = campaigns.map(c => c.id === updated.id ? updated : c);
       onUpdateCampaigns(allUpdated);
+      autoSyncCampaignsToCloud(allUpdated, activeCampaign.id);
       playBeep('skip');
       showToast(`SKU ${row.sku} reabierto para revisión`, 'info');
     } else {
@@ -181,6 +222,7 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
       );
       const allUpdated = campaigns.map(c => c.id === updated.id ? updated : c);
       onUpdateCampaigns(allUpdated);
+      autoSyncCampaignsToCloud(allUpdated, activeCampaign.id);
       playBeep('success');
       showToast(`SKU ${row.sku} validado y marcado como cerrado`, 'success');
     }
@@ -192,6 +234,7 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
     const updated = setCampaignManualSalesAdjustment(activeCampaign, sku, val);
     const allUpdated = campaigns.map(c => c.id === updated.id ? updated : c);
     onUpdateCampaigns(allUpdated);
+    autoSyncCampaignsToCloud(allUpdated, activeCampaign.id);
   };
 
   // Handle processing pasted snapshot text from ERP Excel/CSV
@@ -224,13 +267,14 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
 
       const allUpdated = campaigns.map(c => c.id === updatedCampaign.id ? updatedCampaign : c);
       onUpdateCampaigns(allUpdated);
+      autoSyncCampaignsToCloud(allUpdated, activeCampaign.id);
       setPastedSnapshotText('');
       setActiveTab('MATRIX');
       playBeep('success');
       showToast(
-        `Se procesaron ${totalImported} SKUs (${newSkus} nuevos incorporados, ${updatedSkus} actualizados)`,
+        `Se procesaron ${totalImported} SKUs (${newSkus} nuevos incorporados, ${updatedSkus} actualizados) • Sincronizado con Dispositivos Móviles`,
         'success',
-        'Snapshot ERP Cargado'
+        'Snapshot ERP Cargado y en Nube'
       );
     } catch (e: any) {
       showToast(`Error al procesar el snapshot: ${e.message}`, 'error');
@@ -280,12 +324,13 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
 
       const allUpdated = campaigns.map(c => c.id === updatedCampaign.id ? updatedCampaign : c);
       onUpdateCampaigns(allUpdated);
+      autoSyncCampaignsToCloud(allUpdated, activeCampaign.id);
       setActiveTab('MATRIX');
       playBeep('success');
       showToast(
-        `Archivo "${file.name}" cargado: ${totalImported} SKUs (${newSkus} nuevos, ${updatedSkus} actualizados)`,
+        `Archivo "${file.name}" cargado: ${totalImported} SKUs (${newSkus} nuevos, ${updatedSkus} actualizados) • ¡Listo en tu Móvil/PDA!`,
         'success',
-        'Snapshot Cargado Exitosamente'
+        'Snapshot en la Nube'
       );
     } catch (err: any) {
       showToast(`Error al leer archivo: ${err.message}`, 'error');

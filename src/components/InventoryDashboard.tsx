@@ -125,6 +125,52 @@ import {
 } from '../utils/sliceRegistry';
 import { SliceSelectorBar } from './slices/SliceSelectorBar';
 
+export function mergeCloudConfigs(local: SheetConfig, remote: SheetConfig): SheetConfig {
+  if (!local && !remote) return {};
+  if (!local) return remote;
+  if (!remote) return local;
+
+  const localTime = local?.updatedAt ? new Date(local.updatedAt).getTime() : 0;
+  const remoteTime = remote?.updatedAt ? new Date(remote.updatedAt).getTime() : 0;
+
+  const isRemoteNewer = remoteTime >= localTime;
+  const primary = isRemoteNewer ? remote : local;
+  const secondary = isRemoteNewer ? local : remote;
+
+  // Non-destructive Merge for Custom Slices
+  const primarySlices = primary.slices || [];
+  const secondarySlices = secondary.slices || [];
+  const sliceMap = new Map<string, TableSlice>();
+
+  secondarySlices.forEach(s => {
+    if (s && s.id) sliceMap.set(s.id, s);
+  });
+  primarySlices.forEach(s => {
+    if (s && s.id) sliceMap.set(s.id, s);
+  });
+
+  // Non-destructive Merge for Schema
+  const mergedSchema = {
+    ...(secondary.schema || {}),
+    ...(primary.schema || {})
+  };
+
+  // Non-destructive Merge for Bulk Actions
+  const mergedBulk = {
+    ...(secondary.tableBulkActions || {}),
+    ...(primary.tableBulkActions || {})
+  };
+
+  return {
+    ...secondary,
+    ...primary,
+    slices: Array.from(sliceMap.values()),
+    schema: mergedSchema,
+    tableBulkActions: mergedBulk,
+    updatedAt: new Date(Math.max(localTime, remoteTime, Date.now())).toISOString()
+  };
+}
+
 export const InventoryDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { showToast, updateToast } = useToast();
@@ -348,11 +394,26 @@ export const InventoryDashboard: React.FC = () => {
   });
 
   const saveConfig = (newConfig: SheetConfig) => {
-    setSheetConfig(newConfig);
+    const configWithTimestamp: SheetConfig = {
+      ...newConfig,
+      updatedAt: new Date().toISOString()
+    };
+    setSheetConfig(configWithTimestamp);
     try {
-      localStorage.setItem('appsheet_clone_config', JSON.stringify(newConfig));
+      localStorage.setItem('appsheet_clone_config', JSON.stringify(configWithTimestamp));
     } catch (e) {
       console.warn('LocalStorage save error:', e);
+    }
+
+    // Auto-sync background push to Google Apps Script PropertiesService / Cloud Config if connected
+    const scriptUrl = localStorage.getItem('appsheet_clone_scriptUrl')?.trim();
+    if (scriptUrl) {
+      saveScriptPropertiesConfig(configWithTimestamp).catch(err => {
+        console.warn('Auto-sync ScriptProperties fallback to Cloud Sheet:', err);
+        if (cloudConfigSheetName || hasCloudConfigSheet) {
+          saveCloudConfig(configWithTimestamp, cloudConfigSheetName || '_CONFIG_APP').catch(() => {});
+        }
+      });
     }
   };
 
@@ -967,14 +1028,11 @@ export const InventoryDashboard: React.FC = () => {
       
       // 1. Opción 2: Script Properties (PropertiesService)
       let foundRemoteConfig = false;
+      let remoteConfigToMerge: SheetConfig | null = null;
       try {
         const propConfig = await getScriptPropertiesConfig(forceRefresh);
-        if (propConfig && (propConfig.schema || propConfig.main)) {
-          currentConfig = {
-            ...currentConfig,
-            ...propConfig,
-            schema: { ...(currentConfig.schema || {}), ...(propConfig.schema || {}) }
-          };
+        if (propConfig && (propConfig.schema || propConfig.main || propConfig.slices)) {
+          remoteConfigToMerge = propConfig;
           setConfigStorageMode('properties');
           foundRemoteConfig = true;
         }
@@ -990,12 +1048,8 @@ export const InventoryDashboard: React.FC = () => {
         if (!foundRemoteConfig) {
           try {
             const cloudConf = await loadCloudConfig(configSheet);
-            if (cloudConf && (cloudConf.schema || cloudConf.main)) {
-              currentConfig = {
-                ...currentConfig,
-                ...cloudConf,
-                schema: { ...(currentConfig.schema || {}), ...(cloudConf.schema || {}) }
-              };
+            if (cloudConf && (cloudConf.schema || cloudConf.main || cloudConf.slices)) {
+              remoteConfigToMerge = cloudConf;
               setConfigStorageMode('sheet');
               foundRemoteConfig = true;
             }
@@ -1008,6 +1062,13 @@ export const InventoryDashboard: React.FC = () => {
         if (!foundRemoteConfig) {
           setConfigStorageMode('local');
         }
+      }
+
+      if (remoteConfigToMerge) {
+        currentConfig = mergeCloudConfigs(currentConfig, remoteConfigToMerge);
+        try {
+          localStorage.setItem('appsheet_clone_config', JSON.stringify(currentConfig));
+        } catch {}
       }
 
       let mainSheetTitle = currentConfig.main || allSheets.find((t: string) => /vencimiento|caducidad/i.test(t)) || allSheets[0];

@@ -63,6 +63,7 @@ export interface SheetConfig {
   hiddenSliceIds?: string[];
   ticketPrintConfig?: GlobalTicketConfig;
   backendMirror?: BackendMirrorConfig;
+  updatedAt?: string;
 }
 
 export type ColumnType = 'text' | 'longtext' | 'number' | 'date' | 'datetime' | 'enum' | 'enumlist' | 'ref' | 'calculated' | 'virtual';

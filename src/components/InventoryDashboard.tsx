@@ -819,6 +819,21 @@ export const InventoryDashboard: React.FC = () => {
     showToast('Slice eliminado', 'info');
   }, [sheetConfig, saveConfig, activeSliceId, handleSelectSlice, showToast]);
 
+  const handleToggleStickyColumns = useCallback(() => {
+    const nextVal = !sheetConfig?.enableStickyColumns;
+    const updatedConfig: SheetConfig = {
+      ...sheetConfig,
+      enableStickyColumns: nextVal
+    };
+    setSheetConfig(updatedConfig);
+    saveConfig(updatedConfig);
+    showToast(
+      nextVal ? 'Columnas fijas (Sticky) ACTIVADAS' : 'Columnas fijas (Sticky) DESACTIVADAS',
+      'info',
+      'Vista de Tabla'
+    );
+  }, [sheetConfig, saveConfig, showToast]);
+
   const handleToggleSliceVisibility = useCallback((sliceId: string) => {
     setHiddenSliceIds(prev => {
       const isHidden = prev.includes(sliceId);
@@ -2570,6 +2585,8 @@ export const InventoryDashboard: React.FC = () => {
                 showToast(next ? 'Modo Zen activado (Presiona Esc para salir)' : 'Modo Zen desactivado', 'info', 'Enfoque');
               }}
               onOpenStockCount={() => setIsStockCountOpen(true)}
+              onToggleStickyColumns={handleToggleStickyColumns}
+              isStickyEnabled={sheetConfig?.enableStickyColumns === true}
               slices={visibleTableSlices}
               activeSliceId={activeSliceId}
               onSelectSlice={handleSelectSlice}

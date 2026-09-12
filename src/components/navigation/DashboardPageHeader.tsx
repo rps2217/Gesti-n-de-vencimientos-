@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   Columns, ChevronDown, Tag, Sliders, Settings, 
   RotateCcw, Plus, Layers, Edit2, SlidersHorizontal, Eye, EyeOff, LayoutGrid, Maximize2,
-  ArrowUpAZ, ArrowDownZA, Upload
+  ArrowUpAZ, ArrowDownZA, Upload, Pin
 } from 'lucide-react';
 import { SheetProperties, TableSlice } from '../../types';
 import { SLICE_COLOR_CLASSES } from '../../utils/sliceRegistry';
@@ -38,6 +38,8 @@ interface DashboardPageHeaderProps {
   isZenMode?: boolean;
   onToggleZenMode?: () => void;
   onOpenStockCount?: () => void;
+  onToggleStickyColumns?: () => void;
+  isStickyEnabled?: boolean;
   // Slices integration
   slices?: TableSlice[];
   activeSliceId?: string | null;
@@ -70,6 +72,8 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
   onToggleSummaryView,
   isZenMode = false,
   onToggleZenMode,
+  onToggleStickyColumns,
+  isStickyEnabled = false,
   slices = [],
   activeSliceId = null,
   onSelectSlice,
@@ -274,6 +278,28 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
                   <Settings className="w-3.5 h-3.5 text-slate-500" />
                   <span>Configurar Ticket Térmico</span>
                 </button>
+
+                {onToggleStickyColumns && (
+                  <button
+                    onClick={() => {
+                      onToggleStickyColumns();
+                      setIsViewMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 font-semibold flex items-center justify-between transition-colors cursor-pointer border-t border-slate-100 dark:border-slate-700/60"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Pin className={`w-3.5 h-3.5 ${isStickyEnabled ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`} />
+                      <span>Fijar Columnas (Sticky)</span>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      isStickyEnabled
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300'
+                        : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
+                    }`}>
+                      {isStickyEnabled ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
+                )}
 
                 {hasCustomColWidths && (
                   <button

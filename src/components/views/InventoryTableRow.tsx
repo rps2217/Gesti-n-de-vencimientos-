@@ -37,6 +37,7 @@ export interface InventoryTableRowProps {
   onOpenEmail?: (item: InventoryItem) => void;
   isWhatsAppEnabled?: boolean;
   isEmailEnabled?: boolean;
+  isStickyEnabled?: boolean;
 }
 
 export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
@@ -61,6 +62,7 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
   onOpenEmail,
   isWhatsAppEnabled = true,
   isEmailEnabled = true,
+  isStickyEnabled = false,
 }) => {
   const eventCategory = getEventCategory(item, headers);
   const status = getItemStatus(item, headers);
@@ -230,8 +232,12 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
       {/* 💻 DESKTOP TABLE VIEW */}
       {/* Selection Checkbox */}
       <td 
-        className="hidden md:table-cell p-4 text-center sticky left-0 z-10 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 transition-colors shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]" 
-        style={{ width: '48px', minWidth: '48px', maxWidth: '48px', left: 0 }} 
+        className={`hidden md:table-cell p-4 text-center transition-colors ${
+          isStickyEnabled
+            ? 'sticky left-0 z-10 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]'
+            : ''
+        }`} 
+        style={{ width: '48px', minWidth: '48px', maxWidth: '48px', ...(isStickyEnabled ? { left: 0 } : {}) }} 
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-center">
@@ -247,8 +253,12 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
 
       {/* Row Index */}
       <td 
-        style={{ width: `${getColWidth('_row', '#')}px`, minWidth: `${getColWidth('_row', '#')}px`, maxWidth: `${getColWidth('_row', '#')}px`, left: '48px' }}
-        className="hidden md:table-cell p-4 text-center font-mono text-xs text-slate-400 dark:text-slate-500 truncate sticky left-[48px] z-10 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 transition-colors shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]"
+        style={{ width: `${getColWidth('_row', '#')}px`, minWidth: `${getColWidth('_row', '#')}px`, maxWidth: `${getColWidth('_row', '#')}px`, ...(isStickyEnabled ? { left: '48px' } : {}) }}
+        className={`hidden md:table-cell p-4 text-center font-mono text-xs text-slate-400 dark:text-slate-500 truncate transition-colors ${
+          isStickyEnabled
+            ? 'sticky left-[48px] z-10 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]'
+            : ''
+        }`}
       >
         {item._rowIndex}
       </td>
@@ -443,7 +453,11 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
 
       {/* Row Actions */}
       <td 
-        className="hidden md:table-cell p-4 text-right sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 transition-colors shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)]" 
+        className={`hidden md:table-cell p-4 text-right transition-colors ${
+          isStickyEnabled
+            ? 'sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)]'
+            : ''
+        }`} 
         style={{ width: '110px', minWidth: '110px', maxWidth: '110px' }}
         onClick={(e) => e.stopPropagation()}
       >

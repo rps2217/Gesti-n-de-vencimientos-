@@ -63,6 +63,7 @@ export interface SheetConfig {
   hiddenSliceIds?: string[];
   ticketPrintConfig?: GlobalTicketConfig;
   backendMirror?: BackendMirrorConfig;
+  enableStickyColumns?: boolean;
   updatedAt?: string;
 }
 

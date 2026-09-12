@@ -150,7 +150,19 @@ export const MobilePistoleoTerminalModal: React.FC<MobilePistoleoTerminalModalPr
       setCameraStatus('STARTING');
       setCameraError('');
 
-      const devices = await Html5Qrcode.getCameras();
+      if (!navigator?.mediaDevices?.getUserMedia) {
+        setCameraStatus('ERROR');
+        setCameraError('El contexto del navegador no soporta acceso directo a la cámara. Usa el modo Láser PDA.');
+        return;
+      }
+
+      const devices = await Html5Qrcode.getCameras().catch(err => {
+        const msg = String(err?.message || err || '');
+        if (msg.includes('NotAllowedError') || msg.includes('Permission') || msg.includes('not allowed')) {
+          throw new Error('Permiso de cámara denegado o restringido por el navegador.');
+        }
+        throw err;
+      });
       if (!isMounted.current) return;
 
       if (devices && devices.length > 0) {
@@ -207,11 +219,16 @@ export const MobilePistoleoTerminalModal: React.FC<MobilePistoleoTerminalModalPr
         } catch {}
       } else {
         setCameraStatus('ERROR');
-        setCameraError('No se detectaron cámaras en el dispositivo. Usa el láser PDA o teclado.');
+        setCameraError('No se detectaron cámaras en el dispositivo. Usa el modo Láser PDA.');
       }
     } catch (err: any) {
       setCameraStatus('ERROR');
-      setCameraError(err?.message || 'No se pudo iniciar la cámara.');
+      const errMsg = String(err?.message || err || '');
+      if (errMsg.includes('NotAllowedError') || errMsg.includes('Permission') || errMsg.includes('not allowed') || errMsg.includes('denegado')) {
+        setCameraError('Permiso de cámara denegado o no disponible en este marco. Usa la entrada de texto Láser PDA.');
+      } else {
+        setCameraError(errMsg || 'No se pudo iniciar la cámara.');
+      }
     }
   };
 

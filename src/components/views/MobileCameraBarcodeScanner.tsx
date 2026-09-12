@@ -46,7 +46,20 @@ export const MobileCameraBarcodeScanner: React.FC<MobileCameraBarcodeScannerProp
         setScannerStatus('STARTING');
         setErrorMessage('');
 
-        const devices = await Html5Qrcode.getCameras();
+        if (!navigator?.mediaDevices?.getUserMedia) {
+          if (!isMounted) return;
+          setScannerStatus('ERROR');
+          setErrorMessage('El contexto del navegador no permite acceso a la cámara. Usa la lectura por láser PDA o texto manual.');
+          return;
+        }
+
+        const devices = await Html5Qrcode.getCameras().catch(err => {
+          const msg = String(err?.message || err || '');
+          if (msg.includes('NotAllowedError') || msg.includes('Permission') || msg.includes('not allowed')) {
+            throw new Error('Permiso de cámara denegado o restringido en este contexto.');
+          }
+          throw err;
+        });
         if (!isMounted) return;
 
         if (devices && devices.length > 0) {
@@ -65,10 +78,11 @@ export const MobileCameraBarcodeScanner: React.FC<MobileCameraBarcodeScannerProp
       } catch (err: any) {
         if (!isMounted) return;
         setScannerStatus('ERROR');
+        const errMsg = String(err?.message || err || '');
         setErrorMessage(
-          err?.message?.includes('Permission') 
-            ? 'Permiso de cámara denegado. Permite el acceso a la cámara en los ajustes del navegador.' 
-            : 'Error al inicializar cámara: ' + (err?.message || 'Desconocido')
+          (errMsg.includes('Permission') || errMsg.includes('NotAllowedError') || errMsg.includes('not allowed') || errMsg.includes('denegado'))
+            ? 'Permiso de cámara restringido o denegado en el navegador. Puedes ingresar o pistolear el código manualmente.' 
+            : 'Error al inicializar cámara: ' + (errMsg || 'Desconocido')
         );
       }
     }

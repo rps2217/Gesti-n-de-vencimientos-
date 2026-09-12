@@ -15,13 +15,25 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 }) => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [manualCode, setManualCode] = useState('');
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const elementId = 'reader-container';
+
+  const handleManualSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const clean = manualCode.trim();
+    if (clean) {
+      onScanSuccess(clean);
+      onClose();
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
 
     if (!isOpen) {
+      setManualCode('');
+      setErrorMsg(null);
       if (scannerRef.current) {
         try {
           if (scannerRef.current.isScanning) {
@@ -45,13 +57,27 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       try {
         setErrorMsg(null);
         
-        // Request camera permission immediately to preserve the user gesture context
-        // Otherwise, browsers might auto-deny if we wait for the timeout first.
+        // Check if mediaDevices API is supported in current context
+        if (!navigator?.mediaDevices?.getUserMedia) {
+          if (isMounted) {
+            setErrorMsg('El navegador o contexto actual no soporta acceso directo a cámara. Usa la búsqueda manual.');
+          }
+          return;
+        }
+
+        // Pre-authorization check safely guarded
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ video: true });
           stream.getTracks().forEach(track => track.stop());
-        } catch (mediaErr) {
-          console.warn("Pre-authorization failed, proceeding to let Html5Qrcode try:", mediaErr);
+        } catch (mediaErr: any) {
+          const mediaMsg = String(mediaErr?.message || mediaErr || '');
+          if (mediaMsg.includes('NotAllowedError') || mediaMsg.includes('Permission') || mediaMsg.includes('not allowed')) {
+            console.warn("Camera access denied or restricted in preview context:", mediaErr);
+            if (isMounted) {
+              setErrorMsg('Acceso a la cámara restringido o denegado por el navegador. Puedes ingresar o escanear el SKU manualmente.');
+            }
+            return;
+          }
         }
 
         // Wait for DOM element and animations to settle
@@ -89,17 +115,20 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
               }
             }
           },
-          (errorMessage) => {
-            // Scanning in progress or frame not recognized yet
-          }
+          () => {}
         );
         if (isMounted) setIsScanning(true);
       } catch (err: any) {
-        console.error('Error starting scanner:', err);
+        const errMsg = String(err?.message || err || '');
+        console.warn('Scanner camera status:', errMsg);
         if (isMounted) {
-          setErrorMsg(
-            'No se pudo acceder a la cámara. Verifique los permisos del navegador o use la búsqueda manual.'
-          );
+          if (errMsg.includes('NotAllowedError') || errMsg.includes('Permission') || errMsg.includes('not allowed')) {
+            setErrorMsg('Permiso de cámara denegado o no disponible en este marco. Usa la búsqueda manual de SKU a continuación.');
+          } else {
+            setErrorMsg(
+              'No se pudo iniciar la cámara. Verifique los permisos del navegador o use la búsqueda manual.'
+            );
+          }
         }
       }
     };
@@ -169,8 +198,26 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             </div>
           )}
 
-          <p className="text-xs text-slate-400 text-center mt-4">
-            Al detectar el código de barras o texto QR, se filtrará automáticamente en el inventario.
+          {/* Manual Input Form fallback */}
+          <form onSubmit={handleManualSubmit} className="mt-4 w-full flex gap-2">
+            <input
+              type="text"
+              value={manualCode}
+              onChange={(e) => setManualCode(e.target.value)}
+              placeholder="Escribir SKU o pistolear aquí..."
+              className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+            />
+            <button
+              type="submit"
+              disabled={!manualCode.trim()}
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold text-xs rounded-xl shadow-xs transition-all shrink-0 cursor-pointer"
+            >
+              Buscar SKU
+            </button>
+          </form>
+
+          <p className="text-xs text-slate-400 text-center mt-3">
+            Al detectar o ingresar el código de barras o EAN, se filtrará automáticamente en el inventario.
           </p>
         </div>
 

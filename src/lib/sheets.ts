@@ -238,19 +238,25 @@ export async function updateRow(
   clearSheetsCache(sheetName);
   const parsedRowIndex = typeof rowIndex === 'number' && !isNaN(rowIndex) && rowIndex >= 1 
     ? Math.floor(rowIndex) 
-    : (typeof rowIndex === 'string' && !isNaN(parseInt(rowIndex, 10)) && parseInt(rowIndex, 10) >= 1 ? parseInt(rowIndex, 10) : null);
+    : (typeof rowIndex === 'string' && !isNaN(parseInt(rowIndex, 10)) && parseInt(rowIndex, 10) >= 1 ? parseInt(rowIndex, 10) : 0);
 
   const entityKey = extraKeys?.entityKey || extraKeys?.keyValue;
 
-  if (!parsedRowIndex && !entityKey) {
+  if (parsedRowIndex < 1 && !entityKey) {
     throw new Error(`Índice de fila inválido (${rowIndex}) para actualizar en "${sheetName}". Se requiere un número de fila válido o una clave de entidad.`);
   }
+
+  const safeRowIndex = parsedRowIndex >= 1 ? parsedRowIndex : 0;
 
   return fetchFromScript({ 
     action: 'updateRow', 
     sheetName, 
-    rowIndex: parsedRowIndex, 
+    rowIndex: safeRowIndex, 
+    row: safeRowIndex,
+    rowNumber: safeRowIndex,
+    targetRow: safeRowIndex,
     entityKey: entityKey || undefined,
+    keyValue: entityKey || undefined,
     values, 
     spreadsheetId: SPREADSHEET_ID 
   });
@@ -260,26 +266,42 @@ export async function deleteRow(sheetId: number, rowIndex: number | null | undef
   clearSheetsCache(sheetName);
   const parsedRowIndex = typeof rowIndex === 'number' && !isNaN(rowIndex) && rowIndex >= 1 
     ? Math.floor(rowIndex) 
-    : (typeof rowIndex === 'string' && !isNaN(parseInt(rowIndex, 10)) && parseInt(rowIndex, 10) >= 1 ? parseInt(rowIndex, 10) : null);
+    : (typeof rowIndex === 'string' && !isNaN(parseInt(rowIndex, 10)) && parseInt(rowIndex, 10) >= 1 ? parseInt(rowIndex, 10) : 0);
 
-  if (!parsedRowIndex) {
+  if (parsedRowIndex < 1) {
     throw new Error(`Índice de fila inválido (${rowIndex}) para eliminar en "${sheetName || sheetId}".`);
   }
 
-  return fetchFromScript({ action: 'deleteRow', sheetId, rowIndex: parsedRowIndex, sheetName, spreadsheetId: SPREADSHEET_ID });
+  return fetchFromScript({ 
+    action: 'deleteRow', 
+    sheetId, 
+    rowIndex: parsedRowIndex, 
+    row: parsedRowIndex,
+    rowNumber: parsedRowIndex,
+    targetRow: parsedRowIndex,
+    sheetName, 
+    spreadsheetId: SPREADSHEET_ID 
+  });
 }
 
 export async function deleteRows(sheetId: number, rowIndexes: (number | string)[], sheetName?: string) {
   clearSheetsCache(sheetName);
   const validIndexes = (rowIndexes || [])
-    .map(idx => typeof idx === 'number' ? idx : parseInt(String(idx), 10))
+    .map(idx => typeof idx === 'number' ? Math.floor(idx) : parseInt(String(idx), 10))
     .filter(idx => !isNaN(idx) && idx >= 1);
 
   if (validIndexes.length === 0) {
     throw new Error(`No hay índices de fila válidos para eliminar en "${sheetName || sheetId}".`);
   }
 
-  return fetchFromScript({ action: 'deleteRows', sheetId, rowIndexes: validIndexes, sheetName, spreadsheetId: SPREADSHEET_ID });
+  return fetchFromScript({ 
+    action: 'deleteRows', 
+    sheetId, 
+    rowIndexes: validIndexes, 
+    rows: validIndexes,
+    sheetName, 
+    spreadsheetId: SPREADSHEET_ID 
+  });
 }
 
 /**
@@ -380,13 +402,38 @@ export async function loadCloudConfig(configSheetName = '_CONFIG_APP') {
 
 export async function saveCloudConfig(config: any, configSheetName = '_CONFIG_APP') {
   const jsonStr = JSON.stringify(config, null, 2);
-  const rows = await getSheetData(configSheetName);
+  const nowIso = new Date().toISOString();
+
+  // 1. Guardar en Script Properties si está disponible
+  try {
+    await fetchFromScript({
+      action: 'saveAppProperties',
+      config: jsonStr,
+      propertyName: 'APP_CONFIG',
+      spreadsheetId: SPREADSHEET_ID
+    });
+  } catch (err) {
+    console.warn('[Sheets] ScriptProperties save skipped:', err);
+  }
+
+  // 2. Guardar en la hoja _CONFIG_APP
+  const rows = await getSheetData(configSheetName, true);
   
-  if (rows.length === 0) {
+  if (!rows || rows.length === 0) {
     await appendRow(configSheetName, ['CLAVE', 'VALOR_JSON', 'ULTIMA_ACTUALIZACION']);
-    await appendRow(configSheetName, ['APP_CONFIG', jsonStr, new Date().toISOString()]);
+    await appendRow(configSheetName, ['APP_CONFIG', jsonStr, nowIso]);
+  } else if (rows.length === 1) {
+    await appendRow(configSheetName, ['APP_CONFIG', jsonStr, nowIso]);
   } else {
-    await updateRow(configSheetName, 2, ['APP_CONFIG', jsonStr, new Date().toISOString()]);
+    // Buscar la fila exacta de APP_CONFIG
+    let targetRow = 2;
+    for (let r = 0; r < rows.length; r++) {
+      if (rows[r] && String(rows[r][0] || '').trim() === 'APP_CONFIG') {
+        targetRow = r + 1;
+        break;
+      }
+    }
+    await updateRow(configSheetName, targetRow, ['APP_CONFIG', jsonStr, nowIso], { entityKey: 'APP_CONFIG' });
   }
 }
 
@@ -416,14 +463,13 @@ export async function saveCampaignsToCloud(
       chunks.push(jsonStr.slice(i, i + CHUNK_SIZE));
     }
 
-    // 1. Guardar en Script Properties si es pequeño (< 8KB) para acelerar lecturas concurrentes
+    // 1. Guardar en Script Properties con propiedad dedicada CAMPAIGNS_DATA si es pequeño (< 8KB)
     if (jsonStr.length < 8000) {
       try {
         await fetchFromScript({
           action: 'saveAppProperties',
-          config: {
-            CAMPAIGNS_DATA: jsonStr
-          },
+          config: jsonStr,
+          propertyName: 'CAMPAIGNS_DATA',
           spreadsheetId: SPREADSHEET_ID
         });
       } catch (propsErr) {
@@ -453,7 +499,7 @@ export async function saveCampaignsToCloud(
       // Guardar contador de chunks
       const chunksHeaderRow = existingKeyRowMap.get('CAMPAIGNS_DATA_CHUNKS');
       if (chunksHeaderRow) {
-        await updateRow(configSheetName, chunksHeaderRow, ['CAMPAIGNS_DATA_CHUNKS', String(chunks.length), nowIso]);
+        await updateRow(configSheetName, chunksHeaderRow, ['CAMPAIGNS_DATA_CHUNKS', String(chunks.length), nowIso], { entityKey: 'CAMPAIGNS_DATA_CHUNKS' });
       } else {
         await appendRow(configSheetName, ['CAMPAIGNS_DATA_CHUNKS', String(chunks.length), nowIso]);
       }
@@ -463,7 +509,7 @@ export async function saveCampaignsToCloud(
         const chunkKey = `CAMPAIGNS_DATA_CHUNK_${c}`;
         const chunkRow = existingKeyRowMap.get(chunkKey);
         if (chunkRow) {
-          await updateRow(configSheetName, chunkRow, [chunkKey, chunks[c], nowIso]);
+          await updateRow(configSheetName, chunkRow, [chunkKey, chunks[c], nowIso], { entityKey: chunkKey });
         } else {
           await appendRow(configSheetName, [chunkKey, chunks[c], nowIso]);
         }
@@ -479,7 +525,7 @@ export async function saveCampaignsToCloud(
           const obsoleteKey = `CAMPAIGNS_DATA_CHUNK_${c}`;
           const obsoleteRow = existingKeyRowMap.get(obsoleteKey);
           if (obsoleteRow) {
-            await updateRow(configSheetName, obsoleteRow, [obsoleteKey, '', nowIso]);
+            await updateRow(configSheetName, obsoleteRow, [obsoleteKey, '', nowIso], { entityKey: obsoleteKey });
           }
         }
       }
@@ -488,12 +534,12 @@ export async function saveCampaignsToCloud(
       const singleRow = existingKeyRowMap.get('CAMPAIGNS_DATA');
       if (jsonStr.length < 40000) {
         if (singleRow) {
-          await updateRow(configSheetName, singleRow, ['CAMPAIGNS_DATA', jsonStr, nowIso]);
+          await updateRow(configSheetName, singleRow, ['CAMPAIGNS_DATA', jsonStr, nowIso], { entityKey: 'CAMPAIGNS_DATA' });
         } else {
           await appendRow(configSheetName, ['CAMPAIGNS_DATA', jsonStr, nowIso]);
         }
       } else if (singleRow) {
-        await updateRow(configSheetName, singleRow, ['CAMPAIGNS_DATA', `[CHUNKED:${chunks.length}]`, nowIso]);
+        await updateRow(configSheetName, singleRow, ['CAMPAIGNS_DATA', `[CHUNKED:${chunks.length}]`, nowIso], { entityKey: 'CAMPAIGNS_DATA' });
       }
     } catch (sheetErr) {
       console.warn('[Sheets] Respaldo en _CONFIG_APP falló:', sheetErr);
@@ -819,18 +865,28 @@ function doPost(e) {
 
     // 4. AGREGAR FILA
     if (action === 'appendRow') {
-      const sheet = ss.getSheetByName(payload.sheetName);
-      if (!sheet) return responseJson({ error: 'Hoja no encontrada' });
-      sheet.appendRow(payload.values);
-      return responseJson({ success: true });
+      var sheet = payload.sheetName ? ss.getSheetByName(payload.sheetName) : null;
+      if (!sheet && payload.sheetName) {
+        sheet = ss.insertSheet(payload.sheetName);
+      }
+      if (!sheet) return responseJson({ error: 'Hoja no encontrada: ' + payload.sheetName });
+      sheet.appendRow(payload.values || []);
+      return responseJson({ success: true, newRow: sheet.getLastRow() });
     }
 
     // 5. ACTUALIZAR FILA
     if (action === 'updateRow') {
-      var sheet = ss.getSheetByName(payload.sheetName);
+      var sheet = payload.sheetName ? ss.getSheetByName(payload.sheetName) : null;
+      if (!sheet && payload.sheetId !== undefined) {
+        sheet = ss.getSheets().find(function(s) { return s.getSheetId() === payload.sheetId; });
+      }
+      if (!sheet && payload.sheetName) {
+        sheet = ss.insertSheet(payload.sheetName);
+      }
       if (!sheet) return responseJson({ error: 'Hoja no encontrada: ' + payload.sheetName });
       
-      var targetRow = parseInt(payload.rowIndex, 10);
+      var rawRow = payload.rowIndex !== undefined && payload.rowIndex !== null ? payload.rowIndex : (payload.row !== undefined && payload.row !== null ? payload.row : (payload.rowNumber || payload.targetRow));
+      var targetRow = parseInt(rawRow, 10);
       
       // Auto-recuperación si rowIndex es null o inválido: buscar por clave de entidad/CU_VC/SKU
       if (isNaN(targetRow) || targetRow < 1) {
@@ -851,15 +907,28 @@ function doPost(e) {
         }
       }
 
+      var rowValues = payload.values || [];
+      if (!rowValues.length) {
+        return responseJson({ error: 'No se enviaron valores para actualizar la fila' });
+      }
+
+      // Si no se especificó o no se encontró la fila, anexar de forma segura
       if (isNaN(targetRow) || targetRow < 1) {
-        return responseJson({ error: 'Índice de fila no válido (' + payload.rowIndex + ') y no se pudo resolver por clave para actualización en ' + payload.sheetName });
+        sheet.appendRow(rowValues);
+        return responseJson({ success: true, appended: true, updatedRow: sheet.getLastRow() });
       }
 
-      if (!payload.values || !payload.values.length) {
-        return responseJson({ error: 'No se enviaron valores para actualizar la fila ' + targetRow });
+      // Expandir filas o columnas si la hoja es más pequeña que la fila/celdas deseadas
+      var maxRows = sheet.getMaxRows();
+      if (targetRow > maxRows) {
+        sheet.insertRowsAfter(maxRows, targetRow - maxRows);
+      }
+      var maxCols = sheet.getMaxColumns();
+      if (rowValues.length > maxCols) {
+        sheet.insertColumnsAfter(maxCols, rowValues.length - maxCols);
       }
 
-      sheet.getRange(targetRow, 1, 1, payload.values.length).setValues([payload.values]);
+      sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
       return responseJson({ success: true, updatedRow: targetRow });
     }
 
@@ -871,7 +940,7 @@ function doPost(e) {
       }
       if (!sheet) return responseJson({ error: 'Hoja no encontrada' });
 
-      var rawIndexes = action === 'deleteRows' ? (payload.rowIndexes || []) : [payload.rowIndex];
+      var rawIndexes = action === 'deleteRows' ? (payload.rowIndexes || payload.rows || []) : [payload.rowIndex !== undefined ? payload.rowIndex : payload.row];
       var validIndexes = [];
       for (var i = 0; i < rawIndexes.length; i++) {
         var num = parseInt(rawIndexes[i], 10);
@@ -892,19 +961,22 @@ function doPost(e) {
     // 7. LEER SCRIPT PROPERTIES (Sin crear hojas)
     if (action === 'getAppProperties') {
       const scriptProps = PropertiesService.getScriptProperties();
-      const raw = scriptProps.getProperty('APP_CONFIG');
+      const propName = payload.propertyName || payload.key || 'APP_CONFIG';
+      const raw = scriptProps.getProperty(propName);
       let parsed = null;
       if (raw) {
-        try { parsed = JSON.parse(raw); } catch (err) {}
+        try { parsed = JSON.parse(raw); } catch (err) { parsed = raw; }
       }
-      return responseJson({ success: true, config: parsed });
+      return responseJson({ success: true, config: parsed, data: parsed, value: raw });
     }
 
     // 8. GUARDAR EN SCRIPT PROPERTIES (Sin crear hojas)
     if (action === 'saveAppProperties') {
       const scriptProps = PropertiesService.getScriptProperties();
-      const str = typeof payload.config === 'string' ? payload.config : JSON.stringify(payload.config);
-      scriptProps.setProperty('APP_CONFIG', str);
+      const propName = payload.propertyName || payload.key || 'APP_CONFIG';
+      const valToSave = payload.config !== undefined ? payload.config : payload.value;
+      const str = typeof valToSave === 'string' ? valToSave : JSON.stringify(valToSave);
+      scriptProps.setProperty(propName, str);
       return responseJson({ success: true });
     }
 

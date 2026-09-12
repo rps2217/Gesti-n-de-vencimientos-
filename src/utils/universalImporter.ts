@@ -160,7 +160,8 @@ export function parseDelimitedText(text: string, customDelimiter?: string): { he
  */
 export async function parseExcelBuffer(buffer: ArrayBuffer): Promise<ParsedSpreadsheetResult> {
   const XLSX = await import('xlsx');
-  const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+  const uint8 = new Uint8Array(buffer);
+  const workbook = XLSX.read(uint8, { type: 'array', cellDates: true, dense: true });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) {
     throw new Error('El archivo de Excel no contiene hojas de cálculo legibles.');

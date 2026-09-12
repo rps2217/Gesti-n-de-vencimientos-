@@ -142,18 +142,39 @@ export const MobileErpSnapshotView: React.FC<MobileErpSnapshotViewProps> = ({
     try {
       setIsUploading(true);
       const buffer = await file.arrayBuffer();
-      const wb = read(buffer, { type: 'array' });
-      const firstSheetName = wb.SheetNames[0];
-      const sheet = wb.Sheets[firstSheetName];
-      const jsonData: any[][] = utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      const uint8 = new Uint8Array(buffer);
+      
+      let parsedHeaders: string[] = [];
+      let parsedRows: any[][] = [];
 
-      if (jsonData.length < 2) {
+      try {
+        const wb = read(uint8, { type: 'array', cellDates: true, dense: true });
+        const firstSheetName = wb.SheetNames[0];
+        const sheet = wb.Sheets[firstSheetName];
+        const jsonData: any[][] = utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+
+        if (jsonData.length >= 2) {
+          parsedHeaders = jsonData[0].map(h => String(h || '').trim());
+          parsedRows = jsonData.slice(1);
+        }
+      } catch (xlsxErr) {
+        // Fallback para texto plano CSV / TSV si no es binario xlsx
+        const decoder = new TextDecoder('utf-8');
+        const text = decoder.decode(uint8);
+        const { parseDelimitedText } = await import('../../utils/universalImporter');
+        const delimited = parseDelimitedText(text);
+        if (delimited.headers.length > 0 && delimited.rows.length > 0) {
+          parsedHeaders = delimited.headers;
+          parsedRows = delimited.rows;
+        } else {
+          throw xlsxErr;
+        }
+      }
+
+      if (parsedRows.length === 0 || parsedHeaders.length === 0) {
         showToast('El archivo no contiene filas de datos válidas', 'error');
         return;
       }
-
-      const parsedHeaders = jsonData[0].map(h => String(h || '').trim());
-      const parsedRows = jsonData.slice(1);
 
       const { updatedCampaign, totalImported, newSkus } = importPharmacySnapshotToCampaign(
         activeCampaign,

@@ -66,8 +66,13 @@ export const MobilePistoleoTerminalModal: React.FC<MobilePistoleoTerminalModalPr
   // Scanning & Form State
   const [inputCode, setInputCode] = useState<string>('');
   const [activeScannedCode, setActiveScannedCode] = useState<string>('');
-  const [matchedItem, setMatchedItem] = useState<InventoryItem | null>(null);
+  const [matchedItems, setMatchedItems] = useState<InventoryItem[]>([]);
+  const [selectedMatchedIndex, setSelectedMatchedIndex] = useState<number>(0);
   const [masterSummary, setMasterSummary] = useState<{ name: string; provider: string; category: string } | null>(null);
+
+  const matchedItem = selectedMatchedIndex >= 0 && selectedMatchedIndex < matchedItems.length 
+    ? matchedItems[selectedMatchedIndex] 
+    : null;
   
   // Scanned item form controls
   const [quantity, setQuantity] = useState<number>(1);
@@ -265,8 +270,8 @@ export const MobilePistoleoTerminalModal: React.FC<MobilePistoleoTerminalModalPr
     setInputCode(cleanCode);
     setActiveScannedCode(cleanCode);
 
-    // 1. Search in existing inventory items
-    const existing = items.find(item => {
+    // 1. Search in ALL existing inventory items for coincidences
+    const matches = items.filter(item => {
       const itemSku = String(item[skuCol] || item.SKU || '').trim();
       const itemCuVc = String(item[cuCol] || item.CU_VC || '').trim();
       const itemBarcode = String(item.COD_BARRA || item.BARCODE || '').trim();
@@ -277,21 +282,22 @@ export const MobilePistoleoTerminalModal: React.FC<MobilePistoleoTerminalModalPr
       );
     });
 
-    if (existing) {
-      setMatchedItem(existing);
-      setCustomDescription(String(existing[descCol] || existing.PRODUCTO || ''));
-      const existingQty = parseLocaleNumber(existing[qtyCol] || 1);
+    setMatchedItems(matches);
+    setSelectedMatchedIndex(matches.length > 0 ? 0 : -1);
+
+    if (matches.length > 0) {
+      const activeMatch = matches[0];
+      setCustomDescription(String(activeMatch[descCol] || activeMatch.PRODUCTO || ''));
       setQuantity(1); // Default increment step
       
-      const mm = String(existing[mmCol] || existing.MM || '').trim();
-      const yyyy = String(existing[yyyyCol] || existing.YYYY || '').trim();
+      const mm = String(activeMatch[mmCol] || activeMatch.MM || '').trim();
+      const yyyy = String(activeMatch[yyyyCol] || activeMatch.YYYY || '').trim();
       if (mm && yyyy) {
         setSelectedMonth(mm.padStart(2, '0'));
         setSelectedYear(yyyy);
       }
       triggerFeedback('success');
     } else {
-      setMatchedItem(null);
       // 2. Search in Master Products catalog if available
       const masterProd = findMasterProduct(cleanCode, masterProducts);
       if (masterProd) {
@@ -315,7 +321,8 @@ export const MobilePistoleoTerminalModal: React.FC<MobilePistoleoTerminalModalPr
   const handleClearInput = () => {
     setInputCode('');
     setActiveScannedCode('');
-    setMatchedItem(null);
+    setMatchedItems([]);
+    setSelectedMatchedIndex(-1);
     setMasterSummary(null);
     setCustomDescription('');
     setQuantity(1);
@@ -619,10 +626,10 @@ export const MobilePistoleoTerminalModal: React.FC<MobilePistoleoTerminalModalPr
                 </span>
               </div>
 
-              {matchedItem ? (
+              {matchedItems.length > 0 ? (
                 <span className="px-2.5 py-1 rounded-full bg-emerald-950 border border-emerald-700 text-emerald-300 text-[11px] font-bold flex items-center gap-1.5 shrink-0">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  En Vencimientos ({matchedItem[qtyCol] || 0} ud)
+                  {matchedItems.length === 1 ? '1 Coincidencia' : `${matchedItems.length} Coincidencias`}
                 </span>
               ) : masterSummary ? (
                 <span className="px-2.5 py-1 rounded-full bg-blue-950 border border-blue-700 text-blue-300 text-[11px] font-bold flex items-center gap-1.5 shrink-0">
@@ -650,6 +657,103 @@ export const MobilePistoleoTerminalModal: React.FC<MobilePistoleoTerminalModalPr
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-semibold text-slate-100 placeholder-slate-600 focus:border-rose-500 outline-none"
               />
             </div>
+
+            {/* ALL COINCIDENCES LIST SELECTOR */}
+            {matchedItems.length > 0 && (
+              <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-3 flex flex-col gap-2 shadow-inner">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-extrabold text-amber-300 flex items-center gap-1.5 text-[11px]">
+                    <Layers className="w-3.5 h-3.5 text-amber-400" />
+                    {matchedItems.length === 1 
+                      ? '1 Lote Registrado en Inventario' 
+                      : `${matchedItems.length} Lotes Registrados para este SKU`}
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-slate-400">
+                    Total: {matchedItems.reduce((acc, it) => acc + parseLocaleNumber(it[qtyCol] || 0), 0)} ud
+                  </span>
+                </div>
+
+                {matchedItems.length > 1 && (
+                  <p className="text-[10px] text-slate-400 leading-tight">
+                    Toca el lote específico que deseas actualizar o sumar:
+                  </p>
+                )}
+
+                <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
+                  {matchedItems.map((item, idx) => {
+                    const isSelected = selectedMatchedIndex === idx;
+                    const mm = String(item[mmCol] || item.MM || '').trim();
+                    const yyyy = String(item[yyyyCol] || item.YYYY || '').trim();
+                    const fecha = String(item[fechaCol] || item.FECHA_VC || '').trim();
+                    const qty = parseLocaleNumber(item[qtyCol] || 0);
+
+                    return (
+                      <button
+                        key={`match-${item._rowIndex || idx}`}
+                        type="button"
+                        onClick={() => {
+                          setSelectedMatchedIndex(idx);
+                          setCustomDescription(String(item[descCol] || item.PRODUCTO || ''));
+                          if (mm && yyyy) {
+                            setSelectedMonth(mm.padStart(2, '0'));
+                            setSelectedYear(yyyy);
+                          }
+                        }}
+                        className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-center justify-between gap-2 cursor-pointer ${
+                          isSelected
+                            ? 'bg-rose-950/90 border-rose-500 text-white shadow-md shadow-rose-950/40 ring-1 ring-rose-500'
+                            : 'bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
+                            isSelected ? 'border-rose-400 bg-rose-500' : 'border-slate-600 bg-slate-800'
+                          }`}>
+                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          </div>
+                          <div className="truncate">
+                            <span className="font-mono font-extrabold text-xs block text-slate-100">
+                              Lote / Vencimiento: {mm && yyyy ? `${mm}/${yyyy}` : (fecha || 'Sin Fecha')}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block font-mono truncate">
+                              Fila #{item._rowIndex} • SKU: {item[skuCol] || item.SKU}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className={`font-mono font-extrabold text-xs block ${
+                            isSelected ? 'text-rose-300' : 'text-slate-300'
+                          }`}>
+                            {qty} ud
+                          </span>
+                          <span className="text-[9px] uppercase tracking-wider text-slate-500">
+                            Stock actual
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+
+                  {/* Option to create a new lot for this SKU */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMatchedIndex(-1);
+                      setQuantity(1);
+                    }}
+                    className={`w-full text-center py-2 px-3 rounded-xl border border-dashed transition-all text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+                      selectedMatchedIndex === -1
+                        ? 'bg-amber-950/90 border-amber-500 text-amber-200'
+                        : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Plus className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Registrar Nuevo Lote Vencimiento para este SKU</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Quantity Stepper (Directly inspired by images: (-) 1 (+)) */}
             <div className="flex items-center justify-between bg-slate-950/80 border border-slate-800 rounded-2xl p-3">

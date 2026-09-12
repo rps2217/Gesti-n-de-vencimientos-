@@ -6,7 +6,7 @@ import {
   ChevronRight, ArrowUpRight, ArrowDownRight, MapPin, Store,
   Check, X, FileCheck, Sliders, Eye, EyeOff, RotateCcw,
   Sparkles, Zap, Share2, Cloud, CloudUpload, CloudDownload,
-  Database, Info, Loader2
+  Database, Info, Loader2, Scan, MoreVertical
 } from 'lucide-react';
 import { 
   InventoryCampaign, 
@@ -36,6 +36,7 @@ import {
 } from '../../lib/sheets';
 import { formatLocaleNumber } from '../../utils/pureCalculations';
 import { parseDelimitedText, detectDelimiter } from '../../utils/universalImporter';
+import { CampaignQuickScanModal } from '../modals/CampaignQuickScanModal';
 
 interface CampaignConsolidationDashboardProps {
   campaigns: InventoryCampaign[];
@@ -45,7 +46,7 @@ interface CampaignConsolidationDashboardProps {
   onSelectCampaign: (id: string) => void;
   onStartTargetedRecount: (sessionName: string, skus: string[]) => void;
   showToast: (message: string, type: 'success' | 'error' | 'warning' | 'info', title?: string) => void;
-  onSwitchToTerminal: () => void;
+  onSwitchToTerminal: (sku?: string) => void;
 }
 
 export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashboardProps> = ({
@@ -70,6 +71,10 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
   const [isNewCampaignOpen, setIsNewCampaignOpen] = useState(false);
   const [newCampaignName, setNewCampaignName] = useState('');
   const [newCampaignLocal, setNewCampaignLocal] = useState('');
+
+  // Quick Scan modal state & Tools menu state
+  const [isQuickScanModalOpen, setIsQuickScanModalOpen] = useState(false);
+  const [isToolsDropdownOpen, setIsToolsDropdownOpen] = useState(false);
 
   // Snapshot upload states
   const [pastedSnapshotText, setPastedSnapshotText] = useState('');
@@ -140,16 +145,21 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
     return computeCampaignConsolidationMatrix(activeCampaign, sessions);
   }, [activeCampaign, sessions]);
 
+  // All audit rows across all categories
+  const allAuditRows = useMemo<CampaignAuditRow[]>(() => {
+    if (!matrix) return [];
+    return [...matrix.cuadrados, ...matrix.discrepancias, ...matrix.nuncaPistoleados, ...matrix.hallazgos];
+  }, [matrix]);
+
   // Unique list of providers in snapshot for filter dropdown
   const providerList = useMemo(() => {
     if (!matrix) return [];
     const set = new Set<string>();
-    const all = [...matrix.cuadrados, ...matrix.discrepancias, ...matrix.nuncaPistoleados, ...matrix.hallazgos];
-    all.forEach(r => {
+    allAuditRows.forEach(r => {
       if (r.proveedor) set.add(r.proveedor);
     });
     return Array.from(set).sort();
-  }, [matrix]);
+  }, [matrix, allAuditRows]);
 
   // Filtered rows for the matrix table
   const displayedRows = useMemo(() => {
@@ -585,87 +595,125 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
         </div>
 
         {/* Action buttons on header */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           
-          {/* Cloud Sync Menu */}
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-            <button
-              onClick={handleUploadCampaignsToCloud}
-              disabled={isSyncingCloud}
-              className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
-              title="Guardar y sincronizar todas las campañas en Google Sheets para ver desde otros equipos"
-            >
-              {isSyncingCloud ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <CloudUpload className="w-3.5 h-3.5" />
-              )}
-              <span>Guardar en Nube</span>
-            </button>
-
-            <button
-              onClick={handleDownloadCampaignsFromCloud}
-              disabled={isSyncingCloud}
-              className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-              title="Cargar campañas guardadas en Google Sheets desde otro equipo o dispositivo"
-            >
-              <CloudDownload className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-            </button>
-
-            {lastCloudSyncDate && (
-              <span className="text-[10px] text-slate-400 font-medium px-1.5 hidden sm:inline" title="Hora de última sincronización">
-                {lastCloudSyncDate}
-              </span>
-            )}
-          </div>
-
-          <div className="h-5 w-px bg-slate-200 dark:bg-slate-800 mx-0.5"></div>
-
-          {/* Dedicated Audit Sheet Button */}
+          {/* Primary 1: Pistola Verificadora */}
           <button
-            onClick={handleSaveToDedicatedAuditSheet}
-            disabled={isSavingToAuditSheet || !matrix}
-            className="px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
-            title="Guarda la matriz de auditoría en la pestaña dedicada '_AUDITORIA_INVENTARIO' de Google Sheets (No toca VENCIMIENTOS)"
+            type="button"
+            onClick={() => setIsQuickScanModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black shadow-md shadow-purple-600/20 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
+            title="Abrir Pistola Verificadora para consultar estado de productos en estantería"
           >
-            {isSavingToAuditSheet ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
-            ) : (
-              <Database className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-            )}
-            <span>Guardar en Hoja Auditoría</span>
+            <Scan className="w-4 h-4" />
+            <span>Pistola Consulta</span>
           </button>
 
-          <div className="h-5 w-px bg-slate-200 dark:bg-slate-800 mx-0.5"></div>
-
+          {/* Primary 2: Pistolear Mueble */}
           <button
-            onClick={() => setActiveTab('SNAPSHOT_UPLOAD')}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'SNAPSHOT_UPLOAD'
-                ? 'bg-slate-800 text-white shadow-sm'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-            }`}
-          >
-            <UploadCloud className="w-4 h-4" />
-            <span>Foto ERP</span>
-          </button>
-
-          <button
-            onClick={onSwitchToTerminal}
-            className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+            type="button"
+            onClick={() => onSwitchToTerminal()}
+            className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-md shadow-blue-600/20 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
+            title="Comenzar o continuar pistoleo de mueble/pasillo en sesión activa"
           >
             <Zap className="w-4 h-4" />
             <span>Pistolear Mueble</span>
           </button>
 
-          <button
-            onClick={handleExportFullReport}
-            className="px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-            title="Exportar informe consolidado de la farmacia"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Cierre (.xlsx)</span>
-          </button>
+          {/* Primary 3: Herramientas & Opciones Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsToolsDropdownOpen(!isToolsDropdownOpen)}
+              className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Opciones de exportación, foto ERP y sincronización"
+            >
+              <MoreVertical className="w-4 h-4 text-slate-500" />
+              <span className="hidden sm:inline">Herramientas</span>
+            </button>
+
+            {isToolsDropdownOpen && (
+              <div 
+                className="absolute right-0 top-full mt-1.5 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-40 p-2 flex flex-col gap-1 animate-in zoom-in-95 duration-100"
+                onClick={() => setIsToolsDropdownOpen(false)}
+              >
+                <div className="px-2.5 py-1 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                  Acciones de Campaña
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('SNAPSHOT_UPLOAD')}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <UploadCloud className="w-4 h-4 text-blue-500 shrink-0" />
+                  <span>Cargar Snapshot / Foto ERP</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportFullReport}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-xs font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <Download className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Exportar Cierre Oficial (.xlsx)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportDiscrepanciesSheet}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-950/40 text-xs font-bold text-amber-700 dark:text-amber-300 flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span>Planilla 2da Vuelta (Discrepancias)</span>
+                </button>
+
+                <div className="h-px bg-slate-200 dark:bg-slate-800 my-1"></div>
+
+                <div className="px-2.5 py-1 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                  Sincronización
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSaveToDedicatedAuditSheet}
+                  disabled={isSavingToAuditSheet || !matrix}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-xs font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingToAuditSheet ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                  ) : (
+                    <Database className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  )}
+                  <span>Guardar en Hoja Auditoría</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleUploadCampaignsToCloud}
+                  disabled={isSyncingCloud}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-950/40 text-xs font-bold text-blue-700 dark:text-blue-300 flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {isSyncingCloud ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                  ) : (
+                    <CloudUpload className="w-4 h-4 text-blue-600 shrink-0" />
+                  )}
+                  <span>Guardar en Google Sheets / Nube</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadCampaignsFromCloud}
+                  disabled={isSyncingCloud}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <CloudDownload className="w-4 h-4 text-slate-500 shrink-0" />
+                  <span>Recargar desde la Nube</span>
+                </button>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
 
@@ -856,8 +904,16 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Buscar por SKU, descripción o proveedor..."
-                  className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full pl-9 pr-10 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none"
                 />
+                <button
+                  type="button"
+                  onClick={() => setIsQuickScanModalOpen(true)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-purple-600 dark:text-purple-400 hover:text-purple-700 p-1.5 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-950/50 transition-colors cursor-pointer"
+                  title="Escanear con Pistola Verificadora"
+                >
+                  <Scan className="w-4 h-4" />
+                </button>
               </div>
 
               {/* Provider Filter */}
@@ -1247,6 +1303,28 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
           </div>
         </div>
       )}
+
+      {/* Embedded High-Performance Campaign Quick Scan Modal */}
+      <CampaignQuickScanModal
+        isOpen={isQuickScanModalOpen}
+        onClose={() => setIsQuickScanModalOpen(false)}
+        matrix={matrix}
+        sessions={sessions}
+        onMarkSkuClosed={(sku) => {
+          const row = allAuditRows.find(r => r.sku === sku);
+          if (row) handleToggleCloseSku(row);
+        }}
+        onReopenSku={(sku) => {
+          const row = allAuditRows.find(r => r.sku === sku);
+          if (row) handleToggleCloseSku(row);
+        }}
+        onAdjustSales={handleUpdateSalesAdjustment}
+        onSwitchToCounting={(sku) => {
+          setIsQuickScanModalOpen(false);
+          onSwitchToTerminal(sku);
+        }}
+        showToast={showToast}
+      />
     </div>
   );
 };

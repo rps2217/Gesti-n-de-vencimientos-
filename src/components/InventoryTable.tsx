@@ -130,7 +130,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
         <table className="text-left border-collapse block md:table w-full md:w-[max-content] md:table-fixed" style={{ minWidth: '100%', tableLayout: 'fixed' }}>
           <thead className="hidden md:table-header-group bg-slate-100 dark:bg-slate-700/90 sticky top-0 border-b border-slate-200 dark:border-slate-600/80 text-xs font-bold text-slate-700 dark:text-slate-100 uppercase tracking-wider select-none z-10 shadow-sm">
             <tr>
-              <th className="p-4 text-center bg-slate-100 dark:bg-slate-700/90 border-b border-slate-200 dark:border-slate-600/80" style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }}>
+              <th className="p-4 text-center bg-slate-100 dark:bg-slate-700/90 border-b border-slate-200 dark:border-slate-600/80 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]" style={{ width: '48px', minWidth: '48px', maxWidth: '48px', left: 0 }}>
                 <div className="flex items-center justify-center">
                   <input
                     type="checkbox"
@@ -148,8 +148,8 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                 </div>
               </th>
               <th 
-                style={{ width: `${getColWidth('_row', '#')}px`, minWidth: `${getColWidth('_row', '#')}px`, maxWidth: `${getColWidth('_row', '#')}px` }} 
-                className="p-4 text-center text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-700/90 border-b border-slate-200 dark:border-slate-600/80 relative group font-bold"
+                style={{ width: `${getColWidth('_row', '#')}px`, minWidth: `${getColWidth('_row', '#')}px`, maxWidth: `${getColWidth('_row', '#')}px`, left: '48px' }} 
+                className="p-4 text-center text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-700/90 border-b border-slate-200 dark:border-slate-600/80 relative group font-bold sticky left-[48px] z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]"
               >
                 <span>#</span>
                 <div

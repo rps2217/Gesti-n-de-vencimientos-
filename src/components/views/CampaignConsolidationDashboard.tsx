@@ -116,30 +116,30 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
     }
   };
 
-  // Auto-sync bidirectional on mount if local campaigns is empty or to consolidate fresh counts
+  // Auto-sync bidirectional on mount to consolidate fresh counts and ERP snapshots from other devices
   useEffect(() => {
-    if (campaigns.length === 0) {
-      syncCampaignsWithCloud({
-        campaigns,
-        activeCampaignId,
-        sessions
-      }).then(res => {
-        if (res && res.success && res.mergedCampaigns.length > 0) {
-          onUpdateCampaigns(res.mergedCampaigns);
-          if (onUpdateSessions) {
-            onUpdateSessions(res.mergedSessions);
-          }
-          if (res.activeCampaignId) {
-            onSelectCampaign(res.activeCampaignId);
-          }
-          const nowStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
-          setLastCloudSyncDate(nowStr);
-          try {
-            localStorage.setItem('app_last_campaign_cloud_sync', nowStr);
-          } catch {}
+    syncCampaignsWithCloud({
+      campaigns,
+      activeCampaignId,
+      sessions
+    }).then(res => {
+      if (res && res.success && res.mergedCampaigns.length > 0) {
+        onUpdateCampaigns(res.mergedCampaigns);
+        if (onUpdateSessions) {
+          onUpdateSessions(res.mergedSessions);
         }
-      }).catch(() => {});
-    }
+        if (res.activeCampaignId) {
+          onSelectCampaign(res.activeCampaignId);
+        }
+        const nowStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+        setLastCloudSyncDate(nowStr);
+        try {
+          localStorage.setItem('app_last_campaign_cloud_sync', nowStr);
+        } catch {}
+      }
+    }).catch((err) => {
+      console.warn('[Dashboard AutoSync] Initial sync notice:', err);
+    });
   }, []);
 
   // Active campaign entity
@@ -345,14 +345,33 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
 
       const allUpdated = campaigns.map(c => c.id === updatedCampaign.id ? updatedCampaign : c);
       onUpdateCampaigns(allUpdated);
-      autoSyncCampaignsToCloud(allUpdated, activeCampaign.id);
       setActiveTab('MATRIX');
       playBeep('success');
       showToast(
-        `Archivo "${file.name}" cargado: ${totalImported} SKUs (${newSkus} nuevos, ${updatedSkus} actualizados) • ¡Listo en tu Móvil/PDA!`,
-        'success',
-        'Snapshot en la Nube'
+        `Archivo "${file.name}" cargado: ${totalImported} SKUs (${newSkus} nuevos, ${updatedSkus} actualizados). Sincronizando en la nube...`,
+        'info',
+        'Snapshot Cargado'
       );
+
+      try {
+        await saveCampaignsToCloud({
+          campaigns: allUpdated,
+          activeCampaignId: activeCampaign.id,
+          sessions
+        });
+        const nowStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+        setLastCloudSyncDate(nowStr);
+        try {
+          localStorage.setItem('app_last_campaign_cloud_sync', nowStr);
+        } catch {}
+        showToast(
+          `¡Foto ERP sincronizada en la nube! Visible inmediatamente en tu dispositivo móvil / PDA.`,
+          'success',
+          'Sincronizado'
+        );
+      } catch (cloudErr: any) {
+        showToast(`Snapshot guardado localmente. Error en respaldo nube: ${cloudErr?.message || cloudErr}`, 'warning');
+      }
     } catch (err: any) {
       showToast(`Error al leer archivo: ${err.message}`, 'error');
     } finally {

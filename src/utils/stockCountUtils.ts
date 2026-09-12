@@ -1439,13 +1439,28 @@ export function mergeCampaignsAndSessions(
       const localSnapCount = Object.keys(lCamp.snapshotTeoricoActual || {}).length;
       const snapshotTeoricoActual = localSnapCount >= remoteSnapCount ? lCamp.snapshotTeoricoActual : remote.snapshotTeoricoActual;
 
+      // Preservar historial de snapshots (Foto ERP) del que tenga datos reales
+      const historialSnapshots = (remote.historialSnapshots && remote.historialSnapshots.length >= (lCamp.historialSnapshots?.length || 0))
+        ? remote.historialSnapshots
+        : (lCamp.historialSnapshots || []);
+
+      // Preservar nombre y local si el local era el genérico por defecto
+      const nombre = (remote.nombre && remote.nombre !== 'Inventario General Farmacia')
+        ? remote.nombre
+        : (lCamp.nombre || remote.nombre || 'Inventario General Farmacia');
+
+      const local = remote.local || lCamp.local;
+
       campaignMap.set(lCamp.id, {
         ...remote,
         ...lCamp,
+        nombre,
+        local,
         sessionIds: allSessionIds,
         itemsValidadosCerrados,
         ajustesVentaManual,
         snapshotTeoricoActual,
+        historialSnapshots,
         fechaActualizacion: new Date().toISOString()
       });
     }
@@ -1453,6 +1468,17 @@ export function mergeCampaignsAndSessions(
 
   // Si no hay campañas pero hay sesiones, crear una campaña contenedor por defecto
   let mergedCampaigns = Array.from(campaignMap.values());
+
+  // Limpiar campañas placeholders vacías si ya existen campañas reales con snapshots o sesiones
+  const hasRealCampaigns = mergedCampaigns.some(c => !c.id.startsWith('camp_auto_') || Object.keys(c.snapshotTeoricoActual || {}).length > 0);
+  if (hasRealCampaigns) {
+    mergedCampaigns = mergedCampaigns.filter(c => 
+      !c.id.startsWith('camp_auto_') || 
+      Object.keys(c.snapshotTeoricoActual || {}).length > 0 || 
+      (c.sessionIds && c.sessionIds.length > 0)
+    );
+  }
+
   if (mergedCampaigns.length === 0 && mergedSessions.length > 0) {
     const defaultCamp: InventoryCampaign = {
       id: `camp_auto_${Date.now()}`,
@@ -1470,7 +1496,20 @@ export function mergeCampaignsAndSessions(
     mergedCampaigns = [defaultCamp];
   }
 
-  const activeCampaignId = localData.activeCampaignId || remoteData?.activeCampaignId || (mergedCampaigns[0]?.id || null);
+  // Selección inteligente de la campaña activa para sincronización multidispositivo:
+  // Si la oficina cargó una foto ERP en la nube, el dispositivo móvil debe adoptar automáticamente
+  // la campaña con el snapshot teórico en lugar de quedarse anclado a una campaña local vacía.
+  const campWithSnapshots = mergedCampaigns.find(c => Object.keys(c.snapshotTeoricoActual || {}).length > 0);
+  
+  let activeCampaignId = localData.activeCampaignId || remoteData?.activeCampaignId || (mergedCampaigns[0]?.id || null);
+  const currentActive = mergedCampaigns.find(c => c.id === activeCampaignId);
+  const currentHasData = currentActive && Object.keys(currentActive.snapshotTeoricoActual || {}).length > 0;
+
+  if (!currentHasData && campWithSnapshots) {
+    activeCampaignId = campWithSnapshots.id;
+  } else if (remoteData?.activeCampaignId && !currentHasData) {
+    activeCampaignId = remoteData.activeCampaignId;
+  }
 
   return {
     mergedCampaigns,

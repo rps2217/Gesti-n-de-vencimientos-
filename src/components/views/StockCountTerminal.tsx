@@ -40,6 +40,7 @@ import {
 import { saveAuditRowsToDedicatedSheet, saveCampaignsToCloud, loadCampaignsFromCloud, syncCampaignsWithCloud } from '../../lib/sheets';
 import { CampaignConsolidationDashboard } from './CampaignConsolidationDashboard';
 import { MobileCameraBarcodeScanner } from './MobileCameraBarcodeScanner';
+import { MobileErpSnapshotView } from './MobileErpSnapshotView';
 import { 
   searchMasterProducts, 
   findMasterProduct, 
@@ -252,6 +253,16 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
     const savedCampaigns = loadCampaignsFromStorage();
     return savedCampaigns.length > 0 ? 'CAMPAIGN' : 'LIST';
   });
+
+  // Mobile layout detection & optional full desktop toggle
+  const [forceDesktopCampaignView, setForceDesktopCampaignView] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Persist campaigns
   const handleUpdateCampaigns = (updated: InventoryCampaign[]) => {
@@ -1287,9 +1298,12 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
 
           {/* Sub-bar Navigation Pills (Horizontally Scrollable on Mobile) */}
           <div className="px-3 sm:px-6 py-1.5 bg-slate-100/70 dark:bg-slate-900/60 border-t border-slate-200/70 dark:border-slate-800/70 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-            {/* Tab: Campaña Farmacia */}
+            {/* Tab: Campaña Farmacia / Foto ERP */}
             <button
-              onClick={() => setViewState('CAMPAIGN')}
+              onClick={() => {
+                setForceDesktopCampaignView(false);
+                setViewState('CAMPAIGN');
+              }}
               className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
                 viewState === 'CAMPAIGN'
                   ? 'bg-blue-600 text-white shadow-xs'
@@ -1297,7 +1311,7 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
               }`}
             >
               <Store className="w-3.5 h-3.5" />
-              <span>Matriz Campaña</span>
+              <span>{isMobile ? 'Foto ERP' : 'Matriz Campaña'}</span>
             </button>
 
             {/* Tab: Sesiones por Mueble */}
@@ -1359,32 +1373,62 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
         {/* BODY - VIEW 0: CAMPAIGN CONSOLIDATION DASHBOARD          */}
         {/* ======================================================== */}
         {viewState === 'CAMPAIGN' && (
-          <CampaignConsolidationDashboard
-            campaigns={campaigns}
-            activeCampaignId={activeCampaignIdState}
-            sessions={sessions}
-            onUpdateCampaigns={handleUpdateCampaigns}
-            onSelectCampaign={handleSelectCampaign}
-            onStartTargetedRecount={handleStartTargetedRecount}
-            showToast={showToast}
-            onUpdateSessions={setSessions}
-            onNavigateToSessionList={() => setViewState('LIST')}
-            onSwitchToTerminal={(targetSku) => {
-              if (targetSku) {
-                setScannedSku(targetSku);
-                handleSkuChange(targetSku);
-              }
-              if (currentSession && currentSession.estado !== 'COMPLETED') {
-                setViewState('COUNTING');
-              } else if (sessions.length > 0) {
-                const inProgress = sessions.find(s => s.estado !== 'COMPLETED') || sessions[0];
-                setActiveSessionId(inProgress.id);
-                setViewState('COUNTING');
-              } else {
-                setViewState('LIST');
-              }
-            }}
-          />
+          isMobile && !forceDesktopCampaignView ? (
+            <MobileErpSnapshotView
+              campaigns={campaigns}
+              activeCampaignId={activeCampaignIdState}
+              sessions={sessions}
+              onUpdateCampaigns={handleUpdateCampaigns}
+              onSelectCampaign={handleSelectCampaign}
+              onSwitchToTerminal={(targetSku) => {
+                if (targetSku) {
+                  setScannedSku(targetSku);
+                  handleSkuChange(targetSku);
+                }
+                if (currentSession && currentSession.estado !== 'COMPLETED') {
+                  setViewState('COUNTING');
+                } else if (sessions.length > 0) {
+                  const inProgress = sessions.find(s => s.estado !== 'COMPLETED') || sessions[0];
+                  setActiveSessionId(inProgress.id);
+                  setViewState('COUNTING');
+                } else {
+                  setViewState('LIST');
+                }
+              }}
+              showToast={showToast}
+              onSyncCloud={() => handleCloudSync(false)}
+              isSyncingCloud={isSyncingCloud}
+              lastCloudSyncDate={lastCloudSyncDate || undefined}
+              onOpenDesktopView={() => setForceDesktopCampaignView(true)}
+            />
+          ) : (
+            <CampaignConsolidationDashboard
+              campaigns={campaigns}
+              activeCampaignId={activeCampaignIdState}
+              sessions={sessions}
+              onUpdateCampaigns={handleUpdateCampaigns}
+              onSelectCampaign={handleSelectCampaign}
+              onStartTargetedRecount={handleStartTargetedRecount}
+              showToast={showToast}
+              onUpdateSessions={setSessions}
+              onNavigateToSessionList={() => setViewState('LIST')}
+              onSwitchToTerminal={(targetSku) => {
+                if (targetSku) {
+                  setScannedSku(targetSku);
+                  handleSkuChange(targetSku);
+                }
+                if (currentSession && currentSession.estado !== 'COMPLETED') {
+                  setViewState('COUNTING');
+                } else if (sessions.length > 0) {
+                  const inProgress = sessions.find(s => s.estado !== 'COMPLETED') || sessions[0];
+                  setActiveSessionId(inProgress.id);
+                  setViewState('COUNTING');
+                } else {
+                  setViewState('LIST');
+                }
+              }}
+            />
+          )
         )}
 
         {/* ======================================================== */}
@@ -1731,6 +1775,46 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                     {currentSession.conteos.reduce((a, b) => a + b.cantidad, 0)} unids
                   </span>
                 </div>
+              </div>
+
+              {/* Mobile Mode Switcher Bar */}
+              <div className="px-3 py-1.5 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700/80 flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setMobileCountingTab('SCAN')}
+                  className={`flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    mobileCountingTab === 'SCAN'
+                      ? 'bg-amber-500 text-white shadow-xs font-black'
+                      : 'bg-slate-100 dark:bg-slate-700/70 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                  }`}
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Pistolear</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileCountingTab('READINGS')}
+                  className={`flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    mobileCountingTab === 'READINGS'
+                      ? 'bg-blue-600 text-white shadow-xs font-black'
+                      : 'bg-slate-100 dark:bg-slate-700/70 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                  }`}
+                >
+                  <ListTodo className="w-3.5 h-3.5" />
+                  <span>Lecturas ({currentSession.conteos.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForceDesktopCampaignView(false);
+                    setViewState('CAMPAIGN');
+                  }}
+                  className="py-1.5 px-2.5 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 flex items-center gap-1 shrink-0 cursor-pointer"
+                  title="Consultar Foto ERP"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span className="text-[11px] font-extrabold">Foto ERP</span>
+                </button>
               </div>
 
               {/* MOBILE TAB 1: SCANNER & KEYPAD PAD */}
@@ -3590,6 +3674,82 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
             activeLocation={countLocation || currentSession.ubicacion}
             sessionName={currentSession.nombre}
           />
+        )}
+
+        {/* Persistent Mobile Bottom Navigation Bar */}
+        {isMobile && (
+          <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 flex items-center justify-around py-1.5 px-2 shadow-lg">
+            {/* Foto ERP */}
+            <button
+              type="button"
+              onClick={() => {
+                setForceDesktopCampaignView(false);
+                setViewState('CAMPAIGN');
+              }}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all cursor-pointer ${
+                viewState === 'CAMPAIGN'
+                  ? 'text-blue-600 dark:text-blue-400 font-black'
+                  : 'text-slate-500 dark:text-slate-400 font-medium'
+              }`}
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span className="text-[10px]">Foto ERP</span>
+            </button>
+
+            {/* Muebles */}
+            <button
+              type="button"
+              onClick={() => setViewState('LIST')}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all cursor-pointer ${
+                viewState === 'LIST'
+                  ? 'text-blue-600 dark:text-blue-400 font-black'
+                  : 'text-slate-500 dark:text-slate-400 font-medium'
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+              <span className="text-[10px]">Muebles ({sessions.length})</span>
+            </button>
+
+            {/* Pistola Conteo */}
+            <button
+              type="button"
+              onClick={() => {
+                if (currentSession) {
+                  setViewState('COUNTING');
+                } else if (sessions.length > 0) {
+                  const inProgress = sessions.find(s => s.estado !== 'COMPLETED') || sessions[0];
+                  setActiveSessionId(inProgress.id);
+                  setViewState('COUNTING');
+                } else {
+                  setViewState('LIST');
+                }
+              }}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all cursor-pointer ${
+                viewState === 'COUNTING'
+                  ? 'text-amber-500 font-black'
+                  : 'text-slate-500 dark:text-slate-400 font-medium'
+              }`}
+            >
+              <Zap className={`w-4 h-4 ${viewState === 'COUNTING' ? 'fill-amber-500 text-amber-500' : ''}`} />
+              <span className="text-[10px]">Pistola {currentSession ? `(${currentSession.conteos.length})` : ''}</span>
+            </button>
+
+            {/* Cuadratura */}
+            {currentSession && (
+              <button
+                type="button"
+                onClick={() => setViewState('RECONCILIATION')}
+                className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all cursor-pointer ${
+                  viewState === 'RECONCILIATION'
+                    ? 'text-emerald-600 dark:text-emerald-400 font-black'
+                    : 'text-slate-500 dark:text-slate-400 font-medium'
+                }`}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span className="text-[10px]">Cuadratura</span>
+              </button>
+            )}
+          </div>
         )}
       </div>
   );

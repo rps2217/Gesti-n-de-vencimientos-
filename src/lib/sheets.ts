@@ -404,50 +404,100 @@ export async function saveCampaignsToCloud(
   configSheetName = '_CONFIG_APP'
 ): Promise<boolean> {
   try {
+    const nowIso = new Date().toISOString();
     const jsonStr = JSON.stringify({
       ...campaignsPayload,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: nowIso
     });
 
-    // 1. Guardar en Script Properties primero (latencia ultrarrápida sin crear pestañas extra)
-    try {
-      const scriptPropsRes = await fetchFromScript({
-        action: 'saveAppProperties',
-        config: {
-          CAMPAIGNS_DATA: jsonStr
-        },
-        spreadsheetId: SPREADSHEET_ID
-      });
-      if (scriptPropsRes && scriptPropsRes.success) {
-        // También intentar respaldar en _CONFIG_APP si está disponible
-      }
-    } catch (propsErr) {
-      console.warn('[Sheets] No se pudo guardar campañas en ScriptProperties, guardando en hoja _CONFIG_APP:', propsErr);
+    const CHUNK_SIZE = 30000; // 30KB por celda (máximo permitido por Google Sheets: 50.000)
+    const chunks: string[] = [];
+    for (let i = 0; i < jsonStr.length; i += CHUNK_SIZE) {
+      chunks.push(jsonStr.slice(i, i + CHUNK_SIZE));
     }
 
-    // 2. Guardar en la hoja _CONFIG_APP como respaldo visible
+    // 1. Guardar en Script Properties si es pequeño (< 8KB) para acelerar lecturas concurrentes
+    if (jsonStr.length < 8000) {
+      try {
+        await fetchFromScript({
+          action: 'saveAppProperties',
+          config: {
+            CAMPAIGNS_DATA: jsonStr
+          },
+          spreadsheetId: SPREADSHEET_ID
+        });
+      } catch (propsErr) {
+        console.warn('[Sheets] ScriptProperties save skipped (tamaño o cuota):', propsErr);
+      }
+    }
+
+    // 2. Guardar en la hoja _CONFIG_APP con arquitectura de Chunks robusta
     try {
-      const rows = await getSheetData(configSheetName);
-      let foundRow = -1;
+      const rows = await getSheetData(configSheetName, true);
+
+      if (!rows || rows.length === 0) {
+        await appendRow(configSheetName, ['CLAVE', 'VALOR_JSON', 'ULTIMA_ACTUALIZACION']);
+      }
+
+      // Mapa de claves existentes en _CONFIG_APP para actualizar sin crear duplicados
+      const existingKeyRowMap = new Map<string, number>();
       if (rows && rows.length >= 1) {
-        for (let i = 1; i < rows.length; i++) {
-          if (rows[i][0] === 'CAMPAIGNS_DATA') {
-            foundRow = i + 1;
-            break;
+        for (let r = 1; r < rows.length; r++) {
+          const key = String(rows[r][0] || '').trim();
+          if (key) {
+            existingKeyRowMap.set(key, r + 1); // 1-indexed para Google Sheets
           }
         }
       }
 
-      if (foundRow > 0) {
-        await updateRow(configSheetName, foundRow, ['CAMPAIGNS_DATA', jsonStr, new Date().toISOString()]);
+      // Guardar contador de chunks
+      const chunksHeaderRow = existingKeyRowMap.get('CAMPAIGNS_DATA_CHUNKS');
+      if (chunksHeaderRow) {
+        await updateRow(configSheetName, chunksHeaderRow, ['CAMPAIGNS_DATA_CHUNKS', String(chunks.length), nowIso]);
       } else {
-        if (!rows || rows.length === 0) {
-          await appendRow(configSheetName, ['CLAVE', 'VALOR_JSON', 'ULTIMA_ACTUALIZACION']);
+        await appendRow(configSheetName, ['CAMPAIGNS_DATA_CHUNKS', String(chunks.length), nowIso]);
+      }
+
+      // Guardar cada fragmento
+      for (let c = 0; c < chunks.length; c++) {
+        const chunkKey = `CAMPAIGNS_DATA_CHUNK_${c}`;
+        const chunkRow = existingKeyRowMap.get(chunkKey);
+        if (chunkRow) {
+          await updateRow(configSheetName, chunkRow, [chunkKey, chunks[c], nowIso]);
+        } else {
+          await appendRow(configSheetName, [chunkKey, chunks[c], nowIso]);
         }
-        await appendRow(configSheetName, ['CAMPAIGNS_DATA', jsonStr, new Date().toISOString()]);
+      }
+
+      // Si antes había más chunks que ahora, limpiar los sobrantes
+      const prevCountStr = existingKeyRowMap.get('CAMPAIGNS_DATA_CHUNKS') 
+        ? rows[existingKeyRowMap.get('CAMPAIGNS_DATA_CHUNKS')! - 1]?.[1] 
+        : null;
+      const prevCount = prevCountStr ? parseInt(prevCountStr, 10) : 0;
+      if (prevCount > chunks.length) {
+        for (let c = chunks.length; c < prevCount; c++) {
+          const obsoleteKey = `CAMPAIGNS_DATA_CHUNK_${c}`;
+          const obsoleteRow = existingKeyRowMap.get(obsoleteKey);
+          if (obsoleteRow) {
+            await updateRow(configSheetName, obsoleteRow, [obsoleteKey, '', nowIso]);
+          }
+        }
+      }
+
+      // Retrocompatibilidad con CAMPAIGNS_DATA único (si entra en 40k)
+      const singleRow = existingKeyRowMap.get('CAMPAIGNS_DATA');
+      if (jsonStr.length < 40000) {
+        if (singleRow) {
+          await updateRow(configSheetName, singleRow, ['CAMPAIGNS_DATA', jsonStr, nowIso]);
+        } else {
+          await appendRow(configSheetName, ['CAMPAIGNS_DATA', jsonStr, nowIso]);
+        }
+      } else if (singleRow) {
+        await updateRow(configSheetName, singleRow, ['CAMPAIGNS_DATA', `[CHUNKED:${chunks.length}]`, nowIso]);
       }
     } catch (sheetErr) {
       console.warn('[Sheets] Respaldo en _CONFIG_APP falló:', sheetErr);
+      throw sheetErr;
     }
 
     return true;
@@ -459,6 +509,7 @@ export async function saveCampaignsToCloud(
 
 /**
  * Carga las campañas de inventario y sesiones desde Google Sheets (Nube)
+ * Soporta reconstrucción automática de fragmentos (Chunks) para snapshots masivos.
  */
 export async function loadCampaignsFromCloud(configSheetName = '_CONFIG_APP'): Promise<{
   campaigns?: any[];
@@ -466,7 +517,50 @@ export async function loadCampaignsFromCloud(configSheetName = '_CONFIG_APP'): P
   sessions?: any[];
   lastUpdated?: string;
 } | null> {
-  // 1. Intentar cargar desde Script Properties
+  // 1. Intentar cargar desde la hoja _CONFIG_APP con ensamblado de chunks (soporta fotos ERP de cualquier tamaño)
+  try {
+    const rows = await getSheetData(configSheetName, true);
+    if (rows && rows.length >= 2) {
+      const rowKeyMap = new Map<string, string>();
+      for (let i = 1; i < rows.length; i++) {
+        const k = String(rows[i][0] || '').trim();
+        const v = String(rows[i][1] || '');
+        if (k) rowKeyMap.set(k, v);
+      }
+
+      // A. Verificar si existen CHUNKS
+      if (rowKeyMap.has('CAMPAIGNS_DATA_CHUNKS')) {
+        const count = parseInt(rowKeyMap.get('CAMPAIGNS_DATA_CHUNKS') || '0', 10);
+        if (count > 0) {
+          const pieces: string[] = [];
+          for (let c = 0; c < count; c++) {
+            const piece = rowKeyMap.get(`CAMPAIGNS_DATA_CHUNK_${c}`) || '';
+            pieces.push(piece);
+          }
+          const fullJson = pieces.join('');
+          if (fullJson) {
+            const parsed = JSON.parse(fullJson);
+            if (parsed && Array.isArray(parsed.campaigns)) {
+              return parsed;
+            }
+          }
+        }
+      }
+
+      // B. Si no hay chunks, verificar clave CAMPAIGNS_DATA tradicional
+      const singleData = rowKeyMap.get('CAMPAIGNS_DATA');
+      if (singleData && !singleData.startsWith('[CHUNKED:')) {
+        const parsed = JSON.parse(singleData);
+        if (parsed && Array.isArray(parsed.campaigns)) {
+          return parsed;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[Sheets] No se pudo leer CAMPAIGNS_DATA (chunks) de _CONFIG_APP:', e);
+  }
+
+  // 2. Fallback a Script Properties (para configuraciones livianas)
   try {
     const res = await fetchFromScript({ action: 'getAppProperties', spreadsheetId: SPREADSHEET_ID });
     if (res && res.success && res.config && res.config.CAMPAIGNS_DATA) {
@@ -479,23 +573,6 @@ export async function loadCampaignsFromCloud(configSheetName = '_CONFIG_APP'): P
     }
   } catch (e) {
     console.warn('[Sheets] Script Properties no devolvió CAMPAIGNS_DATA:', e);
-  }
-
-  // 2. Intentar cargar desde la hoja _CONFIG_APP
-  try {
-    const rows = await getSheetData(configSheetName);
-    if (rows && rows.length >= 2) {
-      for (let i = 1; i < rows.length; i++) {
-        if (rows[i][0] === 'CAMPAIGNS_DATA' && rows[i][1]) {
-          const parsed = JSON.parse(rows[i][1]);
-          if (parsed && Array.isArray(parsed.campaigns)) {
-            return parsed;
-          }
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('[Sheets] No se pudo leer CAMPAIGNS_DATA de _CONFIG_APP:', e);
   }
 
   return null;

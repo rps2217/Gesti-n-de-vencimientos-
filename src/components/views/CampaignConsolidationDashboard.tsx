@@ -636,6 +636,24 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
             )}
           </button>
 
+          {/* Guardar en Hoja de Auditoría Directo */}
+          <button
+            type="button"
+            onClick={handleSaveToDedicatedAuditSheet}
+            disabled={isSavingToAuditSheet || !matrix}
+            className="px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs active:scale-95 shrink-0"
+            title="Guardar matriz de auditoría física en la pestaña _AUDITORIA_INVENTARIO de Google Sheets"
+          >
+            {isSavingToAuditSheet ? (
+              <Loader2 className="w-4 h-4 animate-spin text-indigo-600 dark:text-indigo-400" />
+            ) : (
+              <Database className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            )}
+            <span className="hidden sm:inline">
+              {isSavingToAuditSheet ? 'Guardando...' : 'Guardar en _AUDITORIA_INVENTARIO'}
+            </span>
+          </button>
+
           {/* Primary 1: Pistola Verificadora */}
           <button
             type="button"

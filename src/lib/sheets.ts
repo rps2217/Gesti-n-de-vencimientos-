@@ -710,64 +710,101 @@ export async function saveAuditRowsToDedicatedSheet(
   try {
     existingData = await getSheetData(sheetName, true);
   } catch (err) {
-    console.warn(`[Sheets] La hoja ${sheetName} no existe aún o está vacía, se creará al insertar encabezados.`, err);
+    console.warn(`[Sheets] La hoja ${sheetName} no existe aún o está vacía, se creará al insertar datos.`, err);
     existingData = [];
-  }
-
-  // Si la hoja está vacía, insertar encabezados oficiales
-  if (!existingData || existingData.length === 0) {
-    await appendRow(sheetName, AUDIT_SHEET_DEFAULT_HEADERS);
-    existingData = [AUDIT_SHEET_DEFAULT_HEADERS];
   }
 
   const headerList: string[] = existingData[0] && existingData[0].length > 0 
     ? existingData[0].map(h => String(h).trim().toUpperCase()) 
     : AUDIT_SHEET_DEFAULT_HEADERS;
 
-  // Mapa de SKU existente en la hoja de auditoría para actualizar si ya existe la fila en la misma campaña
-  const skuRowMap = new Map<string, number>();
+  // Mapa de filas existentes por clave compuesta de campaña + SKU
+  const existingRowsMap = new Map<string, any[]>();
   const campaignColIdx = headerList.findIndex(h => /ID_CAMPANA|CAMPANA/i.test(h));
   const skuColIdx = headerList.findIndex(h => /^SKU$|CODIGO/i.test(h));
 
   for (let r = 1; r < existingData.length; r++) {
-    const campVal = campaignColIdx >= 0 ? String(existingData[r][campaignColIdx] || '').trim() : '';
-    const skuVal = skuColIdx >= 0 ? String(existingData[r][skuColIdx] || '').trim() : '';
+    const row = existingData[r];
+    const campVal = campaignColIdx >= 0 ? String(row[campaignColIdx] || '').trim() : '';
+    const skuVal = skuColIdx >= 0 ? String(row[skuColIdx] || '').trim() : '';
     if (skuVal) {
-      skuRowMap.set(`${campVal}_${skuVal}`, r + 1); // 1-indexed row number in Google Sheets
+      existingRowsMap.set(`${campVal}_${skuVal}`, row);
     }
   }
 
   const nowIso = new Date().toISOString();
-  let updatedCount = 0;
-  let appendedCount = 0;
 
+  // Incorporar / sobrescribir las nuevas filas de auditoría
   for (const row of rows) {
     const campId = String(row.ID_CAMPANA || row.id_campana || '').trim();
     const sku = String(row.SKU || row.sku || '').trim();
     const compositeKey = `${campId}_${sku}`;
 
-    const values = headerList.map(header => {
+    const rowValues = headerList.map(header => {
       if (header === 'ULTIMA_ACTUALIZACION') return nowIso;
       if (row[header] !== undefined) return String(row[header]);
-      // Search lowercase or normalized key
       const lowerKey = header.toLowerCase();
       if (row[lowerKey] !== undefined) return String(row[lowerKey]);
       return '';
     });
 
-    const existingRowNumber = skuRowMap.get(compositeKey);
-    if (existingRowNumber) {
-      await updateRow(sheetName, existingRowNumber, values);
-      updatedCount++;
-    } else {
+    existingRowsMap.set(compositeKey, rowValues);
+  }
+
+  // Ensamblar la matriz completa (Encabezados + Todas las filas consolidadas)
+  const fullMatrix: any[][] = [
+    headerList,
+    ...Array.from(existingRowsMap.values())
+  ];
+
+  // 1. Intentar volcado en lote ultra-rápido en una sola petición HTTP (setSheetData)
+  try {
+    const batchRes = await fetchFromScript({
+      action: 'setSheetData',
+      sheetName,
+      values: fullMatrix,
+      rows: fullMatrix,
+      spreadsheetId: SPREADSHEET_ID
+    });
+
+    if (batchRes && batchRes.success) {
+      clearSheetsCache(sheetName);
+      return {
+        success: true,
+        count: rows.length,
+        sheetName
+      };
+    }
+  } catch (batchErr) {
+    console.warn('[Sheets] Volcado setSheetData no soportado por versión antigua de Apps Script, aplicando fallback fila a fila:', batchErr);
+  }
+
+  // 2. Fallback resiliente para implementaciones anteriores de Apps Script
+  if (!existingData || existingData.length === 0) {
+    await appendRow(sheetName, headerList);
+  }
+
+  let successCount = 0;
+  for (const row of rows) {
+    const values = headerList.map(header => {
+      if (header === 'ULTIMA_ACTUALIZACION') return nowIso;
+      if (row[header] !== undefined) return String(row[header]);
+      const lowerKey = header.toLowerCase();
+      if (row[lowerKey] !== undefined) return String(row[lowerKey]);
+      return '';
+    });
+
+    try {
       await appendRow(sheetName, values);
-      appendedCount++;
+      successCount++;
+    } catch (e) {
+      console.error('[Sheets] Error insertando fila en hoja de auditoría:', e);
     }
   }
 
   return { 
     success: true, 
-    count: updatedCount + appendedCount, 
+    count: successCount, 
     sheetName 
   };
 }
@@ -863,15 +900,83 @@ function doPost(e) {
       return responseJson({ values: getCleanSheetValues(sheet) });
     }
 
-    // 4. AGREGAR FILA
-    if (action === 'appendRow') {
+    // 4. AGREGAR FILA O FILAS EN LOTE (BATCH APPEND)
+    if (action === 'appendRow' || action === 'appendRows') {
       var sheet = payload.sheetName ? ss.getSheetByName(payload.sheetName) : null;
       if (!sheet && payload.sheetName) {
         sheet = ss.insertSheet(payload.sheetName);
       }
       if (!sheet) return responseJson({ error: 'Hoja no encontrada: ' + payload.sheetName });
-      sheet.appendRow(payload.values || []);
-      return responseJson({ success: true, newRow: sheet.getLastRow() });
+      
+      var rowsToAppend = action === 'appendRows' ? (payload.rows || payload.values || []) : [payload.values || []];
+      if (!rowsToAppend || rowsToAppend.length === 0) {
+        return responseJson({ success: true, count: 0 });
+      }
+
+      var lastRow = sheet.getLastRow();
+      var maxCols = sheet.getMaxColumns();
+      var requiredCols = 1;
+      for (var rIdx = 0; rIdx < rowsToAppend.length; rIdx++) {
+        if (rowsToAppend[rIdx] && rowsToAppend[rIdx].length > requiredCols) {
+          requiredCols = rowsToAppend[rIdx].length;
+        }
+      }
+
+      if (requiredCols > maxCols) {
+        sheet.insertColumnsAfter(maxCols, requiredCols - maxCols);
+      }
+
+      // Escribir en un solo bloque getRange().setValues() para velocidad instantánea
+      sheet.getRange(lastRow + 1, 1, rowsToAppend.length, requiredCols).setValues(rowsToAppend);
+      return responseJson({ success: true, newRow: sheet.getLastRow(), appendedCount: rowsToAppend.length });
+    }
+
+    // 4.1 VOLCADO COMPLETO / REEMPLAZO EN LOTE DE HOJA (SET SHEET DATA / BULK SAVE)
+    if (action === 'setSheetData' || action === 'batchSetSheetData') {
+      var sheet = payload.sheetName ? ss.getSheetByName(payload.sheetName) : null;
+      if (!sheet && payload.sheetName) {
+        sheet = ss.insertSheet(payload.sheetName);
+      }
+      if (!sheet) return responseJson({ error: 'Hoja no encontrada: ' + payload.sheetName });
+
+      var matrixValues = payload.values || payload.rows || [];
+      if (!matrixValues || matrixValues.length === 0) {
+        return responseJson({ success: true, count: 0 });
+      }
+
+      // Limpiar contenido previo para sincronización limpia y exacta
+      sheet.clearContents();
+
+      var numRows = matrixValues.length;
+      var numCols = 1;
+      for (var m = 0; m < matrixValues.length; m++) {
+        if (matrixValues[m] && matrixValues[m].length > numCols) {
+          numCols = matrixValues[m].length;
+        }
+      }
+
+      // Normalizar filas con longitud uniforme
+      var normalizedData = [];
+      for (var rowI = 0; rowI < numRows; rowI++) {
+        var rowArr = matrixValues[rowI] || [];
+        var fullRow = [];
+        for (var colI = 0; colI < numCols; colI++) {
+          fullRow.push(rowArr[colI] !== undefined && rowArr[colI] !== null ? String(rowArr[colI]) : '');
+        }
+        normalizedData.push(fullRow);
+      }
+
+      var maxSheetRows = sheet.getMaxRows();
+      if (numRows > maxSheetRows) {
+        sheet.insertRowsAfter(maxSheetRows, numRows - maxSheetRows);
+      }
+      var maxSheetCols = sheet.getMaxColumns();
+      if (numCols > maxSheetCols) {
+        sheet.insertColumnsAfter(maxSheetCols, numCols - maxSheetCols);
+      }
+
+      sheet.getRange(1, 1, numRows, numCols).setValues(normalizedData);
+      return responseJson({ success: true, rowCount: numRows, colCount: numCols });
     }
 
     // 5. ACTUALIZAR FILA

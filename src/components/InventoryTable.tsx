@@ -127,7 +127,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   const isSticky = sheetConfig?.enableStickyColumns === true;
 
   return (
-    <div className="bg-slate-50 md:bg-white md:dark:bg-slate-900 rounded-2xl md:shadow-sm md:border md:border-slate-200 md:dark:border-slate-800 overflow-hidden flex flex-col h-full">
+    <div className="bg-slate-50 dark:bg-slate-950 md:bg-white md:dark:bg-slate-900 rounded-2xl md:shadow-sm md:border md:border-slate-200 md:dark:border-slate-800 overflow-hidden flex flex-col h-full">
       <div className="flex-1 overflow-auto relative p-2 md:p-0" ref={tableContainerRef}>
         <table className="text-left border-collapse block md:table w-full md:w-[max-content] md:table-fixed" style={{ minWidth: '100%', tableLayout: 'fixed' }}>
           <thead className="hidden md:table-header-group bg-slate-100 dark:bg-slate-700/90 sticky top-0 border-b border-slate-200 dark:border-slate-600/80 text-xs font-bold text-slate-700 dark:text-slate-100 uppercase tracking-wider select-none z-10 shadow-sm">

@@ -2673,7 +2673,7 @@ export const InventoryDashboard: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="h-full flex flex-col bg-slate-50 md:bg-white dark:bg-slate-900 md:border border-slate-200 dark:border-slate-800 md:rounded-3xl md:shadow-sm overflow-hidden min-h-0 relative">
+            <div className="h-full flex flex-col bg-slate-50 dark:bg-slate-950 md:bg-white md:dark:bg-slate-900 md:border border-slate-200 dark:border-slate-800 md:rounded-3xl md:shadow-sm overflow-hidden min-h-0 relative">
               <InventoryTable 
                 filteredItems={filteredItems}
                 selectedRowIds={selectedRowIds}

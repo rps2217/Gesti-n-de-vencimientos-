@@ -395,6 +395,7 @@ export const DashboardModalsManager: React.FC<DashboardModalsManagerProps> = ({
         policies={policies}
         activeSheetTitle={activeSheet?.title || activeView}
         onSaveItem={handleSavePistoleoItem}
+        onDeleteItem={handleDelete}
         onOpenFullModal={(prod, prefillSku) => {
           handleOpenModal(prod, prefillSku);
         }}

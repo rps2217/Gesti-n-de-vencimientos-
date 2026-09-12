@@ -35,6 +35,7 @@ interface MobilePistoleoTerminalModalProps {
   policies?: any[];
   activeSheetTitle?: string;
   onSaveItem: (formData: Record<string, string>, targetExistingItem?: InventoryItem) => Promise<void>;
+  onDeleteItem?: (item: InventoryItem) => Promise<void>;
   onOpenFullModal?: (item?: InventoryItem, prefillSku?: string) => void;
   showToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info', title?: string) => void;
 }
@@ -48,6 +49,7 @@ export const MobilePistoleoTerminalModal: React.FC<MobilePistoleoTerminalModalPr
   policies = [],
   activeSheetTitle = 'VENCIMIENTOS',
   onSaveItem,
+  onDeleteItem,
   onOpenFullModal,
   showToast
 }) => {
@@ -399,6 +401,22 @@ export const MobilePistoleoTerminalModal: React.FC<MobilePistoleoTerminalModalPr
     } catch (err: any) {
       triggerFeedback('error');
       showToast(`Error al guardar: ${err.message}`, 'error', 'Error en Pistoleo');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!matchedItem || !onDeleteItem) return;
+    try {
+      setIsSubmitting(true);
+      await onDeleteItem(matchedItem);
+      triggerFeedback('success');
+      showToast(`Lote (Fila #${matchedItem._rowIndex}) eliminado con éxito.`, 'success', 'Eliminación');
+      handleClearInput();
+    } catch (err: any) {
+      triggerFeedback('error');
+      showToast(`Error al eliminar: ${err.message}`, 'error', 'Error en Eliminación');
     } finally {
       setIsSubmitting(false);
     }
@@ -835,26 +853,40 @@ export const MobilePistoleoTerminalModal: React.FC<MobilePistoleoTerminalModalPr
             {/* ONE-HANDED ACTION BUTTONS (Anchored for thumb access) */}
             <div className="flex flex-col gap-2 mt-1">
               {matchedItem ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => handleConfirmSave('SUM_STOCK')}
-                    className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white text-xs font-extrabold rounded-xl shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-1.5 transition-all"
-                  >
-                    {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                    <span>Sumar Stock (+{quantity})</span>
-                  </button>
+                <div className="flex flex-col gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => handleConfirmSave('SUM_STOCK')}
+                      className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white text-xs font-extrabold rounded-xl shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                      <span>Sumar Stock (+{quantity})</span>
+                    </button>
 
-                  <button
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => handleConfirmSave('UPDATE_EXPIRED')}
-                    className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 active:scale-98 text-white text-xs font-extrabold rounded-xl shadow-lg shadow-blue-950/50 flex items-center justify-center gap-1.5 transition-all"
-                  >
-                    {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Edit3 className="w-4 h-4" />}
-                    <span>Actualizar Registro</span>
-                  </button>
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => handleConfirmSave('UPDATE_EXPIRED')}
+                      className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 active:scale-98 text-white text-xs font-extrabold rounded-xl shadow-lg shadow-blue-950/50 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Edit3 className="w-4 h-4" />}
+                      <span>Actualizar Registro</span>
+                    </button>
+                  </div>
+
+                  {onDeleteItem && (
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={handleConfirmDelete}
+                      className="w-full py-2.5 px-4 bg-rose-950/80 hover:bg-rose-900/90 text-rose-300 border border-rose-800/80 active:scale-98 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Eliminar Lote / Registro (Fila #{matchedItem._rowIndex})</span>
+                    </button>
+                  )}
                 </div>
               ) : (
                 <button

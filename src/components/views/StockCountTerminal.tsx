@@ -7,7 +7,7 @@ import {
   Tag, Barcode, Hash, MapPin, Sliders, ShieldCheck, Database,
   ArrowUpRight, ArrowDownRight, ChevronRight, HelpCircle,
   Lock, Unlock, ListTodo, Zap, Copy, MessageSquare, CheckCheck, Share2, FileWarning, Store,
-  Camera, Smartphone, Cloud, CloudDownload, CloudUpload, Loader2, RefreshCw
+  Camera, Smartphone, Cloud, CloudDownload, CloudUpload, CloudOff, Loader2, RefreshCw
 } from 'lucide-react';
 import { 
   StockCountSession, 
@@ -33,9 +33,11 @@ import {
   setActiveCampaignId,
   exportStockCountToExcel,
   generateShortVcId,
-  playBeep
+  playBeep,
+  getOrCreateDeviceId,
+  generateCountManifest
 } from '../../utils/stockCountUtils';
-import { saveAuditRowsToDedicatedSheet, saveCampaignsToCloud, loadCampaignsFromCloud } from '../../lib/sheets';
+import { saveAuditRowsToDedicatedSheet, saveCampaignsToCloud, loadCampaignsFromCloud, syncCampaignsWithCloud } from '../../lib/sheets';
 import { CampaignConsolidationDashboard } from './CampaignConsolidationDashboard';
 import { MobileCameraBarcodeScanner } from './MobileCameraBarcodeScanner';
 import { 
@@ -105,23 +107,25 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
     return campaigns.find(c => c.id === activeCampaignIdState) || null;
   }, [campaigns, activeCampaignIdState]);
 
-  // Cloud sync handler
+  // Cloud sync handler (Two-Way Merging between this device and Google Sheets)
   const handleCloudSync = async (silent: boolean = false) => {
     setIsSyncingCloud(true);
     try {
-      const cloudData = await loadCampaignsFromCloud();
-      if (cloudData && Array.isArray(cloudData.campaigns) && cloudData.campaigns.length > 0) {
-        setCampaigns(cloudData.campaigns);
-        saveCampaignsToStorage(cloudData.campaigns);
+      const res = await syncCampaignsWithCloud({
+        campaigns,
+        activeCampaignId: activeCampaignIdState,
+        sessions
+      });
 
-        if (cloudData.sessions && Array.isArray(cloudData.sessions)) {
-          setSessions(cloudData.sessions);
-          saveStockCountSessionsToStorage(cloudData.sessions);
-        }
+      if (res && res.success) {
+        setCampaigns(res.mergedCampaigns);
+        setSessions(res.mergedSessions);
+        saveCampaignsToStorage(res.mergedCampaigns);
+        saveStockCountSessionsToStorage(res.mergedSessions);
 
-        if (cloudData.activeCampaignId) {
-          setActiveCampaignIdState(cloudData.activeCampaignId);
-          setActiveCampaignId(cloudData.activeCampaignId);
+        if (res.activeCampaignId) {
+          setActiveCampaignIdState(res.activeCampaignId);
+          setActiveCampaignId(res.activeCampaignId);
         }
 
         const nowStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
@@ -130,24 +134,105 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
           localStorage.setItem('app_last_campaign_cloud_sync', nowStr);
         } catch {}
 
-        const activeCamp = cloudData.campaigns.find((c: any) => c.id === (cloudData.activeCampaignId || cloudData.campaigns[0]?.id));
-        const totalSkus = activeCamp ? Object.keys(activeCamp.snapshotTeoricoActual || {}).length : 0;
-
         if (!silent) {
           playBeep('success');
           showToast(
-            `¡Sincronizado con oficina! ${cloudData.campaigns.length} campaña(s) cargadas (${totalSkus} SKUs teóricos listos).`,
+            `¡Sincronizado con oficina! ${res.mergedSessions.length} muebles y ${res.mergedCampaigns.length} campaña(s) consolidadas.`,
             'success',
             'Sincronización Exitosa'
           );
         }
       } else if (!silent) {
-        showToast('No se encontraron campañas pendientes en la nube.', 'info');
+        showToast('No se pudo conectar a Google Sheets.', 'warning');
       }
     } catch (e: any) {
       if (!silent) {
         showToast(`Error al consultar la nube: ${e.message}`, 'error');
       }
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
+
+  // Respaldar manifiesto de una sesión / mueble específico a la nube
+  const handleBackupSessionToCloud = async (sessionToBackup: StockCountSession) => {
+    setIsSyncingCloud(true);
+    try {
+      showToast(`Respaldando manifiesto de "${sessionToBackup.nombre}" en la nube...`, 'info', 'Respaldo Nube');
+      const updatedSession: StockCountSession = {
+        ...sessionToBackup,
+        sincronizadoNube: true,
+        lastUpdated: new Date().toISOString(),
+        deviceId: sessionToBackup.deviceId || getOrCreateDeviceId()
+      };
+      const updatedSessions = sessions.map(s => s.id === sessionToBackup.id ? updatedSession : s);
+      setSessions(updatedSessions);
+      saveStockCountSessionsToStorage(updatedSessions);
+
+      const res = await syncCampaignsWithCloud({
+        campaigns,
+        activeCampaignId: activeCampaignIdState,
+        sessions: updatedSessions
+      });
+
+      if (res && res.success) {
+        setCampaigns(res.mergedCampaigns);
+        setSessions(res.mergedSessions);
+        saveCampaignsToStorage(res.mergedCampaigns);
+        saveStockCountSessionsToStorage(res.mergedSessions);
+        playBeep('success');
+        showToast(
+          `✅ Manifiesto de "${sessionToBackup.nombre}" respaldado en la nube (${sessionToBackup.conteos.length} lecturas).`,
+          'success',
+          'Manifiesto Guardado'
+        );
+      } else {
+        showToast('Guardado localmente. Se respaldará en la nube cuando haya conexión.', 'warning');
+      }
+    } catch (err: any) {
+      showToast(`Error de respaldo: ${err.message}`, 'error');
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
+
+  // Finalizar mueble y subir manifiesto oficial a la nube
+  const handleFinishAndBackupSession = async (sessionToFinish: StockCountSession) => {
+    const confirmClose = confirm(`¿Deseas finalizar el conteo de "${sessionToFinish.nombre}" y enviar su manifiesto oficial a la nube?`);
+    if (!confirmClose) return;
+
+    setIsSyncingCloud(true);
+    try {
+      const closedSession: StockCountSession = {
+        ...sessionToFinish,
+        estado: 'COMPLETED',
+        fechaCierre: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+        sincronizadoNube: true,
+        deviceId: sessionToFinish.deviceId || getOrCreateDeviceId()
+      };
+      const updatedSessions = sessions.map(s => s.id === sessionToFinish.id ? closedSession : s);
+      setSessions(updatedSessions);
+      saveStockCountSessionsToStorage(updatedSessions);
+
+      const res = await syncCampaignsWithCloud({
+        campaigns,
+        activeCampaignId: activeCampaignIdState,
+        sessions: updatedSessions
+      });
+
+      if (res && res.success) {
+        setCampaigns(res.mergedCampaigns);
+        setSessions(res.mergedSessions);
+        saveCampaignsToStorage(res.mergedCampaigns);
+        saveStockCountSessionsToStorage(res.mergedSessions);
+      }
+
+      playBeep('success');
+      showToast(`🎉 ¡${closedSession.nombre} finalizado y respaldado en la nube!`, 'success');
+      setViewState('LIST');
+    } catch (err: any) {
+      showToast(`Error al finalizar: ${err.message}`, 'error');
     } finally {
       setIsSyncingCloud(false);
     }
@@ -432,8 +517,9 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
     e.preventDefault();
     const name = newSessionName.trim() || `Conteo ${newSessionMode === 'BLIND' ? 'a Ciegas' : 'Doc'} - ${new Date().toLocaleDateString('es-CL')}`;
     
+    const newSessionId = generateShortVcId();
     const newSession: StockCountSession = {
-      id: generateShortVcId(),
+      id: newSessionId,
       nombre: name,
       modo: newSessionMode,
       requiereVencimiento: newSessionRequireExpiry,
@@ -442,16 +528,38 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
       fechaInicio: new Date().toISOString(),
       conteos: [],
       notas: newSessionLocation ? `Ubicación inicial: ${newSessionLocation}` : undefined,
-      rangoAnos: newSessionRequireExpiry ? { desde: newSessionYearFrom, hasta: newSessionYearTo } : undefined
+      rangoAnos: newSessionRequireExpiry ? { desde: newSessionYearFrom, hasta: newSessionYearTo } : undefined,
+      deviceId: getOrCreateDeviceId(),
+      lastUpdated: new Date().toISOString(),
+      sincronizadoNube: false
     };
 
-    setSessions(prev => [newSession, ...prev]);
+    setSessions(prev => {
+      const updated = [newSession, ...prev];
+      saveStockCountSessionsToStorage(updated);
+      return updated;
+    });
+
+    // Automatically link to active campaign if one is selected
+    if (activeCampaignIdState) {
+      setCampaigns(prev => {
+        const updated = prev.map(c => {
+          if (c.id === activeCampaignIdState && !c.sessionIds.includes(newSessionId)) {
+            return { ...c, sessionIds: [...c.sessionIds, newSessionId] };
+          }
+          return c;
+        });
+        saveCampaignsToStorage(updated);
+        return updated;
+      });
+    }
+
     setActiveSessionId(newSession.id);
     setCountLocation(newSessionLocation);
     setNewSessionName('');
     setNewSessionLocation('');
     setViewState('COUNTING');
-    showToast(`Sesión "${name}" iniciada correctamente`, 'info', 'Conteo Activo');
+    showToast(`Mueble "${name}" iniciado. ¡Listo para pistolear!`, 'info', 'Conteo Activo');
   };
 
   // Resume or open existing session
@@ -1259,6 +1367,8 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
             onSelectCampaign={handleSelectCampaign}
             onStartTargetedRecount={handleStartTargetedRecount}
             showToast={showToast}
+            onUpdateSessions={setSessions}
+            onNavigateToSessionList={() => setViewState('LIST')}
             onSwitchToTerminal={(targetSku) => {
               if (targetSku) {
                 setScannedSku(targetSku);
@@ -1419,6 +1529,20 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                     </div>
                   )}
 
+                  {/* Quick suggestion chips for furniture name */}
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {['Góndola 1', 'Góndola 2', 'Pasillo A', 'Refrigerados', 'Vitrina Principal', 'Bodega'].map((chip) => (
+                      <button
+                        key={chip}
+                        type="button"
+                        onClick={() => setNewSessionName(chip)}
+                        className="px-2 py-0.5 rounded-lg bg-slate-200/80 dark:bg-slate-700/80 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-[11px] font-medium text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                      >
+                        + {chip}
+                      </button>
+                    ))}
+                  </div>
+
                   <div>
                     <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1">
                       <MapPin className="w-3.5 h-3.5 text-slate-400" /> Ubicación o Bodega (Opcional)
@@ -1450,6 +1574,20 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                   <Database className="w-4 h-4 text-blue-600" />
                   <span>Historial de Sesiones ({sessions.length})</span>
                 </h3>
+                <button
+                  type="button"
+                  onClick={() => handleCloudSync(false)}
+                  disabled={isSyncingCloud}
+                  className="px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Sincronizar y combinar sesiones de todos los dispositivos móviles"
+                >
+                  {isSyncingCloud ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600 dark:text-blue-400" />
+                  ) : (
+                    <Cloud className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  )}
+                  <span>{isSyncingCloud ? 'Sincronizando...' : 'Sincronizar Todos'}</span>
+                </button>
               </div>
 
               {sessions.length === 0 ? (
@@ -1465,6 +1603,7 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                   {sessions.map(s => {
                     const totalLecturas = s.conteos.length;
                     const totalUnidades = s.conteos.reduce((acc, curr) => acc + curr.cantidad, 0);
+                    const deviceLabel = s.deviceId ? (s.deviceId.includes('movil') ? '📱 ' + s.deviceId : '💻 ' + s.deviceId) : 'Dispositivo';
 
                     return (
                       <div
@@ -1472,8 +1611,8 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                         onClick={() => handleOpenSession(s)}
                         className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all cursor-pointer flex items-center justify-between group"
                       >
-                        <div className="flex items-center gap-3.5">
-                          <div className={`p-3 rounded-xl ${
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className={`p-3 rounded-xl shrink-0 ${
                             s.estado === 'COMPLETED'
                               ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'
                               : 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400'
@@ -1481,12 +1620,12 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                             {s.estado === 'COMPLETED' ? <CheckCircle2 className="w-5 h-5" /> : <Play className="w-5 h-5" />}
                           </div>
 
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
                                 {s.nombre}
                               </h4>
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
                                 s.modo === 'BLIND'
                                   ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300'
                                   : 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300'
@@ -1494,23 +1633,45 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                                 {s.modo === 'BLIND' ? 'A Ciegas' : 'Contra Doc.'}
                               </span>
                               {s.requiereVencimiento && (
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 shrink-0">
                                   MM/YYYY
+                                </span>
+                              )}
+                              {s.sincronizadoNube ? (
+                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5 shrink-0" title="Respaldado en Google Sheets">
+                                  <Cloud className="w-3 h-3" /> Nube
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-0.5 shrink-0" title="Pendiente de respaldo en nube">
+                                  <CloudOff className="w-3 h-3" /> Local
                                 </span>
                               )}
                             </div>
 
-                            <div className="flex items-center gap-4 text-xs text-slate-400 dark:text-slate-500 mt-1">
+                            <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500 mt-1 flex-wrap">
                               <span>📅 {new Date(s.fechaInicio).toLocaleDateString('es-CL')}</span>
                               <span>📦 {totalLecturas} lecturas ({formatLocaleNumber(totalUnidades)} unids)</span>
                               <span className="font-semibold text-slate-600 dark:text-slate-300">
                                 {s.estado === 'COMPLETED' ? 'Completado' : 'En progreso'}
                               </span>
+                              <span>•</span>
+                              <span className="text-slate-500 font-mono text-[11px]">{deviceLabel}</span>
                             </div>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleBackupSessionToCloud(s);
+                            }}
+                            className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                            title="Respaldar este mueble en la nube de Google Sheets"
+                          >
+                            <CloudUpload className="w-4 h-4" />
+                          </button>
                           <button
                             type="button"
                             onClick={(e) => {

@@ -501,6 +501,57 @@ export async function loadCampaignsFromCloud(configSheetName = '_CONFIG_APP'): P
   return null;
 }
 
+/**
+ * Sincronización atómica bidireccional (2-Way Merge) entre el dispositivo local y Google Sheets
+ * Descarga los datos remotos, los fusiona inteligentemente sin pérdida de conteos ni sesiones,
+ * y empuja la versión consolidada a la nube.
+ */
+export async function syncCampaignsWithCloud(
+  localPayload: {
+    campaigns: any[];
+    activeCampaignId?: string | null;
+    sessions: any[];
+  },
+  configSheetName = '_CONFIG_APP'
+): Promise<{
+  mergedCampaigns: any[];
+  mergedSessions: any[];
+  activeCampaignId: string | null;
+  newRemoteSessionsCount: number;
+  success: boolean;
+}> {
+  try {
+    const { mergeCampaignsAndSessions } = await import('../utils/stockCountUtils');
+    
+    // 1. Descargar estado remoto
+    const remoteData = await loadCampaignsFromCloud(configSheetName);
+
+    // 2. Fusionar inteligentemente sesiones y campañas
+    const mergeResult = mergeCampaignsAndSessions(localPayload, remoteData);
+
+    // 3. Empujar estado fusionado a la nube
+    await saveCampaignsToCloud({
+      campaigns: mergeResult.mergedCampaigns,
+      activeCampaignId: mergeResult.activeCampaignId,
+      sessions: mergeResult.mergedSessions
+    }, configSheetName);
+
+    return {
+      ...mergeResult,
+      success: true
+    };
+  } catch (err) {
+    console.error('[Sheets] Error durante syncCampaignsWithCloud:', err);
+    return {
+      mergedCampaigns: localPayload.campaigns,
+      mergedSessions: localPayload.sessions,
+      activeCampaignId: localPayload.activeCampaignId || null,
+      newRemoteSessionsCount: 0,
+      success: false
+    };
+  }
+}
+
 export const AUDIT_SHEET_DEFAULT_HEADERS = [
   'ID_CAMPANA',
   'FECHA_AUDITORIA',

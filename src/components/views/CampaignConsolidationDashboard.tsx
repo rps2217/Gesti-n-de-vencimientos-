@@ -26,12 +26,14 @@ import {
   createNewCampaign,
   saveCampaignsToStorage,
   loadCampaignsFromStorage,
+  saveStockCountSessionsToStorage,
   buildAuditRowsFromCampaignMatrix,
   playBeep
 } from '../../utils/stockCountUtils';
 import { 
   saveCampaignsToCloud, 
   loadCampaignsFromCloud, 
+  syncCampaignsWithCloud,
   saveAuditRowsToDedicatedSheet 
 } from '../../lib/sheets';
 import { formatLocaleNumber } from '../../utils/pureCalculations';
@@ -47,6 +49,8 @@ interface CampaignConsolidationDashboardProps {
   onStartTargetedRecount: (sessionName: string, skus: string[]) => void;
   showToast: (message: string, type: 'success' | 'error' | 'warning' | 'info', title?: string) => void;
   onSwitchToTerminal: (sku?: string) => void;
+  onUpdateSessions?: (sessions: StockCountSession[]) => void;
+  onNavigateToSessionList?: () => void;
 }
 
 export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashboardProps> = ({
@@ -57,7 +61,9 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
   onSelectCampaign,
   onStartTargetedRecount,
   showToast,
-  onSwitchToTerminal
+  onSwitchToTerminal,
+  onUpdateSessions,
+  onNavigateToSessionList
 }) => {
   // Active tab inside Campaign view: 'MATRIX' | 'SNAPSHOT_UPLOAD' | 'CAMPAIGN_SETTINGS'
   const [activeTab, setActiveTab] = useState<'MATRIX' | 'SNAPSHOT_UPLOAD' | 'CAMPAIGN_SETTINGS'>('MATRIX');
@@ -110,24 +116,29 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
     }
   };
 
-  // Auto-fetch from cloud on initial mount if local campaigns is empty
+  // Auto-sync bidirectional on mount if local campaigns is empty or to consolidate fresh counts
   useEffect(() => {
     if (campaigns.length === 0) {
-      loadCampaignsFromCloud()
-        .then(cloudData => {
-          if (cloudData && Array.isArray(cloudData.campaigns) && cloudData.campaigns.length > 0) {
-            onUpdateCampaigns(cloudData.campaigns);
-            if (cloudData.activeCampaignId) {
-              onSelectCampaign(cloudData.activeCampaignId);
-            }
-            const nowStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
-            setLastCloudSyncDate(nowStr);
-            try {
-              localStorage.setItem('app_last_campaign_cloud_sync', nowStr);
-            } catch {}
+      syncCampaignsWithCloud({
+        campaigns,
+        activeCampaignId,
+        sessions
+      }).then(res => {
+        if (res && res.success && res.mergedCampaigns.length > 0) {
+          onUpdateCampaigns(res.mergedCampaigns);
+          if (onUpdateSessions) {
+            onUpdateSessions(res.mergedSessions);
           }
-        })
-        .catch(() => {});
+          if (res.activeCampaignId) {
+            onSelectCampaign(res.activeCampaignId);
+          }
+          const nowStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+          setLastCloudSyncDate(nowStr);
+          try {
+            localStorage.setItem('app_last_campaign_cloud_sync', nowStr);
+          } catch {}
+        }
+      }).catch(() => {});
     }
   }, []);
 
@@ -390,44 +401,26 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
     onStartTargetedRecount(sessionName, skus);
   };
 
-  // ☁️ PERSISTENCIA EN LA NUBE (GOOGLE SHEETS)
-  // Guarda las campañas completas (snapshots, validaciones, ajustes) en Google Sheets
-  const handleUploadCampaignsToCloud = async () => {
+  // ☁️ SINCRONIZACIÓN Y CONSOLIDACIÓN ATÓMICA DE DISPOSITIVOS (GOOGLE SHEETS)
+  // Combina bidireccionalmente los muebles pistoleados en otros teléfonos/PCs con los locales
+  const handleSyncDevicesWithCloud = async () => {
     setIsSyncingCloud(true);
     try {
-      showToast('Guardando campañas en la nube (Google Sheets)...', 'info', 'Sincronización');
-      await saveCampaignsToCloud({
+      showToast('Sincronizando y consolidando con Google Sheets y dispositivos...', 'info', 'Sincronización');
+      const res = await syncCampaignsWithCloud({
         campaigns,
         activeCampaignId,
         sessions
       });
-      const nowStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
-      setLastCloudSyncDate(nowStr);
-      try {
-        localStorage.setItem('app_last_campaign_cloud_sync', nowStr);
-      } catch {}
 
-      playBeep('success');
-      showToast('¡Campañas y sesiones respaldadas en Google Sheets con éxito! Disponibles para consultar desde cualquier equipo.', 'success', 'Nube Sincronizada');
-    } catch (e: any) {
-      showToast(`Error al sincronizar con la nube: ${e.message}`, 'error', 'Error Nube');
-    } finally {
-      setIsSyncingCloud(false);
-    }
-  };
-
-  // 📥 CARGAR CAMPAÑAS DESDE LA NUBE (GOOGLE SHEETS)
-  // Carga campañas y sesiones compartidas desde otro computador o teléfono
-  const handleDownloadCampaignsFromCloud = async () => {
-    setIsSyncingCloud(true);
-    try {
-      showToast('Consultando campañas guardadas en Google Sheets...', 'info', 'Carga Nube');
-      const cloudData = await loadCampaignsFromCloud();
-      if (cloudData && Array.isArray(cloudData.campaigns) && cloudData.campaigns.length > 0) {
-        onUpdateCampaigns(cloudData.campaigns);
-        if (cloudData.activeCampaignId) {
-          onSelectCampaign(cloudData.activeCampaignId);
+      if (res && res.success) {
+        onUpdateCampaigns(res.mergedCampaigns);
+        if (onUpdateSessions) {
+          onUpdateSessions(res.mergedSessions);
         }
+        saveCampaignsToStorage(res.mergedCampaigns);
+        saveStockCountSessionsToStorage(res.mergedSessions);
+
         const nowStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
         setLastCloudSyncDate(nowStr);
         try {
@@ -435,12 +428,16 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
         } catch {}
 
         playBeep('success');
-        showToast(`Se cargaron ${cloudData.campaigns.length} campañas desde Google Sheets exitosamente.`, 'success', 'Campaña Cargada');
+        showToast(
+          `¡Sincronización completa! ${res.mergedSessions.length} muebles consolidados (${res.newRemoteSessionsCount > 0 ? `${res.newRemoteSessionsCount} muebles nuevos de otros dispositivos` : 'datos al día'}).`,
+          'success',
+          'Nube Consolidada'
+        );
       } else {
-        showToast('No se encontraron campañas guardadas previamente en la nube.', 'warning', 'Sin Datos en Nube');
+        showToast('No se pudo conectar a Google Sheets. Los datos locales permanecen seguros.', 'warning', 'Aviso de Red');
       }
     } catch (e: any) {
-      showToast(`Error al cargar desde la nube: ${e.message}`, 'error', 'Error');
+      showToast(`Error al sincronizar con la nube: ${e.message}`, 'error', 'Error');
     } finally {
       setIsSyncingCloud(false);
     }
@@ -597,11 +594,34 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
         {/* Action buttons on header */}
         <div className="flex items-center gap-2">
           
+          {/* Sincronizar Dispositivos Directo */}
+          <button
+            type="button"
+            onClick={handleSyncDevicesWithCloud}
+            disabled={isSyncingCloud}
+            className="px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs active:scale-95"
+            title="Consolidar conteos y muebles de todos los dispositivos móviles y Google Sheets"
+          >
+            {isSyncingCloud ? (
+              <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
+            ) : (
+              <Cloud className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            )}
+            <span className="hidden sm:inline">
+              {isSyncingCloud ? 'Sincronizando...' : 'Sincronizar Dispositivos'}
+            </span>
+            {lastCloudSyncDate && (
+              <span className="text-[10px] text-blue-500 font-mono hidden lg:inline">
+                ({lastCloudSyncDate})
+              </span>
+            )}
+          </button>
+
           {/* Primary 1: Pistola Verificadora */}
           <button
             type="button"
             onClick={() => setIsQuickScanModalOpen(true)}
-            className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black shadow-md shadow-purple-600/20 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
+            className="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black shadow-md shadow-purple-600/20 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
             title="Abrir Pistola Verificadora para consultar estado de productos en estantería"
           >
             <Scan className="w-4 h-4" />
@@ -675,6 +695,20 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
 
                 <button
                   type="button"
+                  onClick={handleSyncDevicesWithCloud}
+                  disabled={isSyncingCloud}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-950/40 text-xs font-bold text-blue-700 dark:text-blue-300 flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {isSyncingCloud ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                  ) : (
+                    <Cloud className="w-4 h-4 text-blue-600 shrink-0" />
+                  )}
+                  <span>Sincronizar Todos los Dispositivos</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={handleSaveToDedicatedAuditSheet}
                   disabled={isSavingToAuditSheet || !matrix}
                   className="w-full text-left px-3 py-2 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-xs font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
@@ -684,31 +718,7 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
                   ) : (
                     <Database className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   )}
-                  <span>Guardar en Hoja Auditoría</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleUploadCampaignsToCloud}
-                  disabled={isSyncingCloud}
-                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-950/40 text-xs font-bold text-blue-700 dark:text-blue-300 flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {isSyncingCloud ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                  ) : (
-                    <CloudUpload className="w-4 h-4 text-blue-600 shrink-0" />
-                  )}
-                  <span>Guardar en Google Sheets / Nube</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleDownloadCampaignsFromCloud}
-                  disabled={isSyncingCloud}
-                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  <CloudDownload className="w-4 h-4 text-slate-500 shrink-0" />
-                  <span>Recargar desde la Nube</span>
+                  <span>Guardar en Hoja Auditoría de Sheets</span>
                 </button>
               </div>
             )}
@@ -766,6 +776,59 @@ export const CampaignConsolidationDashboard: React.FC<CampaignConsolidationDashb
                 title="Nunca Pistoleados"
               />
             </div>
+          </div>
+
+          {/* Ribbon: Muebles y Dispositivos Consolidados en esta Campaña */}
+          <div className="mb-4 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 flex flex-col gap-2">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                <Layers className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Muebles Consolidados ({sessions.length}):</span>
+                <span className="text-[11px] text-slate-400 font-normal">Lecturas de todos los dispositivos combinadas en la matriz</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => onNavigateToSessionList ? onNavigateToSessionList() : onSwitchToTerminal()}
+                className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <span>+ Agregar Mueble</span>
+              </button>
+            </div>
+
+            {sessions.length === 0 ? (
+              <div className="p-3 bg-white dark:bg-slate-900 rounded-xl text-xs text-slate-400 text-center border border-dashed border-slate-200 dark:border-slate-700">
+                Aún no hay muebles pistoleados. Pulsa <strong className="text-blue-600">"Pistolear Mueble"</strong> para iniciar el primer conteo.
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                {sessions.map(s => {
+                  const unids = s.conteos.reduce((acc, c) => acc + c.cantidad, 0);
+                  const isCompleted = s.estado === 'COMPLETED';
+                  const deviceLabel = s.deviceId ? (s.deviceId.includes('movil') ? '📱 ' + s.deviceId : '💻 ' + s.deviceId) : 'Dispositivo';
+
+                  return (
+                    <div
+                      key={s.id}
+                      onClick={() => onSwitchToTerminal()}
+                      className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center gap-2.5 shrink-0 shadow-2xs hover:border-blue-500 transition-all cursor-pointer group"
+                      title={`${s.nombre} - ${unids} unidades - Clic para abrir`}
+                    >
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${isCompleted ? 'bg-emerald-500' : 'bg-blue-500 animate-pulse'}`} />
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 truncate max-w-[150px]">
+                          {s.nombre}
+                        </span>
+                        <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                          <span className="font-semibold text-slate-600 dark:text-slate-300">{formatLocaleNumber(unids)} unids</span>
+                          <span>•</span>
+                          <span className="truncate max-w-[90px]">{deviceLabel}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* 4 Semáforo KPI Cards */}

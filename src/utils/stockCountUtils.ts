@@ -6,7 +6,8 @@ import {
   InventoryCampaign,
   CampaignSnapshotRecord,
   CampaignConsolidationMatrix,
-  CampaignAuditRow
+  CampaignAuditRow,
+  CountManifest
 } from '../types';
 import { findColumnBySemantic } from './columnAliases';
 import { parseLocaleNumber } from './pureCalculations';
@@ -1253,5 +1254,229 @@ export function playBeep(type: 'success' | 'error' | 'skip'): void {
   } catch (e) {
     console.warn('AudioContext failed to execute:', e);
   }
+}
+
+/**
+ * Retorna o crea un identificador persistente y amigable de este dispositivo / terminal
+ * e.g. "Móvil-A41B" o "Terminal-F92C"
+ */
+export function getOrCreateDeviceId(): string {
+  try {
+    let id = localStorage.getItem('app_device_id');
+    if (!id) {
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+      const prefix = isMobile ? 'Móvil' : 'Terminal';
+      const randomHex = Math.random().toString(36).substring(2, 6).toUpperCase();
+      id = `${prefix}-${randomHex}`;
+      localStorage.setItem('app_device_id', id);
+    }
+    return id;
+  } catch {
+    return 'Terminal-Local';
+  }
+}
+
+/**
+ * Genera un manifiesto oficial de entrega a partir de una sesión de conteo por mueble
+ */
+export function generateCountManifest(
+  session: StockCountSession,
+  campaign?: InventoryCampaign | null
+): CountManifest {
+  const deviceId = session.deviceId || getOrCreateDeviceId();
+  const manifestId = session.manifestId || `MAN-${session.id.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`;
+  
+  const skuMap = new Map<string, { sku: string; descripcion: string; cantidad: number }>();
+  for (const c of session.conteos) {
+    const existing = skuMap.get(c.sku);
+    if (existing) {
+      existing.cantidad += c.cantidad;
+    } else {
+      skuMap.set(c.sku, {
+        sku: c.sku,
+        descripcion: c.descripcion || '',
+        cantidad: c.cantidad
+      });
+    }
+  }
+
+  const totalUnidades = session.conteos.reduce((sum, c) => sum + c.cantidad, 0);
+
+  return {
+    manifestId,
+    campaignId: campaign?.id,
+    campaignName: campaign?.nombre,
+    sessionId: session.id,
+    sessionName: session.nombre,
+    ubicacion: session.ubicacion,
+    deviceId,
+    auditor: session.auditor,
+    totalSkus: skuMap.size,
+    totalUnidades,
+    fechaInicio: session.fechaInicio,
+    fechaCierre: session.fechaCierre,
+    estado: session.estado === 'COMPLETED' ? 'FINALIZADO_ENVIADO' : 'EN_CONTEO',
+    resumenSkus: Array.from(skuMap.values())
+  };
+}
+
+/**
+ * Motor de Fusión y Consolidación Multi-dispositivo (Merge Engine)
+ * Fusiona sin pérdida de datos las campañas y sesiones de conteo locales con las remotas de Google Sheets
+ */
+export function mergeCampaignsAndSessions(
+  localData: { campaigns: InventoryCampaign[]; sessions: StockCountSession[]; activeCampaignId?: string | null },
+  remoteData: { campaigns?: InventoryCampaign[]; sessions?: StockCountSession[]; activeCampaignId?: string | null } | null
+): {
+  mergedCampaigns: InventoryCampaign[];
+  mergedSessions: StockCountSession[];
+  activeCampaignId: string | null;
+  newRemoteSessionsCount: number;
+} {
+  const localSessions = localData.sessions || [];
+  const remoteSessions = (remoteData && Array.isArray(remoteData.sessions)) ? remoteData.sessions : [];
+  
+  // 1. Mapa de sesiones unificadas por ID
+  const sessionMap = new Map<string, StockCountSession>();
+  
+  // Registrar sesiones remotas primero
+  for (const rSess of remoteSessions) {
+    if (rSess && rSess.id) {
+      sessionMap.set(rSess.id, { ...rSess, sincronizadoNube: true });
+    }
+  }
+
+  let newRemoteSessionsCount = 0;
+  const localSessionIds = new Set(localSessions.map(s => s.id));
+  for (const rSess of remoteSessions) {
+    if (rSess && rSess.id && !localSessionIds.has(rSess.id)) {
+      newRemoteSessionsCount++;
+    }
+  }
+
+  // Fusionar sesiones locales
+  for (const lSess of localSessions) {
+    if (!lSess || !lSess.id) continue;
+    const remote = sessionMap.get(lSess.id);
+    if (!remote) {
+      // Sesión creada localmente que aún no existe en la nube
+      sessionMap.set(lSess.id, lSess);
+    } else {
+      // Existe en ambos: fusionar conteos de forma idempotente
+      const entryIdSet = new Set<string>();
+      const combinedConteos: StockCountEntry[] = [];
+      
+      const addEntry = (entry: StockCountEntry) => {
+        const uniqueKey = entry.id || `${entry.sku}_${entry.timestamp}_${entry.cantidad}_${entry.cu_vc || ''}`;
+        if (!entryIdSet.has(uniqueKey)) {
+          entryIdSet.add(uniqueKey);
+          combinedConteos.push(entry);
+        }
+      };
+
+      (remote.conteos || []).forEach(addEntry);
+      (lSess.conteos || []).forEach(addEntry);
+
+      const estado = (lSess.estado === 'COMPLETED' || remote.estado === 'COMPLETED') ? 'COMPLETED' : 'IN_PROGRESS';
+      
+      sessionMap.set(lSess.id, {
+        ...remote,
+        ...lSess,
+        estado,
+        conteos: combinedConteos,
+        lastUpdated: new Date().toISOString(),
+        deviceId: lSess.deviceId || remote.deviceId || getOrCreateDeviceId(),
+        sincronizadoNube: true
+      });
+    }
+  }
+
+  const mergedSessions = Array.from(sessionMap.values()).sort((a, b) => 
+    new Date(b.fechaInicio || 0).getTime() - new Date(a.fechaInicio || 0).getTime()
+  );
+
+  // 2. Fusionar Campañas
+  const localCampaigns = localData.campaigns || [];
+  const remoteCampaigns = (remoteData && Array.isArray(remoteData.campaigns)) ? remoteData.campaigns : [];
+  const campaignMap = new Map<string, InventoryCampaign>();
+
+  for (const rCamp of remoteCampaigns) {
+    if (rCamp && rCamp.id) {
+      campaignMap.set(rCamp.id, rCamp);
+    }
+  }
+
+  for (const lCamp of localCampaigns) {
+    if (!lCamp || !lCamp.id) continue;
+    const remote = campaignMap.get(lCamp.id);
+    if (!remote) {
+      campaignMap.set(lCamp.id, lCamp);
+    } else {
+      // Unión de sessionIds
+      const allSessionIds = Array.from(new Set([...(remote.sessionIds || []), ...(lCamp.sessionIds || [])]));
+      
+      // Auto-vincular todas las sesiones existentes para asegurar consolidación total
+      mergedSessions.forEach(s => {
+        if (!allSessionIds.includes(s.id)) {
+          allSessionIds.push(s.id);
+        }
+      });
+
+      // Unión de validaciones cerradas
+      const itemsValidadosCerrados = {
+        ...(remote.itemsValidadosCerrados || {}),
+        ...(lCamp.itemsValidadosCerrados || {})
+      };
+
+      // Unión de ajustes de venta
+      const ajustesVentaManual = {
+        ...(remote.ajustesVentaManual || {}),
+        ...(lCamp.ajustesVentaManual || {})
+      };
+
+      // Snapshot con más datos
+      const remoteSnapCount = Object.keys(remote.snapshotTeoricoActual || {}).length;
+      const localSnapCount = Object.keys(lCamp.snapshotTeoricoActual || {}).length;
+      const snapshotTeoricoActual = localSnapCount >= remoteSnapCount ? lCamp.snapshotTeoricoActual : remote.snapshotTeoricoActual;
+
+      campaignMap.set(lCamp.id, {
+        ...remote,
+        ...lCamp,
+        sessionIds: allSessionIds,
+        itemsValidadosCerrados,
+        ajustesVentaManual,
+        snapshotTeoricoActual,
+        fechaActualizacion: new Date().toISOString()
+      });
+    }
+  }
+
+  // Si no hay campañas pero hay sesiones, crear una campaña contenedor por defecto
+  let mergedCampaigns = Array.from(campaignMap.values());
+  if (mergedCampaigns.length === 0 && mergedSessions.length > 0) {
+    const defaultCamp: InventoryCampaign = {
+      id: `camp_auto_${Date.now()}`,
+      nombre: 'Inventario General Farmacia',
+      local: 'LOCAL PRINCIPAL',
+      fechaInicio: new Date().toISOString(),
+      fechaActualizacion: new Date().toISOString(),
+      estado: 'ACTIVA',
+      snapshotTeoricoActual: {},
+      historialSnapshots: [],
+      sessionIds: mergedSessions.map(s => s.id),
+      itemsValidadosCerrados: {},
+      ajustesVentaManual: {}
+    };
+    mergedCampaigns = [defaultCamp];
+  }
+
+  const activeCampaignId = localData.activeCampaignId || remoteData?.activeCampaignId || (mergedCampaigns[0]?.id || null);
+
+  return {
+    mergedCampaigns,
+    mergedSessions,
+    activeCampaignId,
+    newRemoteSessionsCount
+  };
 }
 

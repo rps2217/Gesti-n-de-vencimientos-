@@ -246,6 +246,28 @@ export interface StockCountSession {
   rangoAnos?: { desde: number; hasta: number }; // Rango de años de interés para vencimiento
   snapshotTeorico?: Record<string, number>; // Snapshot congelado del teórico al iniciar/guardar sesión
   ajustesMovimiento?: Record<string, number>; // Ajustes de movimientos (ventas/entradas) durante el conteo
+  deviceId?: string;               // Identificador único del dispositivo / terminal auditor
+  auditor?: string;                // Nombre o firma del operario
+  lastUpdated?: string;            // Timestamp de última mutación (ISO)
+  sincronizadoNube?: boolean;      // Indicador si esta versión ya fue respaldada en la nube
+  manifestId?: string;             // ID único del manifiesto de entrega
+}
+
+export interface CountManifest {
+  manifestId: string;
+  campaignId?: string;
+  campaignName?: string;
+  sessionId: string;
+  sessionName: string;
+  ubicacion?: string;
+  deviceId: string;
+  auditor?: string;
+  totalSkus: number;
+  totalUnidades: number;
+  fechaInicio: string;
+  fechaCierre?: string;
+  estado: 'EN_CONTEO' | 'FINALIZADO_ENVIADO';
+  resumenSkus?: Array<{ sku: string; descripcion: string; cantidad: number }>;
 }
 
 export interface StockCountReconciliationItem {

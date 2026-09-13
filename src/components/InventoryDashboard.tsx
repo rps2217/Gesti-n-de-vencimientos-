@@ -103,6 +103,7 @@ import { EventFilterChips } from './views/EventFilterChips';
 import { PmRadarCards } from './views/PmRadarCards';
 import { ColumnFilterMenu } from './views/ColumnFilterMenu';
 import { InventoryTableRow } from './views/InventoryTableRow';
+import { ViewConfigControlDrawer } from './drawers/ViewConfigControlDrawer';
 import { usePrecomputedColumns } from '../hooks/usePrecomputedColumns';
 import { TicketPrintView } from './views/TicketPrintView';
 import { buildBulkActionContext, isActionEnabledForTable } from '../utils/bulkActionsRegistry';
@@ -308,6 +309,23 @@ export const InventoryDashboard: React.FC = () => {
   const [isBulkActionsConfigOpen, setIsBulkActionsConfigOpen] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
+  const [isRightDrawerOpen, setIsRightDrawerOpen] = useState<boolean>(false);
+  const [tableDensity, setTableDensity] = useState<'comfortable' | 'compact' | 'ultra'>(() => {
+    try {
+      const saved = localStorage.getItem('app_table_density');
+      return (saved as 'comfortable' | 'compact' | 'ultra') || 'compact';
+    } catch {
+      return 'compact';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('app_table_density', tableDensity);
+    } catch {
+      // ignore
+    }
+  }, [tableDensity]);
 
   // Contextual intelligence for bulk actions on the current table
   const bulkActionCtx = useMemo(() => {
@@ -459,7 +477,8 @@ export const InventoryDashboard: React.FC = () => {
     showAllColumns,
     resetColumnOrder,
     setVisibleColumns,
-    columnOrders
+    columnOrders,
+    hiddenColumns
   } = useColumnManager({
     headers,
     activeSheetTitle: activeSheet?.title,
@@ -490,9 +509,9 @@ export const InventoryDashboard: React.FC = () => {
   const [isZenMode, setIsZenMode] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('app_zen_mode');
-      return saved !== null ? JSON.parse(saved) : true;
+      return saved !== null ? JSON.parse(saved) : false;
     } catch {
-      return true;
+      return false;
     }
   });
 
@@ -2479,6 +2498,16 @@ export const InventoryDashboard: React.FC = () => {
 
             <button
               type="button"
+              onClick={() => setIsRightDrawerOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm shrink-0"
+              title="Abrir panel de vistas, columnas y configuraciones"
+            >
+              <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Ajustes</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => {
                 setIsZenMode(false);
                 showToast('Modo Zen desactivado', 'info', 'Enfoque');
@@ -2538,6 +2567,7 @@ export const InventoryDashboard: React.FC = () => {
             handleOpenModal={handleOpenModal}
             setIsBulkImportOpen={setIsBulkImportOpen}
             setIsScriptModalOpen={setIsScriptModalOpen}
+            onOpenViewConfig={() => setIsRightDrawerOpen(true)}
           />
         )}
 
@@ -2587,6 +2617,7 @@ export const InventoryDashboard: React.FC = () => {
               onOpenStockCount={() => setIsStockCountOpen(true)}
               onToggleStickyColumns={handleToggleStickyColumns}
               isStickyEnabled={sheetConfig?.enableStickyColumns === true}
+              onOpenViewConfig={() => setIsRightDrawerOpen(true)}
               slices={visibleTableSlices}
               activeSliceId={activeSliceId}
               onSelectSlice={handleSelectSlice}
@@ -2737,6 +2768,7 @@ export const InventoryDashboard: React.FC = () => {
                 measureElementRef={rowVirtualizer.measureElement}
                 sortConfig={sortConfig}
                 handleToggleSort={handleToggleSort}
+                tableDensity={tableDensity}
               />
 
               {/* Footer summary bar */}
@@ -2827,6 +2859,46 @@ export const InventoryDashboard: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* WORKSPACE SIDE DRAWER */}
+      <ViewConfigControlDrawer
+        isOpen={isRightDrawerOpen}
+        onClose={() => setIsRightDrawerOpen(false)}
+        allHeaders={headers}
+        hiddenColumns={hiddenColumns?.[activeView] || []}
+        onToggleColumnVisibility={(col) => toggleVisibility(col)}
+        onResetColumns={resetColumnOrder}
+        onShowAllColumns={showAllColumns}
+        activeTableKey={activeView}
+        activeSliceId={activeSliceId}
+        onSelectSlice={(sliceId) => {
+          if (!sliceId) {
+            handleSelectSlice(null);
+          } else {
+            const found = currentTableSlices.find(s => s.id === sliceId);
+            handleSelectSlice(found || null);
+          }
+        }}
+        customSlices={customSlices}
+        onOpenSliceEditor={(slice) => {
+          setEditingSliceModalItem(slice || null);
+          setIsSliceModalOpen(true);
+        }}
+        isZenMode={isZenMode}
+        onToggleZenMode={() => {
+          const next = !isZenMode;
+          setIsZenMode(next);
+          showToast(next ? 'Modo Zen activado (Presiona Esc para salir)' : 'Modo Zen desactivado', 'info', 'Enfoque');
+        }}
+        tableDensity={tableDensity}
+        onChangeTableDensity={(density) => setTableDensity(density)}
+        sheetConfig={sheetConfig}
+        onOpenGlobalConfig={() => setIsConfigOpen(true)}
+        onOpenBulkActionsConfig={() => setIsBulkActionsConfigOpen(true)}
+        onOpenSchemaEditor={() => setActiveView('schema')}
+        totalItemsCount={items.length}
+        filteredItemsCount={filteredItems.length}
+      />
 
       {/* CENTRALIZED DASHBOARD MODALS AND DRAWERS */}
       <DashboardModalsManager

@@ -38,6 +38,7 @@ export interface InventoryTableRowProps {
   isWhatsAppEnabled?: boolean;
   isEmailEnabled?: boolean;
   isStickyEnabled?: boolean;
+  tableDensity?: 'comfortable' | 'compact' | 'ultra';
 }
 
 export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
@@ -63,6 +64,7 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
   isWhatsAppEnabled = true,
   isEmailEnabled = true,
   isStickyEnabled = false,
+  tableDensity = 'compact',
 }) => {
   const eventCategory = getEventCategory(item, headers);
   const status = getItemStatus(item, headers);
@@ -85,6 +87,13 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
   const descCol = useMemo(() => findColumnBySemantic(headers, 'descripcion'), [headers]);
   const qtyCol = useMemo(() => findColumnBySemantic(headers, 'cantidad'), [headers]);
   const dateCol = useMemo(() => findColumnBySemantic(headers, 'fecha_vc') || findColumnBySemantic(headers, 'fecha_retiro'), [headers]);
+
+  // Calculate padding class based on table density
+  const paddingClass = useMemo(() => {
+    if (tableDensity === 'comfortable') return 'p-4';
+    if (tableDensity === 'ultra') return 'p-1.5 text-[11px]';
+    return 'p-2.5 text-xs'; // default is 'compact'
+  }, [tableDensity]);
 
   let rowBgClass = 'hover:bg-slate-50/80 dark:hover:bg-slate-800/60';
   if (isSelected) {
@@ -232,7 +241,7 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
       {/* 💻 DESKTOP TABLE VIEW */}
       {/* Selection Checkbox */}
       <td 
-        className={`hidden md:table-cell p-4 text-center transition-colors ${
+        className={`hidden md:table-cell ${paddingClass} text-center transition-colors ${
           isStickyEnabled
             ? 'sticky left-0 z-10 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]'
             : ''
@@ -254,7 +263,7 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
       {/* Row Index */}
       <td 
         style={{ width: `${getColWidth('_row', '#')}px`, minWidth: `${getColWidth('_row', '#')}px`, maxWidth: `${getColWidth('_row', '#')}px`, ...(isStickyEnabled ? { left: '48px' } : {}) }}
-        className={`hidden md:table-cell p-4 text-center font-mono text-xs text-slate-400 dark:text-slate-500 truncate transition-colors ${
+        className={`hidden md:table-cell ${paddingClass} text-center font-mono text-xs text-slate-400 dark:text-slate-500 truncate transition-colors ${
           isStickyEnabled
             ? 'sticky left-[48px] z-10 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]'
             : ''
@@ -267,7 +276,7 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
       {activeView === 'main' && (
         <td 
           style={{ width: `${getColWidth('_status', 'Estado / Radar PM')}px`, minWidth: `${getColWidth('_status', 'Estado / Radar PM')}px`, maxWidth: `${getColWidth('_status', 'Estado / Radar PM')}px` }}
-          className="hidden md:table-cell p-3 truncate"
+          className={`hidden md:table-cell ${paddingClass} truncate`}
         >
           {eventCategory === 'VENCIMIENTO' || eventCategory === 'VENCIMIENTO_CERCANO' ? (
             <button 
@@ -320,7 +329,7 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
       {activeView === 'events' && (
         <td 
           style={{ width: `${getColWidth('_res_status', 'Estado Gestión')}px`, minWidth: `${getColWidth('_res_status', 'Estado Gestión')}px`, maxWidth: `${getColWidth('_res_status', 'Estado Gestión')}px` }}
-          className="hidden md:table-cell p-4 truncate"
+          className={`hidden md:table-cell ${paddingClass} truncate`}
         >
           {eventResStatus?.isResolved ? (
             <button
@@ -360,7 +369,7 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
           <td 
             key={header} 
             style={{ width: `${colWidth}px`, minWidth: `${colWidth}px`, maxWidth: `${colWidth}px` }}
-            className="hidden md:table-cell p-4 truncate text-slate-800 dark:text-slate-200"
+            className={`hidden md:table-cell ${paddingClass} truncate text-slate-800 dark:text-slate-200`}
           >
             <div className="w-full flex justify-start overflow-hidden">
               {isProductsView && isSku ? (
@@ -453,7 +462,7 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
 
       {/* Row Actions */}
       <td 
-        className={`hidden md:table-cell p-4 text-right transition-colors ${
+        className={`hidden md:table-cell ${paddingClass} text-right transition-colors ${
           isStickyEnabled
             ? 'sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)]'
             : ''
@@ -493,6 +502,7 @@ export const InventoryTableRow: React.FC<InventoryTableRowProps> = React.memo(({
   );
 }, (prevProps, nextProps) => {
   // Ultra-fast memo comparison for 60fps virtualization scrolling
+  if (prevProps.tableDensity !== nextProps.tableDensity) return false;
   if (prevProps.item !== nextProps.item) return false;
   if (prevProps.isSelected !== nextProps.isSelected) return false;
   if (prevProps.virtualIndex !== nextProps.virtualIndex) return false;

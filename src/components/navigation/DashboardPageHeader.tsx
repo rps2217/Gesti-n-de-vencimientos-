@@ -40,6 +40,7 @@ interface DashboardPageHeaderProps {
   onOpenStockCount?: () => void;
   onToggleStickyColumns?: () => void;
   isStickyEnabled?: boolean;
+  onOpenViewConfig?: () => void;
   // Slices integration
   slices?: TableSlice[];
   activeSliceId?: string | null;
@@ -74,6 +75,7 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
   onToggleZenMode,
   onToggleStickyColumns,
   isStickyEnabled = false,
+  onOpenViewConfig,
   slices = [],
   activeSliceId = null,
   onSelectSlice,
@@ -375,6 +377,18 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
           >
             <Maximize2 className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
             <span>Modo Zen</span>
+          </button>
+        )}
+
+        {/* Panel Lateral de Vistas y Configuración */}
+        {activeView !== 'schema' && activeView !== 'analytics' && onOpenViewConfig && (
+          <button
+            onClick={onOpenViewConfig}
+            className="px-3 py-1 rounded-xl font-bold border border-blue-200 dark:border-blue-800/80 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            title="Abrir Panel Lateral de Control, Densidad y Vistas"
+          >
+            <Sliders className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span>Vistas & Ajustes</span>
           </button>
         )}
       </div>

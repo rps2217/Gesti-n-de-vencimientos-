@@ -56,6 +56,7 @@ interface DashboardTopNavProps {
   handleOpenModal?: () => void;
   setIsBulkImportOpen?: (open: boolean) => void;
   setIsScriptModalOpen?: (open: boolean) => void;
+  onOpenViewConfig?: () => void;
 }
 
 export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
@@ -101,6 +102,7 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
   handleOpenModal,
   setIsBulkImportOpen,
   setIsScriptModalOpen,
+  onOpenViewConfig,
 }) => {
   const navigate = useNavigate();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -623,6 +625,17 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : ''}`} />
         </button>
+
+        {/* Panel Lateral de Vistas y Configuración */}
+        {activeView !== 'schema' && activeView !== 'analytics' && onOpenViewConfig && (
+          <button
+            onClick={onOpenViewConfig}
+            className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 p-2 rounded-xl shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors cursor-pointer shrink-0"
+            title="Abrir Panel Lateral de Control, Densidad y Vistas"
+          >
+            <Sliders className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+          </button>
+        )}
       </div>
     </header>
   );

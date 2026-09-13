@@ -13,7 +13,13 @@ import {
   Database, 
   FileSpreadsheet, 
   Settings2,
-  CheckCircle2
+  CheckCircle2,
+  Tag,
+  ArrowUpAZ,
+  ArrowDownZA,
+  LayoutGrid,
+  Pin,
+  Settings
 } from 'lucide-react';
 import { SheetConfig, TableSlice } from '../../types';
 import { BUILT_IN_SLICES } from '../../utils/sliceRegistry';
@@ -47,6 +53,25 @@ interface ViewConfigControlDrawerProps {
   // Stats
   totalItemsCount: number;
   filteredItemsCount: number;
+  // Grouping (shifted from page header)
+  groupByColumn: string;
+  setGroupByColumn: (col: string) => void;
+  groupByDirection?: 'asc' | 'desc';
+  onToggleGroupByDirection?: () => void;
+  // Summary view (shifted from page header)
+  isSummaryView?: boolean;
+  onToggleSummaryView?: () => void;
+  // KPIs (shifted from page header)
+  areFiltersVisible?: boolean;
+  onToggleFiltersVisible?: () => void;
+  // Sticky Columns (shifted from page header)
+  isStickyEnabled?: boolean;
+  onToggleStickyColumns?: () => void;
+  // Column Widths (shifted from page header)
+  hasCustomColWidths?: boolean;
+  handleResetColWidths?: () => void;
+  // Ticket configuration (shifted from page header dropdown)
+  onOpenTicketConfig?: () => void;
 }
 
 export const ViewConfigControlDrawer: React.FC<ViewConfigControlDrawerProps> = ({
@@ -73,6 +98,20 @@ export const ViewConfigControlDrawer: React.FC<ViewConfigControlDrawerProps> = (
   onOpenBackendMirror,
   totalItemsCount,
   filteredItemsCount,
+  // New props
+  groupByColumn,
+  setGroupByColumn,
+  groupByDirection = 'asc',
+  onToggleGroupByDirection,
+  isSummaryView = false,
+  onToggleSummaryView,
+  areFiltersVisible = true,
+  onToggleFiltersVisible,
+  isStickyEnabled = false,
+  onToggleStickyColumns,
+  hasCustomColWidths = false,
+  handleResetColWidths,
+  onOpenTicketConfig,
 }) => {
   const [activeTab, setActiveTab] = useState<'view' | 'columns' | 'slices' | 'system'>('view');
   const [columnSearch, setColumnSearch] = useState('');
@@ -261,6 +300,137 @@ export const ViewConfigControlDrawer: React.FC<ViewConfigControlDrawerProps> = (
                         <div className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">{d.desc}</div>
                       </button>
                     ))}
+                  </div>
+                </div>
+
+                {/* Agrupación Dinámica (Shifted from main view) */}
+                <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5 text-blue-500" />
+                      Agrupación de Filas
+                    </span>
+                    {groupByColumn !== 'none' && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-bold">
+                        Activo
+                      </span>
+                    )}
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <select
+                        value={groupByColumn}
+                        onChange={(e) => setGroupByColumn(e.target.value)}
+                        className="w-full text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 shadow-2xs focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer appearance-none"
+                      >
+                        <option value="none">Sin agrupar (Lista plana)</option>
+                        {allHeaders.map(h => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                      <div className="absolute right-3 top-3.5 pointer-events-none border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-500" />
+                    </div>
+                    {groupByColumn !== 'none' && onToggleGroupByDirection && (
+                      <button
+                        type="button"
+                        onClick={onToggleGroupByDirection}
+                        className="p-2.5 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-600 dark:text-slate-300 transition-all flex items-center justify-center shrink-0"
+                        title={`Orden de grupo: ${groupByDirection === 'desc' ? 'Z a A' : 'A a Z'}`}
+                      >
+                        {groupByDirection === 'desc' ? (
+                          <ArrowDownZA className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        ) : (
+                          <ArrowUpAZ className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Opciones de Presentación (Shifted from header dropdowns) */}
+                <div className="space-y-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    Presentación y Pantalla
+                  </label>
+
+                  <div className="space-y-2 bg-white dark:bg-slate-900/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
+                    {/* Vista Resumida */}
+                    {onToggleSummaryView && (
+                      <div className="flex items-center justify-between gap-3 text-xs">
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">Vista Resumida</span>
+                        <button
+                          type="button"
+                          onClick={onToggleSummaryView}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            isSummaryView ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                              isSummaryView ? 'translate-x-4' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Tarjetas KPI */}
+                    {onToggleFiltersVisible && (
+                      <div className="flex items-center justify-between gap-3 text-xs pt-2 border-t border-slate-100 dark:border-slate-800/50">
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">Mostrar Tarjetas KPI</span>
+                        <button
+                          type="button"
+                          onClick={onToggleFiltersVisible}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            areFiltersVisible ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                              areFiltersVisible ? 'translate-x-4' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Fijar Columnas (Sticky) */}
+                    {onToggleStickyColumns && (
+                      <div className="flex items-center justify-between gap-3 text-xs pt-2 border-t border-slate-100 dark:border-slate-800/50">
+                        <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                          <Pin className="w-3 h-3 text-slate-400 shrink-0" />
+                          Fijar Primera Columna (Sticky)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={onToggleStickyColumns}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            isStickyEnabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                              isStickyEnabled ? 'translate-x-4' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Restablecer Columnas y Anchos */}
+                  <div className="flex gap-2">
+                    {hasCustomColWidths && handleResetColWidths && (
+                      <button
+                        type="button"
+                        onClick={handleResetColWidths}
+                        className="flex-1 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-[11px] font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                        Ajustar Columnas
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -531,6 +701,23 @@ export const ViewConfigControlDrawer: React.FC<ViewConfigControlDrawerProps> = (
                         Espejo Backend / PostgreSQL Dual-Write
                       </span>
                       <span className="text-[10px] text-slate-400">Espejo →</span>
+                    </button>
+                  )}
+
+                  {onOpenTicketConfig && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onOpenTicketConfig();
+                      }}
+                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center justify-between transition-all text-left"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Settings className="w-4 h-4 text-blue-500" />
+                        Configurar Impresión de Ticket Térmico
+                      </span>
+                      <span className="text-[10px] text-slate-400">Configurar →</span>
                     </button>
                   )}
                 </div>

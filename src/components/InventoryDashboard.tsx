@@ -2898,6 +2898,20 @@ export const InventoryDashboard: React.FC = () => {
         onOpenSchemaEditor={() => setActiveView('schema')}
         totalItemsCount={items.length}
         filteredItemsCount={filteredItems.length}
+        // Shifted states passed from header to drawer
+        groupByColumn={groupByColumn}
+        setGroupByColumn={setGroupByColumn}
+        groupByDirection={groupByDirection}
+        onToggleGroupByDirection={toggleGroupByDirection}
+        isSummaryView={isSummaryView}
+        onToggleSummaryView={handleToggleSummaryView}
+        areFiltersVisible={areFiltersVisible}
+        onToggleFiltersVisible={() => setAreFiltersVisible(prev => !prev)}
+        isStickyEnabled={sheetConfig?.enableStickyColumns === true}
+        onToggleStickyColumns={handleToggleStickyColumns}
+        hasCustomColWidths={hasCustomColWidths}
+        handleResetColWidths={handleResetColWidths}
+        onOpenTicketConfig={() => setIsTicketConfigOpen(true)}
       />
 
       {/* CENTRALIZED DASHBOARD MODALS AND DRAWERS */}

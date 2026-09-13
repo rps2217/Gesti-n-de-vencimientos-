@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   X, 
   Sliders, 
@@ -19,10 +19,22 @@ import {
   ArrowDownZA,
   LayoutGrid,
   Pin,
-  Settings
+  Settings,
+  // New icons for actions & reports
+  Mail,
+  MessageSquare,
+  Flame,
+  Printer,
+  Barcode,
+  Download,
+  Share2
 } from 'lucide-react';
 import { SheetConfig, TableSlice } from '../../types';
 import { BUILT_IN_SLICES } from '../../utils/sliceRegistry';
+import { VIRTUAL_COLUMNS } from '../../utils/virtualColumns';
+import { parseAnyDate } from '../../utils/dateCalculations';
+import { exportToExcel } from '../../utils/exportUtils';
+import { buildBulkActionContext, isActionEnabledForTable } from '../../utils/bulkActionsRegistry';
 
 interface ViewConfigControlDrawerProps {
   isOpen: boolean;
@@ -72,6 +84,17 @@ interface ViewConfigControlDrawerProps {
   handleResetColWidths?: () => void;
   // Ticket configuration (shifted from page header dropdown)
   onOpenTicketConfig?: () => void;
+  // Actions & Export Props
+  activeSheetTitle?: string;
+  filteredItems?: any[];
+  products?: any[];
+  policies?: any[];
+  drainageReportItems?: any[];
+  visibleHeaders?: string[];
+  handlePrintTicket?: (items: any[], mode?: 'standard' | 'barcode') => void;
+  setIsGmailModalOpen?: (open: boolean) => void;
+  setIsWhatsAppModalOpen?: (open: boolean) => void;
+  setIsPmReportOpen?: (open: boolean) => void;
 }
 
 export const ViewConfigControlDrawer: React.FC<ViewConfigControlDrawerProps> = ({
@@ -112,9 +135,31 @@ export const ViewConfigControlDrawer: React.FC<ViewConfigControlDrawerProps> = (
   hasCustomColWidths = false,
   handleResetColWidths,
   onOpenTicketConfig,
+  // Actions & Export Props
+  activeSheetTitle,
+  filteredItems = [],
+  products = [],
+  policies = [],
+  drainageReportItems = [],
+  visibleHeaders = [],
+  handlePrintTicket,
+  setIsGmailModalOpen,
+  setIsWhatsAppModalOpen,
+  setIsPmReportOpen,
 }) => {
-  const [activeTab, setActiveTab] = useState<'view' | 'columns' | 'slices' | 'system'>('view');
+  const [activeTab, setActiveTab] = useState<'view' | 'columns' | 'slices' | 'actions' | 'system'>('view');
   const [columnSearch, setColumnSearch] = useState('');
+
+  const bulkActionCtx = useMemo(() => {
+    return buildBulkActionContext(allHeaders, activeTableKey, activeSheetTitle);
+  }, [allHeaders, activeTableKey, activeSheetTitle]);
+
+  const isWhatsAppActive = isActionEnabledForTable('whatsapp', bulkActionCtx, sheetConfig);
+  const isGmailActive = isActionEnabledForTable('gmail', bulkActionCtx, sheetConfig);
+  const isPmReportActive = isActionEnabledForTable('pm_report', bulkActionCtx, sheetConfig);
+  const isTicketActive = isActionEnabledForTable('ticket', bulkActionCtx, sheetConfig);
+  const isBarcodeTicketActive = isActionEnabledForTable('barcode_ticket', bulkActionCtx, sheetConfig);
+  const isExcelActive = isActionEnabledForTable('excel', bulkActionCtx, sheetConfig);
 
   if (!isOpen) return null;
 
@@ -222,6 +267,18 @@ export const ViewConfigControlDrawer: React.FC<ViewConfigControlDrawerProps> = (
             >
               <Layers className="w-3.5 h-3.5" />
               Slices & Filtros
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('actions')}
+              className={`pb-2 px-3 border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                activeTab === 'actions'
+                  ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-bold'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+              }`}
+            >
+              <Download className="w-3.5 h-3.5" />
+              Acciones & Exportar
             </button>
             <button
               type="button"
@@ -645,6 +702,201 @@ export const ViewConfigControlDrawer: React.FC<ViewConfigControlDrawerProps> = (
                       {activeSliceId === slice.id && <CheckCircle2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />}
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: ACCIONES Y EXPORTAR */}
+            {activeTab === 'actions' && (
+              <div className="space-y-4 animate-fade-in">
+                <div>
+                  <div className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                    Comunicación & Reportes
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    Genera borradores, envía alertas y recopila informes gerenciales.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {/* Borrador Gmail */}
+                  {isGmailActive && setIsGmailModalOpen && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        setIsGmailModalOpen(true);
+                      }}
+                      className="w-full text-left p-3 hover:bg-red-50 dark:hover:bg-red-950/20 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-3 transition-all rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-3xs cursor-pointer group hover:border-red-200 dark:hover:border-red-900"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/60 text-red-600 dark:text-red-300 flex items-center justify-center shrink-0">
+                        <Mail className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-slate-800 dark:text-slate-100 text-xs">Borrador Gmail</div>
+                        <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">Generar correo formateado en HTML</div>
+                      </div>
+                      <span className="text-[10px] text-slate-400">Abrir →</span>
+                    </button>
+                  )}
+
+                  {/* WhatsApp Web */}
+                  {isWhatsAppActive && setIsWhatsAppModalOpen && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        setIsWhatsAppModalOpen(true);
+                      }}
+                      className="w-full text-left p-3 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-3 transition-all rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-3xs cursor-pointer group hover:border-emerald-200 dark:hover:border-emerald-900"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                        <MessageSquare className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-slate-800 dark:text-slate-100 text-xs">WhatsApp Web</div>
+                        <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">Enviar mensaje predefinido con stock/alertas</div>
+                      </div>
+                      <span className="text-[10px] text-slate-400">Enviar →</span>
+                    </button>
+                  )}
+
+                  {/* Reporte PM */}
+                  {isPmReportActive && setIsPmReportOpen && drainageReportItems && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        setIsPmReportOpen(true);
+                      }}
+                      className="w-full text-left p-3 hover:bg-orange-50 dark:hover:bg-orange-950/20 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-3 transition-all rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-3xs cursor-pointer group hover:border-orange-200 dark:hover:border-orange-900"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/60 text-orange-600 dark:text-orange-300 flex items-center justify-center shrink-0">
+                        <Flame className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-slate-800 dark:text-slate-100 text-xs">Reporte PM ({drainageReportItems.length})</div>
+                        <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">Resumen de drenaje crítico para compras</div>
+                      </div>
+                      <span className="text-[10px] text-slate-400">Ver →</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <div className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                    Archivos & Físico
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    Exportaciones en formato tabular e impresiones térmicas.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {/* Descargar Excel */}
+                  {isExcelActive && filteredItems && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const activeVirtual = [
+                          ...VIRTUAL_COLUMNS.filter(vc => sheetConfig.activeVirtualColumns?.includes(vc.id)),
+                          ...(sheetConfig.userVirtualColumns || []).map(uvc => ({
+                            id: uvc.id,
+                            label: uvc.label,
+                            calculate: (item: any) => {
+                              const values = uvc.sourceColumns.map(sc => item[sc] || '');
+                              if (uvc.operation === 'concatenate') return values.join(' ');
+                              if (uvc.operation === 'sum') return values.reduce((acc, v) => acc + (parseFloat(v) || 0), 0);
+                              if (uvc.operation === 'diff_days') { 
+                                const d1 = parseAnyDate(values[0]); 
+                                const d2 = parseAnyDate(values[1]); 
+                                if (d1 && d2) return Math.round(Math.abs(d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24)); 
+                                return '-'; 
+                              }
+                              return '-';
+                            }
+                          }))
+                        ];
+                        const allData = { products: products || [], policies: policies || [], events: [] };
+                        const exportHeaders = (visibleHeaders && visibleHeaders.length > 0) ? visibleHeaders : allHeaders;
+                        
+                        const columnLabelsMap: Record<string, string> = {};
+                        VIRTUAL_COLUMNS.forEach(vc => { columnLabelsMap[vc.id] = vc.label; });
+                        (sheetConfig.userVirtualColumns || []).forEach(uvc => { columnLabelsMap[uvc.id] = uvc.label; });
+                        const schemaForSheet = activeSheetTitle ? sheetConfig.schema?.[activeSheetTitle] : undefined;
+                        if (schemaForSheet) {
+                          Object.keys(schemaForSheet).forEach(colId => {
+                            if (schemaForSheet[colId]?.label) {
+                              columnLabelsMap[colId] = schemaForSheet[colId].label;
+                            }
+                          });
+                        }
+
+                        exportToExcel(
+                          `${activeTableKey}_${new Date().toISOString().split('T')[0]}`, 
+                          exportHeaders, 
+                          filteredItems, 
+                          'Inventario', 
+                          activeVirtual, 
+                          allData, 
+                          columnLabelsMap
+                        );
+                        onClose();
+                      }}
+                      className="w-full text-left p-3 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-3 transition-all rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-3xs cursor-pointer group hover:border-emerald-200 dark:hover:border-emerald-900"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                        <FileSpreadsheet className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-slate-800 dark:text-slate-100 text-xs">Descargar Excel (.xlsx)</div>
+                        <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{filteredItems.length} registros en la vista actual</div>
+                      </div>
+                      <span className="text-[10px] text-slate-400">Descargar →</span>
+                    </button>
+                  )}
+
+                  {/* Imprimir Ticket Térmico */}
+                  {isTicketActive && handlePrintTicket && filteredItems && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handlePrintTicket(filteredItems, 'standard');
+                        onClose();
+                      }}
+                      className="w-full text-left p-3 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-3 transition-all rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-3xs cursor-pointer group hover:border-indigo-200 dark:hover:border-indigo-900"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 flex items-center justify-center shrink-0">
+                        <Printer className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-slate-800 dark:text-slate-100 text-xs">Imprimir Ticket Térmico</div>
+                        <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">Formato continuo para impresoras 80mm/58mm</div>
+                      </div>
+                      <span className="text-[10px] text-slate-400">Imprimir →</span>
+                    </button>
+                  )}
+
+                  {/* Imprimir Código de Barras */}
+                  {isBarcodeTicketActive && handlePrintTicket && filteredItems && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handlePrintTicket(filteredItems, 'barcode');
+                        onClose();
+                      }}
+                      className="w-full text-left p-3 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-3 transition-all rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-3xs cursor-pointer group hover:border-indigo-200 dark:hover:border-indigo-900"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 flex items-center justify-center shrink-0">
+                        <Barcode className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-slate-800 dark:text-slate-100 text-xs">Imprimir Códigos de Barra</div>
+                        <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">Impresión masiva de etiquetas de barra por SKU</div>
+                      </div>
+                      <span className="text-[10px] text-slate-400">Imprimir →</span>
+                    </button>
+                  )}
                 </div>
               </div>
             )}

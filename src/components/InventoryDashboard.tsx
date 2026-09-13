@@ -2912,6 +2912,17 @@ export const InventoryDashboard: React.FC = () => {
         hasCustomColWidths={hasCustomColWidths}
         handleResetColWidths={handleResetColWidths}
         onOpenTicketConfig={() => setIsTicketConfigOpen(true)}
+        // Actions & Export Props
+        activeSheetTitle={activeSheet?.title}
+        filteredItems={filteredItems}
+        products={products}
+        policies={policies}
+        drainageReportItems={drainageReportItems}
+        visibleHeaders={visibleHeaders}
+        handlePrintTicket={handlePrintTicket}
+        setIsGmailModalOpen={setIsGmailModalOpen}
+        setIsWhatsAppModalOpen={setIsWhatsAppModalOpen}
+        setIsPmReportOpen={setIsPmReportOpen}
       />
 
       {/* CENTRALIZED DASHBOARD MODALS AND DRAWERS */}

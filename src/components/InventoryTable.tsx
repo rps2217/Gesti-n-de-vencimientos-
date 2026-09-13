@@ -65,6 +65,9 @@ interface InventoryTableProps {
   sortConfig: SortConfig;
   handleToggleSort: (columnName: string) => void;
   tableDensity?: 'comfortable' | 'compact' | 'ultra';
+  expandAllGroups?: () => void;
+  collapseAllGroups?: () => void;
+  collapsedGroups?: Record<string, boolean>;
 }
 
 export const InventoryTable: React.FC<InventoryTableProps> = ({
@@ -125,6 +128,9 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   sortConfig,
   handleToggleSort,
   tableDensity = 'compact',
+  expandAllGroups,
+  collapseAllGroups,
+  collapsedGroups,
 }) => {
   const isSticky = sheetConfig?.enableStickyColumns === true;
 
@@ -134,6 +140,15 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
     if (tableDensity === 'ultra') return 'p-1.5 text-[11px]';
     return 'p-2.5 text-xs'; // default is 'compact'
   }, [tableDensity]);
+
+  // Dynamic width calculation for '#' column to house group expand/collapse actions comfortably
+  const rowColWidth = useMemo(() => {
+    const defaultWidth = getColWidth('_row', '#');
+    if (groupByColumn && groupByColumn !== 'none') {
+      return Math.max(defaultWidth, 68);
+    }
+    return defaultWidth;
+  }, [getColWidth, groupByColumn]);
 
   return (
     <div className="bg-slate-50 dark:bg-slate-950 md:bg-white md:dark:bg-slate-900 rounded-2xl md:shadow-sm md:border md:border-slate-200 md:dark:border-slate-800 overflow-hidden flex flex-col h-full">
@@ -164,14 +179,37 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                 </div>
               </th>
               <th 
-                style={{ width: `${getColWidth('_row', '#')}px`, minWidth: `${getColWidth('_row', '#')}px`, maxWidth: `${getColWidth('_row', '#')}px`, ...(isSticky ? { left: '48px' } : {}) }} 
+                style={{ width: `${rowColWidth}px`, minWidth: `${rowColWidth}px`, maxWidth: `${rowColWidth}px`, ...(isSticky ? { left: '48px' } : {}) }} 
                 className={`${paddingClass} text-center text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-700/90 border-b border-slate-200 dark:border-slate-600/80 relative group font-bold ${
                   isSticky ? 'sticky left-[48px] z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]' : ''
                 }`}
               >
-                <span>#</span>
+                {groupByColumn && groupByColumn !== 'none' ? (
+                  <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={collapseAllGroups}
+                      className="p-1 rounded bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors cursor-pointer shrink-0"
+                      title="Contraer todos los grupos"
+                    >
+                      <svg className="w-3 h-3 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={expandAllGroups}
+                      className="p-1 rounded bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors cursor-pointer shrink-0"
+                      title="Expandir todos los grupos"
+                    >
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  <span>#</span>
+                )}
                 <div
-                  onMouseDown={(e) => handleStartResize('_row', getColWidth('_row', '#'), e)}
+                  onMouseDown={(e) => handleStartResize('_row', rowColWidth, e)}
                   onDoubleClick={() => handleAutoFitColumn('_row', '#')}
                   className={`absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400/80 transition-colors z-20 flex items-center justify-center ${
                     resizingCol?.colId === '_row' ? 'bg-blue-600 w-2.5' : ''

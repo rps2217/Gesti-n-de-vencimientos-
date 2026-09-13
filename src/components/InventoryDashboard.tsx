@@ -2958,6 +2958,9 @@ export const InventoryDashboard: React.FC = () => {
                 sortConfig={sortConfig}
                 handleToggleSort={handleToggleSort}
                 tableDensity={tableDensity}
+                expandAllGroups={expandAllGroups}
+                collapseAllGroups={collapseAllGroups}
+                collapsedGroups={collapsedGroups}
               />
 
               {/* Footer summary bar */}

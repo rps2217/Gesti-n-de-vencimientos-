@@ -18,7 +18,9 @@ import {
   SpreadsheetMetadata, 
   SheetProperties, 
   SheetConfig, 
-  EventCategory 
+  EventCategory,
+  SortConfig,
+  DynamicMonthRange
 } from '../types';
 import { z } from 'zod';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -172,6 +174,38 @@ export function mergeCloudConfigs(local: SheetConfig, remote: SheetConfig): Shee
   };
 }
 
+export interface ModuleViewState {
+  activeSliceId: string | null;
+  searchTerm: string;
+  activeQuickChip: string | null;
+  sortConfig: SortConfig;
+  eventFilter: string[];
+  frcBodFilter: string[];
+  eventResolutionFilter: string[];
+  pmRadarFilter: string[];
+  columnFilters: Record<string, string[]>;
+  dynamicMonthFilter: number[];
+  dynamicMonthRange: DynamicMonthRange | null;
+  groupByColumn: string;
+  groupByDirection: 'asc' | 'desc';
+}
+
+const DEFAULT_MODULE_STATE: ModuleViewState = {
+  activeSliceId: null,
+  searchTerm: '',
+  activeQuickChip: null,
+  sortConfig: { column: null, direction: null },
+  eventFilter: [],
+  frcBodFilter: [],
+  eventResolutionFilter: [],
+  pmRadarFilter: [],
+  columnFilters: {},
+  dynamicMonthFilter: [],
+  dynamicMonthRange: null,
+  groupByColumn: 'none',
+  groupByDirection: 'asc',
+};
+
 export const InventoryDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { showToast, updateToast } = useToast();
@@ -250,9 +284,44 @@ export const InventoryDashboard: React.FC = () => {
     }
   };
 
-  // Search and Selection States
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeQuickChip, setActiveQuickChip] = useState<string | null>(null);
+  // Search, Selection and Scoped Module States
+  const [moduleStates, setModuleStates] = useState<Record<string, ModuleViewState>>(() => {
+    try {
+      const saved = localStorage.getItem('app_module_states');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const initialModuleState = useMemo(() => {
+    try {
+      const saved = localStorage.getItem('app_module_states');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed['main']) return { ...DEFAULT_MODULE_STATE, ...parsed['main'] };
+      }
+    } catch {
+      // ignore
+    }
+    return DEFAULT_MODULE_STATE;
+  }, []);
+
+  const [searchTerm, setSearchTerm] = useState(initialModuleState.searchTerm);
+  const [activeQuickChip, setActiveQuickChip] = useState<string | null>(initialModuleState.activeQuickChip);
+  const [activeSliceId, setActiveSliceId] = useState<string | null>(initialModuleState.activeSliceId);
+
+  const [sortConfig, setSortConfig] = useState<SortConfig>(initialModuleState.sortConfig);
+  const [eventFilter, setEventFilter] = useState<string[]>(initialModuleState.eventFilter);
+  const [frcBodFilter, setFrcBodFilter] = useState<string[]>(initialModuleState.frcBodFilter);
+  const [eventResolutionFilter, setEventResolutionFilter] = useState<string[]>(initialModuleState.eventResolutionFilter);
+  const [pmRadarFilter, setPmRadarFilter] = useState<string[]>(initialModuleState.pmRadarFilter);
+  const [columnFilters, setColumnFilters] = useState<Record<string, string[]>>(initialModuleState.columnFilters);
+  const [dynamicMonthFilter, setDynamicMonthFilter] = useState<number[]>(initialModuleState.dynamicMonthFilter);
+  const [dynamicMonthRange, setDynamicMonthRange] = useState<DynamicMonthRange | null>(initialModuleState.dynamicMonthRange);
+  const [groupByColumn, setGroupByColumn] = useState<string>(initialModuleState.groupByColumn);
+  const [groupByDirection, setGroupByDirection] = useState<'asc' | 'desc'>(initialModuleState.groupByDirection);
+
   const [selectedRowIds, setSelectedRowIds] = useState<number[]>([]);
   const [quickTraspasoItem, setQuickTraspasoItem] = useState<InventoryItem | null>(null);
   const [isQuickTraspasoOpen, setIsQuickTraspasoOpen] = useState<boolean>(false);
@@ -281,6 +350,132 @@ export const InventoryDashboard: React.FC = () => {
 
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const [activeView, setActiveView] = useState<string>('main');
+  const lastViewRef = useRef<string>('main');
+
+  // 1. Tab switch transition: save previous view's state and restore target view's state
+  useEffect(() => {
+    const prevView = lastViewRef.current;
+    if (prevView === activeView) return;
+
+    // Save previous view state
+    const prevViewState: ModuleViewState = {
+      activeSliceId,
+      searchTerm,
+      activeQuickChip,
+      sortConfig,
+      eventFilter,
+      frcBodFilter,
+      eventResolutionFilter,
+      pmRadarFilter,
+      columnFilters,
+      dynamicMonthFilter,
+      dynamicMonthRange,
+      groupByColumn,
+      groupByDirection,
+    };
+
+    setModuleStates(prev => {
+      const updated = {
+        ...prev,
+        [prevView]: prevViewState
+      };
+      try {
+        localStorage.setItem('app_module_states', JSON.stringify(updated));
+      } catch (e) {
+        // ignore
+      }
+      return updated;
+    });
+
+    // Load target view state
+    const targetState = moduleStates[activeView] || DEFAULT_MODULE_STATE;
+
+    // Batch apply target view state
+    setActiveSliceId(targetState.activeSliceId);
+    setSearchTerm(targetState.searchTerm);
+    setActiveQuickChip(targetState.activeQuickChip);
+    setSortConfig(targetState.sortConfig || { column: null, direction: null });
+    setEventFilter(targetState.eventFilter || []);
+    setFrcBodFilter(targetState.frcBodFilter || []);
+    setEventResolutionFilter(targetState.eventResolutionFilter || []);
+    setPmRadarFilter(targetState.pmRadarFilter || []);
+    setColumnFilters(targetState.columnFilters || {});
+    setDynamicMonthFilter(targetState.dynamicMonthFilter || []);
+    setDynamicMonthRange(targetState.dynamicMonthRange || null);
+    setGroupByColumn(targetState.groupByColumn || 'none');
+    setGroupByDirection(targetState.groupByDirection || 'asc');
+
+    // Update ref
+    lastViewRef.current = activeView;
+  }, [activeView]);
+
+  // 2. Continuous background persistence: save state of active view on modification (page reload safety)
+  useEffect(() => {
+    if (lastViewRef.current !== activeView) return; // Prevent overwriting during transitions
+
+    const stateToSave: ModuleViewState = {
+      activeSliceId,
+      searchTerm,
+      activeQuickChip,
+      sortConfig,
+      eventFilter,
+      frcBodFilter,
+      eventResolutionFilter,
+      pmRadarFilter,
+      columnFilters,
+      dynamicMonthFilter,
+      dynamicMonthRange,
+      groupByColumn,
+      groupByDirection,
+    };
+
+    setModuleStates(prev => {
+      const currentSaved = prev[activeView];
+      if (currentSaved && 
+          currentSaved.activeSliceId === stateToSave.activeSliceId &&
+          currentSaved.searchTerm === stateToSave.searchTerm &&
+          currentSaved.activeQuickChip === stateToSave.activeQuickChip &&
+          JSON.stringify(currentSaved.sortConfig) === JSON.stringify(stateToSave.sortConfig) &&
+          JSON.stringify(currentSaved.eventFilter) === JSON.stringify(stateToSave.eventFilter) &&
+          JSON.stringify(currentSaved.frcBodFilter) === JSON.stringify(stateToSave.frcBodFilter) &&
+          JSON.stringify(currentSaved.eventResolutionFilter) === JSON.stringify(stateToSave.eventResolutionFilter) &&
+          JSON.stringify(currentSaved.pmRadarFilter) === JSON.stringify(stateToSave.pmRadarFilter) &&
+          JSON.stringify(currentSaved.columnFilters) === JSON.stringify(stateToSave.columnFilters) &&
+          JSON.stringify(currentSaved.dynamicMonthFilter) === JSON.stringify(stateToSave.dynamicMonthFilter) &&
+          JSON.stringify(currentSaved.dynamicMonthRange) === JSON.stringify(stateToSave.dynamicMonthRange) &&
+          currentSaved.groupByColumn === stateToSave.groupByColumn &&
+          currentSaved.groupByDirection === stateToSave.groupByDirection) {
+        return prev;
+      }
+
+      const updated = {
+        ...prev,
+        [activeView]: stateToSave
+      };
+      try {
+        localStorage.setItem('app_module_states', JSON.stringify(updated));
+      } catch (e) {
+        // ignore
+      }
+      return updated;
+    });
+  }, [
+    activeView,
+    activeSliceId,
+    searchTerm,
+    activeQuickChip,
+    sortConfig,
+    eventFilter,
+    frcBodFilter,
+    eventResolutionFilter,
+    pmRadarFilter,
+    columnFilters,
+    dynamicMonthFilter,
+    dynamicMonthRange,
+    groupByColumn,
+    groupByDirection
+  ]);
+
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
   const [areFiltersVisible, setAreFiltersVisible] = useState<boolean>(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -567,27 +762,7 @@ export const InventoryDashboard: React.FC = () => {
   // Unified filtering, metrics aggregation, virtual columns, and grouping hook
   const {
     deferredSearchTerm,
-    eventFilter,
-    setEventFilter,
-    frcBodFilter,
-    setFrcBodFilter,
-    eventResolutionFilter,
-    setEventResolutionFilter,
-    pmRadarFilter,
-    setPmRadarFilter,
-    columnFilters,
-    setColumnFilters,
-    dynamicMonthFilter,
-    setDynamicMonthFilter,
-    dynamicMonthRange,
-    setDynamicMonthRange,
-    groupByColumn,
-    setGroupByColumn,
-    groupByDirection,
-    setGroupByDirection,
     toggleGroupByDirection,
-    sortConfig,
-    setSortConfig,
     handleToggleSort,
     collapsedGroups,
     toggleGroupCollapse,
@@ -618,6 +793,26 @@ export const InventoryDashboard: React.FC = () => {
     searchableHeaders,
     pageSize,
     currentPage,
+    sortConfig,
+    setSortConfig,
+    eventFilter,
+    setEventFilter,
+    frcBodFilter,
+    setFrcBodFilter,
+    eventResolutionFilter,
+    setEventResolutionFilter,
+    pmRadarFilter,
+    setPmRadarFilter,
+    columnFilters,
+    setColumnFilters,
+    dynamicMonthFilter,
+    setDynamicMonthFilter,
+    dynamicMonthRange,
+    setDynamicMonthRange,
+    groupByColumn,
+    setGroupByColumn,
+    groupByDirection,
+    setGroupByDirection,
   });
 
   // Contextual persistent grouping handlers per table
@@ -710,7 +905,6 @@ export const InventoryDashboard: React.FC = () => {
   // AppSheet Pattern: Slices / Vistas Personalizadas
   const [customSlices, setCustomSlices] = useState<TableSlice[]>(() => loadCustomSlices());
   const [hiddenSliceIds, setHiddenSliceIds] = useState<string[]>(() => loadHiddenSliceIds(sheetConfig.hiddenSliceIds));
-  const [activeSliceId, setActiveSliceId] = useState<string | null>(null);
   const [isSliceModalOpen, setIsSliceModalOpen] = useState(false);
   const [isSliceManagerOpen, setIsSliceManagerOpen] = useState(false);
   const [editingSliceModalItem, setEditingSliceModalItem] = useState<TableSlice | null>(null);
@@ -724,11 +918,6 @@ export const InventoryDashboard: React.FC = () => {
       });
     }
   }, [sheetConfig.hiddenSliceIds]);
-
-  // Reset slice selection when active table/view changes
-  useEffect(() => {
-    setActiveSliceId(null);
-  }, [activeView]);
 
   // Compute all slices available for current table (built-in + custom)
   const currentTableSlices = useMemo(() => {

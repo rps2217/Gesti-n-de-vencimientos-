@@ -43,6 +43,28 @@ export interface UseInventoryFilteringProps {
   pageSize: number | 'all';
   currentPage: number;
   initialSort?: SortConfig;
+
+  // Controlled states for tab memory isolation
+  sortConfig?: SortConfig;
+  setSortConfig?: (val: SortConfig | ((prev: SortConfig) => SortConfig)) => void;
+  eventFilter?: string[];
+  setEventFilter?: (val: string[] | ((prev: string[]) => string[])) => void;
+  frcBodFilter?: string[];
+  setFrcBodFilter?: (val: string[] | ((prev: string[]) => string[])) => void;
+  eventResolutionFilter?: string[];
+  setEventResolutionFilter?: (val: string[] | ((prev: string[]) => string[])) => void;
+  pmRadarFilter?: string[];
+  setPmRadarFilter?: (val: string[] | ((prev: string[]) => string[])) => void;
+  columnFilters?: Record<string, string[]>;
+  setColumnFilters?: (val: Record<string, string[]> | ((prev: Record<string, string[]>) => Record<string, string[]>)) => void;
+  dynamicMonthFilter?: number[];
+  setDynamicMonthFilter?: (val: number[] | ((prev: number[]) => number[])) => void;
+  dynamicMonthRange?: DynamicMonthRange | null;
+  setDynamicMonthRange?: (val: DynamicMonthRange | null | ((prev: DynamicMonthRange | null) => DynamicMonthRange | null)) => void;
+  groupByColumn?: string;
+  setGroupByColumn?: (val: string | ((prev: string) => string)) => void;
+  groupByDirection?: 'asc' | 'desc';
+  setGroupByDirection?: (val: 'asc' | 'desc' | ((prev: 'asc' | 'desc') => 'asc' | 'desc')) => void;
 }
 
 export function handleFilterToggle<T>(current: T[], value: T, isMulti = false): T[] {
@@ -53,34 +75,66 @@ export function handleFilterToggle<T>(current: T[], value: T, isMulti = false): 
   return current.includes(value) ? current.filter(x => x !== value) : [...current, value];
 }
 
-export function useInventoryFiltering({
-  items,
-  headers,
-  activeView,
-  frcBodCol,
-  sheetConfig,
-  products,
-  policies,
-  searchTerm,
-  activeQuickChip,
-  searchableHeaders,
-  pageSize,
-  currentPage,
-  initialSort = { column: null, direction: null }
-}: UseInventoryFilteringProps) {
+export function useInventoryFiltering(props: UseInventoryFilteringProps) {
+  const {
+    items,
+    headers,
+    activeView,
+    frcBodCol,
+    sheetConfig,
+    products,
+    policies,
+    searchTerm,
+    activeQuickChip,
+    searchableHeaders,
+    pageSize,
+    currentPage,
+    initialSort = { column: null, direction: null }
+  } = props;
+
   const deferredSearchTerm = useDeferredValue(searchTerm);
 
-  // Filter and Sorting state
-  const [sortConfig, setSortConfig] = useState<SortConfig>(initialSort);
-  const [eventFilter, setEventFilter] = useState<string[]>([]);
-  const [frcBodFilter, setFrcBodFilter] = useState<string[]>([]);
-  const [eventResolutionFilter, setEventResolutionFilter] = useState<string[]>([]);
-  const [pmRadarFilter, setPmRadarFilter] = useState<string[]>([]);
-  const [columnFilters, setColumnFilters] = useState<Record<string, string[]>>({});
-  const [dynamicMonthFilter, setDynamicMonthFilter] = useState<number[]>([]);
-  const [dynamicMonthRange, setDynamicMonthRange] = useState<DynamicMonthRange | null>(null);
-  const [groupByColumn, setGroupByColumn] = useState<string>('none');
-  const [groupByDirection, setGroupByDirection] = useState<'asc' | 'desc'>('asc');
+  // Filter and Sorting state (Fallback to local if props not provided)
+  const [localSortConfig, setLocalSortConfig] = useState<SortConfig>(initialSort);
+  const sortConfig = props.sortConfig !== undefined ? props.sortConfig : localSortConfig;
+  const setSortConfig = props.setSortConfig !== undefined ? props.setSortConfig : setLocalSortConfig;
+
+  const [localEventFilter, setLocalEventFilter] = useState<string[]>([]);
+  const eventFilter = props.eventFilter !== undefined ? props.eventFilter : localEventFilter;
+  const setEventFilter = props.setEventFilter !== undefined ? props.setEventFilter : setLocalEventFilter;
+
+  const [localFrcBodFilter, setLocalFrcBodFilter] = useState<string[]>([]);
+  const frcBodFilter = props.frcBodFilter !== undefined ? props.frcBodFilter : localFrcBodFilter;
+  const setFrcBodFilter = props.setFrcBodFilter !== undefined ? props.setFrcBodFilter : setLocalFrcBodFilter;
+
+  const [localEventResolutionFilter, setLocalEventResolutionFilter] = useState<string[]>([]);
+  const eventResolutionFilter = props.eventResolutionFilter !== undefined ? props.eventResolutionFilter : localEventResolutionFilter;
+  const setEventResolutionFilter = props.setEventResolutionFilter !== undefined ? props.setEventResolutionFilter : setLocalEventResolutionFilter;
+
+  const [localPmRadarFilter, setLocalPmRadarFilter] = useState<string[]>([]);
+  const pmRadarFilter = props.pmRadarFilter !== undefined ? props.pmRadarFilter : localPmRadarFilter;
+  const setPmRadarFilter = props.setPmRadarFilter !== undefined ? props.setPmRadarFilter : setLocalPmRadarFilter;
+
+  const [localColumnFilters, setLocalColumnFilters] = useState<Record<string, string[]>>({});
+  const columnFilters = props.columnFilters !== undefined ? props.columnFilters : localColumnFilters;
+  const setColumnFilters = props.setColumnFilters !== undefined ? props.setColumnFilters : setLocalColumnFilters;
+
+  const [localDynamicMonthFilter, setLocalDynamicMonthFilter] = useState<number[]>([]);
+  const dynamicMonthFilter = props.dynamicMonthFilter !== undefined ? props.dynamicMonthFilter : localDynamicMonthFilter;
+  const setDynamicMonthFilter = props.setDynamicMonthFilter !== undefined ? props.setDynamicMonthFilter : setLocalDynamicMonthFilter;
+
+  const [localDynamicMonthRange, setLocalDynamicMonthRange] = useState<DynamicMonthRange | null>(null);
+  const dynamicMonthRange = props.dynamicMonthRange !== undefined ? props.dynamicMonthRange : localDynamicMonthRange;
+  const setDynamicMonthRange = props.setDynamicMonthRange !== undefined ? props.setDynamicMonthRange : setLocalDynamicMonthRange;
+
+  const [localGroupByColumn, setLocalGroupByColumn] = useState<string>('none');
+  const groupByColumn = props.groupByColumn !== undefined ? props.groupByColumn : localGroupByColumn;
+  const setGroupByColumn = props.setGroupByColumn !== undefined ? props.setGroupByColumn : setLocalGroupByColumn;
+
+  const [localGroupByDirection, setLocalGroupByDirection] = useState<'asc' | 'desc'>('asc');
+  const groupByDirection = props.groupByDirection !== undefined ? props.groupByDirection : localGroupByDirection;
+  const setGroupByDirection = props.setGroupByDirection !== undefined ? props.setGroupByDirection : setLocalGroupByDirection;
+
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   const toggleGroupByDirection = useCallback(() => {

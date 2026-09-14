@@ -4,6 +4,7 @@ import { Package, Link as LinkIcon, Settings2, CheckCircle2, Moon, Sun, Contrast
 import InventoryDashboard from './components/InventoryDashboard';
 import { ToastProvider } from './components/common/ToastContainer';
 import { PWAReloadPrompt } from './components/pwa/PWAReloadPrompt';
+import { AppLogo } from './components/common/AppLogo';
 
 export type ThemeMode = 'light' | 'dark-slate' | 'dark-gray';
 
@@ -146,17 +147,7 @@ export default function App() {
             <Route path="/" element={
               <>
                 <nav className="hidden md:flex h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 items-center justify-between shrink-0 shadow-sm print:hidden">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-blue-600 p-2 rounded-lg text-white shadow-sm shadow-blue-200 dark:shadow-none">
-                      <Package className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
-                        Gestión de <span className="text-blue-600 dark:text-blue-400 font-medium">Vencimientos</span>
-                      </h1>
-                      <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Modo Desarrollo (Sin PIN)</span>
-                    </div>
-                  </div>
+                  <AppLogo size="md" showText={true} />
 
                   <div className="flex items-center gap-3">
                     {/* Theme Selector Dropdown */}

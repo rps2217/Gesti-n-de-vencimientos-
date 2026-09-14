@@ -1,4 +1,6 @@
 import { findColumnBySemantic, KnownFieldSemantic } from './columnAliases';
+import { parseAnyDate } from './dateCalculations';
+import { SheetConfig } from '../types';
 
 export interface MasterProductSummary {
   sku: string;
@@ -312,4 +314,194 @@ export function dereferenceMasterProduct(
   }
 
   return result;
+}
+
+/**
+ * Automatically calculates and auto-completes dependent fields for manual product entries:
+ * - POLITICA (from master catalog or policy defaults)
+ * - PM (Product Manager / Responsable from master catalog)
+ * - DIAS_RETIRO_VC (Lead time days from master catalog or policies table)
+ * - FECHA_RETIRO (Calculated as FECHA_VC - DIAS_RETIRO_VC days)
+ * - FECHA_VC (Calculated from MM & YYYY last day of month)
+ * - CU_VC (Unique Expiry Code = SKU + YYYY + MM)
+ */
+export function autoCalculateItemFormData(
+  currentForm: Record<string, string>,
+  headers: string[],
+  products: any[] = [],
+  policies: any[] = [],
+  sheetConfig?: SheetConfig
+): Record<string, string> {
+  const newForm = { ...currentForm };
+  if (!headers || headers.length === 0) return newForm;
+
+  const customAliases = sheetConfig?.customAliases;
+
+  // Identify semantic headers
+  const skuCol = findColumnBySemantic(headers, 'sku', customAliases) || 
+                 headers.find(h => /sku|código|codigo/i.test(h));
+  const policyCol = findColumnBySemantic(headers, 'politica', customAliases) || 
+                    headers.find(h => /política|politica|regla/i.test(h));
+  const pmCol = findColumnBySemantic(headers, 'pm', customAliases) || 
+                headers.find(h => /pm|product_manager|responsable|comprador|gestor|jefe_producto/i.test(h));
+  const diasRetiroCol = findColumnBySemantic(headers, 'dias_retiro', customAliases) || 
+                        findColumnBySemantic(headers, 'dias_anticipacion', customAliases) || 
+                        headers.find(h => /dias(_|\s)?(retiro|anticipacion|canje|limite)|dias_retiro_vc/i.test(h));
+  const cuVcCol = findColumnBySemantic(headers, 'id', customAliases) || 
+                  headers.find(h => /^cu(_|\s)?(vc|calculado)?$/i.test(h.trim()) || /^id_vc$/i.test(h.trim()) || /^codigo_unico$/i.test(h.trim()));
+
+  const mmCol = findColumnBySemantic(headers, 'mes', customAliases) || 
+                headers.find(h => /^(mes|mm)$/i.test(h.trim()));
+  const yyyyCol = findColumnBySemantic(headers, 'anio', customAliases) || 
+                  headers.find(h => /^(a[nñ]o|yyyy|year)$/i.test(h.trim()));
+  const fechaVcCol = findColumnBySemantic(headers, 'fecha_vc', customAliases) || 
+                     headers.find(h => /vencimiento|caducidad|expiración|fecha_vc/i.test(h));
+  const fechaRetiroCol = findColumnBySemantic(headers, 'fecha_retiro', customAliases) || 
+                         headers.find(h => /retiro|canje_retiro|fecha_canje/i.test(h));
+
+  // 1. Lookup SKU in master catalog (products) if SKU is typed
+  const skuVal = skuCol && newForm[skuCol] ? String(newForm[skuCol]).trim() : '';
+  let masterProduct: any = null;
+  if (skuVal && products && products.length > 0) {
+    masterProduct = findMasterProduct(skuVal, products, customAliases);
+    if (masterProduct) {
+      // Auto dereference fields (Description, Provider, Price, Category, etc.) if empty or needed
+      const dereferenced = dereferenceMasterProduct(masterProduct, headers, customAliases);
+      for (const [k, v] of Object.entries(dereferenced)) {
+        if (v !== undefined && v !== null && String(v).trim() !== '') {
+          if (!newForm[k] || newForm[k].trim() === '') {
+            newForm[k] = String(v);
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Auto-fill POLITICA if empty
+  if (policyCol && (!newForm[policyCol] || newForm[policyCol].trim() === '')) {
+    if (masterProduct) {
+      const masterPolCol = Object.keys(masterProduct).find(k => /política|politica|canje|regla/i.test(k));
+      if (masterPolCol && masterProduct[masterPolCol]) {
+        newForm[policyCol] = String(masterProduct[masterPolCol]).trim();
+      }
+    }
+  }
+
+  // 3. Auto-fill PM if empty
+  if (pmCol && (!newForm[pmCol] || newForm[pmCol].trim() === '')) {
+    if (masterProduct) {
+      const masterPmCol = Object.keys(masterProduct).find(k => /pm|product_manager|responsable|comprador|gestor|jefe/i.test(k));
+      if (masterPmCol && masterProduct[masterPmCol]) {
+        newForm[pmCol] = String(masterProduct[masterPmCol]).trim();
+      }
+    }
+  }
+
+  // 4. Auto-fill DIAS_RETIRO_VC (dias_anticipacion / dias_retiro)
+  let activeDays: number | null = null;
+
+  if (diasRetiroCol && newForm[diasRetiroCol] && !isNaN(parseInt(newForm[diasRetiroCol], 10))) {
+    activeDays = parseInt(newForm[diasRetiroCol], 10);
+  }
+
+  if (activeDays === null && masterProduct) {
+    const masterDaysCol = Object.keys(masterProduct).find(k => /dias(_|\s)?(retiro|anticipacion|canje|limite)/i.test(k));
+    if (masterDaysCol && masterProduct[masterDaysCol] && !isNaN(parseInt(masterProduct[masterDaysCol], 10))) {
+      activeDays = parseInt(masterProduct[masterDaysCol], 10);
+    }
+  }
+
+  const activePolicy = policyCol && newForm[policyCol] ? newForm[policyCol].trim() : '';
+  if (activePolicy && policies && policies.length > 0) {
+    const polKeyCol = Object.keys(policies[0]).find(k => /política|politica|tipo|canje|familia|nombre/i.test(k));
+    const polDaysCol = Object.keys(policies[0]).find(k => /dias|días|anticipacion|tiempo|lead/i.test(k));
+    if (polKeyCol && polDaysCol) {
+      const matchedPolicy = policies.find(p => String(p[polKeyCol]).trim().toLowerCase() === activePolicy.toLowerCase());
+      if (matchedPolicy && matchedPolicy[polDaysCol]) {
+        const days = parseInt(matchedPolicy[polDaysCol], 10);
+        if (!isNaN(days)) {
+          activeDays = days;
+        }
+      }
+    }
+  }
+
+  if (activeDays === null && activePolicy) {
+    const matchNum = activePolicy.match(/\b(\d{1,3})\b/);
+    if (matchNum) {
+      const parsedFromPol = parseInt(matchNum[1], 10);
+      if (!isNaN(parsedFromPol) && parsedFromPol > 0 && parsedFromPol <= 365) {
+        activeDays = parsedFromPol;
+      }
+    }
+  }
+
+  if (diasRetiroCol && activeDays !== null && !isNaN(activeDays)) {
+    if (!newForm[diasRetiroCol] || newForm[diasRetiroCol].trim() === '') {
+      newForm[diasRetiroCol] = String(activeDays);
+    }
+  }
+
+  // 5. MM & YYYY <-> FECHA_VC Sync
+  let mVal = mmCol && newForm[mmCol] ? newForm[mmCol].trim() : '';
+  let yVal = yyyyCol && newForm[yyyyCol] ? newForm[yyyyCol].trim() : '';
+  let fechaVcVal = fechaVcCol && newForm[fechaVcCol] ? newForm[fechaVcCol].trim() : '';
+
+  if (mVal && yVal && !isNaN(Number(mVal)) && !isNaN(Number(yVal))) {
+    const mNum = parseInt(mVal, 10);
+    const yNum = parseInt(yVal, 10);
+    if (mNum >= 1 && mNum <= 12 && yNum >= 2000 && yNum <= 2100) {
+      const lastDay = new Date(yNum, mNum, 0);
+      const calcY = lastDay.getFullYear();
+      const calcM = String(lastDay.getMonth() + 1).padStart(2, '0');
+      const calcD = String(lastDay.getDate()).padStart(2, '0');
+      const computedDateStr = `${calcY}-${calcM}-${calcD}`;
+      if (fechaVcCol && (!newForm[fechaVcCol] || newForm[fechaVcCol] !== computedDateStr)) {
+        newForm[fechaVcCol] = computedDateStr;
+        fechaVcVal = computedDateStr;
+      }
+    }
+  } else if (fechaVcVal) {
+    const parsedDate = parseAnyDate(fechaVcVal);
+    if (parsedDate) {
+      const extractedY = String(parsedDate.getFullYear());
+      const extractedM = String(parsedDate.getMonth() + 1).padStart(2, '0');
+      if (yyyyCol && !newForm[yyyyCol]) { newForm[yyyyCol] = extractedY; yVal = extractedY; }
+      if (mmCol && !newForm[mmCol]) { newForm[mmCol] = extractedM; mVal = extractedM; }
+    }
+  }
+
+  // 6. FECHA_RETIRO Calculation = FECHA_VC - activeDays
+  if (fechaRetiroCol && fechaVcVal && activeDays !== null && !isNaN(activeDays)) {
+    const expDate = parseAnyDate(fechaVcVal);
+    if (expDate) {
+      const d = new Date(expDate.getTime());
+      d.setDate(d.getDate() - activeDays);
+      const rY = d.getFullYear();
+      const rM = String(d.getMonth() + 1).padStart(2, '0');
+      const rD = String(d.getDate()).padStart(2, '0');
+      newForm[fechaRetiroCol] = `${rY}-${rM}-${rD}`;
+    }
+  }
+
+  // 7. Auto-calculate CU_VC = SKU + YYYY + MM
+  if (cuVcCol) {
+    const cleanSkuForCu = skuVal.replace(/\s+/g, '');
+    let finalY = yVal;
+    let finalM = mVal;
+    if ((!finalY || !finalM) && fechaVcVal) {
+      const pDate = parseAnyDate(fechaVcVal);
+      if (pDate) {
+        finalY = String(pDate.getFullYear());
+        finalM = String(pDate.getMonth() + 1).padStart(2, '0');
+      }
+    }
+
+    if (cleanSkuForCu && finalY && finalM) {
+      const formattedM = finalM.padStart(2, '0');
+      newForm[cuVcCol] = `${cleanSkuForCu}${finalY}${formattedM}`;
+    }
+  }
+
+  return newForm;
 }

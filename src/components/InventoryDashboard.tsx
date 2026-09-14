@@ -47,7 +47,7 @@ import {
 } from '../utils/dateCalculations';
 import { findColumnBySemantic } from '../utils/columnAliases';
 import { resolveItemIdentity, matchRowIndexByIdentity } from '../utils/entityIdentityResolver';
-import { findMasterProduct, dereferenceMasterProduct } from '../utils/referenceResolver';
+import { findMasterProduct, dereferenceMasterProduct, autoCalculateItemFormData } from '../utils/referenceResolver';
 import { 
   findExistingItemByCuVc, 
   reconcileImportWithInventory, 
@@ -1704,7 +1704,8 @@ export const InventoryDashboard: React.FC = () => {
           initialData[h] = raw;
         }
       });
-      setFormData(initialData);
+      const calculatedData = autoCalculateItemFormData(initialData, headers, products, policies, sheetConfig);
+      setFormData(calculatedData);
     } else {
       setEditingItem(null);
       const cat: EventCategory = initialCategory || (Array.isArray(eventFilter) && eventFilter.length === 1 && (eventFilter[0] in EVENT_CATEGORIES) ? (eventFilter[0] as EventCategory) : 'VENCIMIENTO');
@@ -1737,23 +1738,10 @@ export const InventoryDashboard: React.FC = () => {
 
       if (prefillSku && skuCol) {
         initialData[skuCol] = prefillSku;
-        // Autofill details from products catalog
-        if (products.length > 0) {
-          const prodSkuCol = Object.keys(products[0]).find(k => /sku|código|codigo/i.test(k));
-          if (prodSkuCol) {
-            const prod = products.find(p => String(p[prodSkuCol]).trim() === prefillSku.trim());
-            if (prod) {
-              headers.forEach(h => {
-                if (h !== skuCol && prod[h] !== undefined && prod[h] !== '') {
-                  initialData[h] = prod[h];
-                }
-              });
-            }
-          }
-        }
       }
       
-      setFormData(initialData);
+      const calculatedData = autoCalculateItemFormData(initialData, headers, products, policies, sheetConfig);
+      setFormData(calculatedData);
     }
     setIsModalOpen(true);
   };
@@ -1952,79 +1940,8 @@ export const InventoryDashboard: React.FC = () => {
         return updated;
       });
     }
-    
-    const skuCol = headers.find(h => /sku|código|codigo/i.test(h));
-    const expiryCol = headers.find(h => /vencimiento|caducidad|expiración|fecha_vc/i.test(h));
-    const withdrawalCol = headers.find(h => /retiro|canje/i.test(h));
-    const formPolicyCol = headers.find(h => /política|politica/i.test(h));
-    
-    const mmCol = headers.find(h => /^MM$/i.test(h.trim()));
-    const yyyyCol = headers.find(h => /^YYYY$/i.test(h.trim()));
-    const fechaVcCol = headers.find(h => /^FECHA_VC$/i.test(h.trim()));
 
-    if (mmCol && yyyyCol && fechaVcCol && (name === mmCol || name === yyyyCol)) {
-      const mStr = newForm[mmCol];
-      const yStr = newForm[yyyyCol];
-      if (mStr && yStr && !isNaN(Number(mStr)) && !isNaN(Number(yStr))) {
-        const m = parseInt(mStr, 10);
-        const y = parseInt(yStr, 10);
-        if (m >= 1 && m <= 12) {
-          const lastDay = new Date(y, m, 0); 
-          const calcY = lastDay.getFullYear();
-          const calcM = String(lastDay.getMonth() + 1).padStart(2, '0');
-          const calcD = String(lastDay.getDate()).padStart(2, '0');
-          newForm[fechaVcCol] = `${calcY}-${calcM}-${calcD}`;
-        }
-      }
-    }
-
-    if (skuCol && name === skuCol && products.length > 0 && value.trim().length >= 2) {
-      const masterProduct = findMasterProduct(value, products, sheetConfig.customAliases);
-      if (masterProduct) {
-        const dereferenced = dereferenceMasterProduct(masterProduct, headers, sheetConfig.customAliases);
-        delete dereferenced[skuCol];
-        delete dereferenced[name];
-        Object.assign(newForm, dereferenced);
-      }
-    }
-
-    if (withdrawalCol && expiryCol) {
-      const currentExpiry = newForm[expiryCol];
-      let currentPolicy = formPolicyCol ? newForm[formPolicyCol] : null;
-
-      if (!currentPolicy && skuCol && products.length > 0) {
-        const currentSku = newForm[skuCol];
-        const masterProduct = findMasterProduct(currentSku, products, sheetConfig.customAliases);
-        if (masterProduct) {
-          const prodPolicyCol = Object.keys(masterProduct).find(k => /política|politica/i.test(k));
-          if (prodPolicyCol) currentPolicy = masterProduct[prodPolicyCol];
-        }
-      }
-
-      if (currentExpiry && currentPolicy && policies.length > 0) {
-        const polKeyCol = Object.keys(policies[0]).find(k => /política|politica|tipo|canje|familia/i.test(k));
-        const polDaysCol = Object.keys(policies[0]).find(k => /dias|días|anticipacion|tiempo/i.test(k));
-        
-        if (polKeyCol && polDaysCol) {
-          const matchedPolicy = policies.find(p => String(p[polKeyCol]).trim().toLowerCase() === String(currentPolicy).trim().toLowerCase());
-          if (matchedPolicy) {
-            const days = parseInt(matchedPolicy[polDaysCol], 10);
-            if (!isNaN(days)) {
-              const expDate = parseAnyDate(currentExpiry);
-              if (expDate) {
-                const d = new Date(expDate.getTime());
-                d.setDate(d.getDate() - days);
-                const yyyy = d.getFullYear();
-                const mm = String(d.getMonth() + 1).padStart(2, '0');
-                const dd = String(d.getDate()).padStart(2, '0');
-                newForm[withdrawalCol] = `${yyyy}-${mm}-${dd}`;
-              }
-            }
-          }
-        }
-      }
-    }
-    
+    newForm = autoCalculateItemFormData(newForm, headers, products, policies, sheetConfig);
     setFormData(newForm);
   };
 
@@ -2039,37 +1956,7 @@ export const InventoryDashboard: React.FC = () => {
       });
     }
 
-    const expiryCol = headers.find(h => /vencimiento|caducidad|expiración|fecha_vc/i.test(h));
-    const withdrawalCol = headers.find(h => /retiro|canje/i.test(h));
-    const formPolicyCol = headers.find(h => /política|politica/i.test(h));
-
-    if (withdrawalCol && expiryCol) {
-      const currentExpiry = newForm[expiryCol];
-      let currentPolicy = formPolicyCol ? newForm[formPolicyCol] : null;
-
-      if (currentExpiry && currentPolicy && policies.length > 0) {
-        const polKeyCol = Object.keys(policies[0]).find(k => /política|politica|tipo|canje|familia/i.test(k));
-        const polDaysCol = Object.keys(policies[0]).find(k => /dias|días|anticipacion|tiempo/i.test(k));
-        if (polKeyCol && polDaysCol) {
-          const matchedPolicy = policies.find(p => String(p[polKeyCol]).trim().toLowerCase() === String(currentPolicy).trim().toLowerCase());
-          if (matchedPolicy) {
-            const days = parseInt(matchedPolicy[polDaysCol], 10);
-            if (!isNaN(days)) {
-              const expDate = parseAnyDate(currentExpiry);
-              if (expDate) {
-                const d = new Date(expDate.getTime());
-                d.setDate(d.getDate() - days);
-                const yyyy = d.getFullYear();
-                const mm = String(d.getMonth() + 1).padStart(2, '0');
-                const dd = String(d.getDate()).padStart(2, '0');
-                newForm[withdrawalCol] = `${yyyy}-${mm}-${dd}`;
-              }
-            }
-          }
-        }
-      }
-    }
-
+    newForm = autoCalculateItemFormData(newForm, headers, products, policies, sheetConfig);
     setFormData(newForm);
   };
 

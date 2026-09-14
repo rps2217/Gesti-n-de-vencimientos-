@@ -7,7 +7,8 @@ import {
   Tag, Barcode, Hash, MapPin, Sliders, ShieldCheck, Database,
   ArrowUpRight, ArrowDownRight, ChevronRight, HelpCircle,
   Lock, Unlock, ListTodo, Zap, Copy, MessageSquare, CheckCheck, Share2, FileWarning, Store,
-  Camera, Smartphone, Cloud, CloudDownload, CloudUpload, CloudOff, Loader2, RefreshCw
+  Camera, Smartphone, Cloud, CloudDownload, CloudUpload, CloudOff, Loader2, RefreshCw,
+  Printer, Building2
 } from 'lucide-react';
 import { 
   StockCountSession, 
@@ -49,6 +50,8 @@ import {
 } from '../../utils/referenceResolver';
 import { formatLocaleNumber, parseLocaleNumber } from '../../utils/pureCalculations';
 import { copyTextToClipboard } from '../../utils/exportUtils';
+import { executeThermalPrint } from '../../utils/ticketUtils';
+import { TicketPrintView } from './TicketPrintView';
 
 interface StockCountTerminalProps {
   sheetItems: InventoryItem[];
@@ -383,8 +386,11 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
   const [mobileCountingTab, setMobileCountingTab] = useState<'SCAN' | 'READINGS'>('SCAN');
   const [readingsSearch, setReadingsSearch] = useState<string>('');
 
-  // Reconciliation filter
+  // Reconciliation filter & Supplier audit filter
   const [reconciliationFilter, setReconciliationFilter] = useState<'ALL' | 'DIF' | 'CUADRADO' | 'FALTANTE' | 'SOBRANTE' | 'NO_CATALOGADO'>('ALL');
+  const [selectedProviderFilter, setSelectedProviderFilter] = useState<string>('ALL');
+  const [itemsToPrintList, setItemsToPrintList] = useState<InventoryItem[]>([]);
+  const [ticketPrintMode, setTicketPrintMode] = useState<'standard' | 'barcode'>('standard');
   const [isSyncingToSheet, setIsSyncingToSheet] = useState(false);
 
   // Visual Flash Feedback State for high-visibility confirmation in noisy environments
@@ -952,12 +958,58 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
     return reconcileStockCountSession(currentSession, sheetItems, headers, masterProducts);
   }, [currentSession, sheetItems, headers, masterProducts, viewState]);
 
-  // Filtered reconciliation list for display
+  // Unique list of suppliers found in current reconciliation session
+  const reconciliationProviders = useMemo(() => {
+    const set = new Set<string>();
+    reconciliation.forEach(r => {
+      if (r.rutProveedor && r.rutProveedor.trim()) {
+        set.add(r.rutProveedor.trim());
+      }
+    });
+    return Array.from(set).sort();
+  }, [reconciliation]);
+
+  // Filtered reconciliation list for display & thermal printing
   const filteredReconciliation = useMemo(() => {
-    if (reconciliationFilter === 'ALL') return reconciliation;
-    if (reconciliationFilter === 'DIF') return reconciliation.filter(r => r.estado !== 'CUADRADO');
-    return reconciliation.filter(r => r.estado === reconciliationFilter);
-  }, [reconciliation, reconciliationFilter]);
+    let list = reconciliation;
+    if (selectedProviderFilter !== 'ALL') {
+      list = list.filter(r => (r.rutProveedor || '').trim().toLowerCase() === selectedProviderFilter.trim().toLowerCase());
+    }
+    if (reconciliationFilter === 'ALL') return list;
+    if (reconciliationFilter === 'DIF') return list.filter(r => r.estado !== 'CUADRADO');
+    return list.filter(r => r.estado === reconciliationFilter);
+  }, [reconciliation, reconciliationFilter, selectedProviderFilter]);
+
+  // Thermal ticket printer for supplier / reconciliation audit
+  const handlePrintSupplierTicket = () => {
+    if (filteredReconciliation.length === 0) {
+      showToast('No hay productos para imprimir con el filtro actual', 'warning');
+      return;
+    }
+    const itemsToPrint: InventoryItem[] = filteredReconciliation.map((r, idx) => ({
+      _rowIndex: idx + 1,
+      SKU: r.sku,
+      DESCRIPCION: r.descripcion,
+      'CANTIDAD CONTADA': r.contado,
+      'CANTIDAD TEORICA': r.teorico,
+      DIFERENCIA: r.diferencia === 0 ? '0 (OK)' : (r.diferencia > 0 ? `+${r.diferencia}` : String(r.diferencia)),
+      PROVEEDOR: r.rutProveedor || 'N/A',
+      ESTADO: r.estado
+    }));
+
+    setItemsToPrintList(itemsToPrint);
+    setTicketPrintMode('standard');
+
+    executeThermalPrint({
+      elementId: 'thermal-ticket-root',
+      paperWidth: '80mm',
+      orientation: 'portrait',
+      cutMarginMm: 2
+    });
+
+    const providerLabel = selectedProviderFilter === 'ALL' ? 'Todos los Proveedores' : selectedProviderFilter;
+    showToast(`Imprimiendo ticket de auditoría (${providerLabel} - ${filteredReconciliation.length} ítems)`, 'info', 'Impresora Térmica');
+  };
 
   // Virtualization for high-volume reconciliation table (10,000+ items)
   const reconciliationTableContainerRef = useRef<HTMLDivElement>(null);
@@ -3359,6 +3411,24 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                 >
                   Cuadrados ({metrics.cuadrados})
                 </button>
+
+                {/* Proveedor Audit Filter Dropdown */}
+                <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 shadow-xs ml-1">
+                  <Building2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <select
+                    value={selectedProviderFilter}
+                    onChange={(e) => setSelectedProviderFilter(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 outline-none cursor-pointer py-0.5 max-w-[160px] truncate"
+                    title="Filtrar auditoría focalizada por proveedor"
+                  >
+                    <option value="ALL">Proveedores: Todos ({reconciliationProviders.length})</option>
+                    {reconciliationProviders.map(prov => (
+                      <option key={prov} value={prov}>
+                        {prov}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
@@ -3393,6 +3463,17 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
                     <span className="hidden lg:inline">Acta Diferencias</span>
                   </button>
                 </div>
+
+                {/* Print Supplier Audit Ticket Button */}
+                <button
+                  type="button"
+                  onClick={handlePrintSupplierTicket}
+                  title={`Imprimir ticket térmico para ${selectedProviderFilter === 'ALL' ? 'todos los proveedores' : selectedProviderFilter}`}
+                  className="px-2.5 py-1.5 bg-slate-900 hover:bg-black dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Printer className="w-4 h-4 text-emerald-400 dark:text-emerald-600" />
+                  <span className="hidden sm:inline">Ticket Proveedor</span>
+                </button>
 
                 <div className="flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 shadow-sm">
                   <button
@@ -3751,6 +3832,35 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
             )}
           </div>
         )}
+
+        {/* Hidden thermal ticket container for provider audit printing */}
+        <div style={{ display: 'none' }}>
+          <div id="thermal-ticket-root">
+            <TicketPrintView
+              items={itemsToPrintList}
+              headers={['SKU', 'DESCRIPCION', 'CANTIDAD CONTADA', 'CANTIDAD TEORICA', 'DIFERENCIA', 'PROVEEDOR']}
+              config={{
+                general: {
+                  title: `AUDITORÍA PROVEEDOR - ${selectedProviderFilter === 'ALL' ? 'GENERAL' : selectedProviderFilter}`,
+                  paperWidth: '80mm',
+                  orientation: 'portrait',
+                  showDateTime: true,
+                  showTotalCount: true
+                },
+                columns: {
+                  SKU: { show: true, bold: true, size: 12 },
+                  DESCRIPCION: { show: true, bold: false, size: 11 },
+                  'CANTIDAD CONTADA': { show: true, bold: true, size: 11 },
+                  'CANTIDAD TEORICA': { show: true, bold: false, size: 10 },
+                  DIFERENCIA: { show: true, bold: true, size: 11 },
+                  PROVEEDOR: { show: true, bold: false, size: 10 }
+                }
+              }}
+              activeView="main"
+              mode={ticketPrintMode}
+            />
+          </div>
+        </div>
       </div>
   );
 };

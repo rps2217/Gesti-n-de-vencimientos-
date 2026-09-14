@@ -121,15 +121,21 @@ export function buildMasterCatalogIndex(
     const q = (query || '').trim().toLowerCase();
     if (!q) return summaries.slice(0, limit);
 
+    const tokens = q.split(/\s+/).filter(Boolean);
+
     const results: MasterProductSummary[] = [];
     for (let i = 0; i < summaries.length; i++) {
       const s = summaries[i];
-      if (
-        s.sku.toLowerCase().includes(q) ||
-        s.name.toLowerCase().includes(q) ||
-        s.provider.toLowerCase().includes(q) ||
-        s.category.toLowerCase().includes(q)
-      ) {
+      const skuL = s.sku.toLowerCase();
+      const nameL = s.name.toLowerCase();
+      const provL = s.provider.toLowerCase();
+      const catL = s.category.toLowerCase();
+
+      const matchesAll = tokens.every(t => 
+        skuL.includes(t) || nameL.includes(t) || provL.includes(t) || catL.includes(t)
+      );
+
+      if (matchesAll) {
         results.push(s);
         if (results.length >= limit) break;
       }
@@ -146,6 +152,32 @@ export function buildMasterCatalogIndex(
     getRawBySku,
     search
   };
+}
+
+let cachedIndexProducts: any[] | null = null;
+let cachedIndexAliases: Record<string, string[]> | undefined = undefined;
+let cachedIndexResult: MasterCatalogIndex | null = null;
+
+export function getMasterCatalogIndex(
+  products: any[],
+  customAliases?: Record<string, string[]>
+): MasterCatalogIndex {
+  if (!products || products.length === 0) {
+    return buildMasterCatalogIndex([], customAliases);
+  }
+
+  if (
+    cachedIndexResult &&
+    cachedIndexProducts === products &&
+    cachedIndexAliases === customAliases
+  ) {
+    return cachedIndexResult;
+  }
+
+  cachedIndexProducts = products;
+  cachedIndexAliases = customAliases;
+  cachedIndexResult = buildMasterCatalogIndex(products, customAliases);
+  return cachedIndexResult;
 }
 
 /**
@@ -185,57 +217,8 @@ export function findMasterProduct(
   customAliases?: Record<string, string[]>
 ): any | null {
   if (!sku || !products || products.length === 0) return null;
-
-  const targetSku = String(sku).trim().toLowerCase();
-  if (!targetSku) return null;
-
-  const firstProd = products[0];
-  const keys = Object.keys(firstProd || {});
-  const skuCol = findColumnBySemantic(keys, 'sku', customAliases) || keys.find(k => /sku|código|codigo/i.test(k));
-
-  // 1. Exact string match on primary SKU column
-  for (let i = 0; i < products.length; i++) {
-    const prod = products[i];
-    if (!prod) continue;
-    const prodVal = skuCol ? prod[skuCol] : (prod.SKU || prod.sku);
-    if (prodVal !== undefined && prodVal !== null) {
-      const cleanProdVal = String(prodVal).trim().toLowerCase();
-      if (cleanProdVal === targetSku) {
-        return prod;
-      }
-    }
-  }
-
-  // 2. Exact normalized alphanumeric match (e.g. '1001' matches 'SKU-1001' or 'SKU1001')
-  const alphaTarget = targetSku.replace(/[^a-z0-9]/g, '');
-  if (alphaTarget) {
-    for (let i = 0; i < products.length; i++) {
-      const prod = products[i];
-      if (!prod) continue;
-      const prodVal = skuCol ? prod[skuCol] : (prod.SKU || prod.sku);
-      if (prodVal !== undefined && prodVal !== null) {
-        const cleanAlpha = String(prodVal).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (cleanAlpha === alphaTarget) {
-          return prod;
-        }
-      }
-    }
-  }
-
-  // 3. Fallback: Check barcode / code fields for exact match
-  for (let i = 0; i < products.length; i++) {
-    const prod = products[i];
-    if (!prod) continue;
-    for (const k of Object.keys(prod)) {
-      if (/sku|código|codigo|id|barcode|ean/i.test(k) && prod[k]) {
-        if (String(prod[k]).trim().toLowerCase() === targetSku) {
-          return prod;
-        }
-      }
-    }
-  }
-
-  return null;
+  const index = getMasterCatalogIndex(products, customAliases);
+  return index.getRawBySku(sku);
 }
 
 /**
@@ -248,27 +231,8 @@ export function searchMasterProducts(
   customAliases?: Record<string, string[]>
 ): MasterProductSummary[] {
   if (!products || products.length === 0) return [];
-  const q = (query || '').trim().toLowerCase();
-
-  const results: MasterProductSummary[] = [];
-
-  for (const prod of products) {
-    const summary = getMasterProductSummary(prod, customAliases);
-    if (!q) {
-      results.push(summary);
-    } else {
-      const matchSku = summary.sku.toLowerCase().includes(q);
-      const matchName = summary.name.toLowerCase().includes(q);
-      const matchProv = summary.provider.toLowerCase().includes(q);
-      const matchCat = summary.category.toLowerCase().includes(q);
-      if (matchSku || matchName || matchProv || matchCat) {
-        results.push(summary);
-      }
-    }
-    if (results.length >= limit) break;
-  }
-
-  return results;
+  const index = getMasterCatalogIndex(products, customAliases);
+  return index.search(query, limit);
 }
 
 /**

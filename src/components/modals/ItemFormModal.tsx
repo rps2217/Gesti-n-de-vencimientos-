@@ -20,6 +20,7 @@ import {
   searchMasterProducts, 
   dereferenceMasterProduct, 
   getMasterProductSummary,
+  getMasterCatalogIndex,
   MasterProductSummary
 } from '../../utils/referenceResolver';
 import { findColumnBySemantic } from '../../utils/columnAliases';
@@ -152,6 +153,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   };
 
   // Look up linked master product (memoized)
+  const masterSummaries = useMemo(() => {
+    if (!products || products.length === 0) return [];
+    return getMasterCatalogIndex(products, sheetConfig.customAliases).summaries;
+  }, [products, sheetConfig.customAliases]);
+
   const linkedMasterProduct = useMemo(() => {
     return currentSkuVal && currentSkuVal.length >= 2 && products.length > 0 
       ? findMasterProduct(currentSkuVal, products, sheetConfig.customAliases) 
@@ -604,8 +610,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                         }`}
                       >
                         <option value="">-- Seleccionar registro de {colSchema.refTable || 'tabla relacionada'} --</option>
-                        {products.map((prod, idx) => {
-                          const summary = getMasterProductSummary(prod, sheetConfig.customAliases);
+                        {masterSummaries.map((summary, idx) => {
                           if (!summary.sku) return null;
                           return (
                             <option key={`ref-${idx}-${summary.sku}`} value={summary.sku}>

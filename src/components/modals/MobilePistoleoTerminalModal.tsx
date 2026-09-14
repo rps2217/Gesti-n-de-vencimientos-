@@ -428,26 +428,23 @@ export const MobilePistoleoTerminalModal: React.FC<MobilePistoleoTerminalModalPr
     <div className="fixed inset-0 z-[160] bg-slate-950 flex flex-col justify-between overflow-hidden select-none animate-in fade-in duration-150">
       
       {/* 1. TOP SAP/STEM STYLE BURGUNDY BAR (Directly inspired by images) */}
-      <div className="bg-gradient-to-r from-red-950 via-rose-950 to-red-900 text-white px-3.5 py-3 flex items-center justify-between shadow-xl border-b border-red-900/60 safe-top">
-        <div className="flex items-center gap-2.5">
+      <div className="bg-gradient-to-r from-red-950 via-rose-950 to-red-900 text-white px-3 py-2.5 flex items-center justify-between shadow-xl border-b border-red-900/60 safe-top">
+        <div className="flex items-center gap-2">
           <button
             onClick={onClose}
-            className="p-2 hover:bg-white/10 active:bg-white/20 rounded-xl transition-colors text-slate-200"
+            className="p-2 hover:bg-white/10 active:bg-white/20 rounded-xl transition-colors text-slate-200 cursor-pointer"
             title="Volver"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-extrabold tracking-wide text-white leading-tight">Start Counting</h2>
-              <span className="px-2 py-0.5 rounded-full bg-red-900/80 border border-red-700/60 text-[10px] font-mono text-red-200 font-bold">
-                Pistoleo Móvil
-              </span>
+          
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-red-900/60 border border-red-800 flex items-center justify-center text-rose-300">
+              <Scan className="w-4 h-4" />
             </div>
-            <p className="text-[11px] text-red-200/80 font-mono tracking-tight">
-              #{activeSheetTitle.toUpperCase()} • 📍 Escaneo a una mano
-            </p>
+            <span className="text-xs font-mono font-bold tracking-wider text-red-200 uppercase">
+              TERMINAL PDA
+            </span>
           </div>
         </div>
 
@@ -456,7 +453,7 @@ export const MobilePistoleoTerminalModal: React.FC<MobilePistoleoTerminalModalPr
           {/* Mode Switcher Button (Laser vs Camera) */}
           <button
             onClick={() => setScanMode(m => (m === 'LASER' ? 'CAMERA' : 'LASER'))}
-            className={`p-2.5 rounded-xl border font-bold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 ${
+            className={`p-2 rounded-xl border font-bold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer ${
               scanMode === 'CAMERA'
                 ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-amber-500/20'
                 : 'bg-red-900/80 border-red-700/80 text-white hover:bg-red-800'
@@ -465,13 +462,13 @@ export const MobilePistoleoTerminalModal: React.FC<MobilePistoleoTerminalModalPr
           >
             {scanMode === 'CAMERA' ? (
               <>
-                <Camera className="w-4 h-4 animate-pulse text-slate-950" />
-                <span className="hidden sm:inline">Cámara</span>
+                <Camera className="w-4 h-4 text-slate-950" />
+                <span className="text-[10px] font-bold">Cámara</span>
               </>
             ) : (
               <>
                 <Barcode className="w-4 h-4 text-rose-300" />
-                <span className="hidden sm:inline">Láser PDA</span>
+                <span className="text-[10px] font-bold">Láser PDA</span>
               </>
             )}
           </button>
@@ -479,7 +476,7 @@ export const MobilePistoleoTerminalModal: React.FC<MobilePistoleoTerminalModalPr
           {/* Sound / Mute */}
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`p-2.5 rounded-xl border transition-colors ${
+            className={`p-2 rounded-xl border transition-colors cursor-pointer ${
               soundEnabled
                 ? 'bg-red-900/60 border-red-800 text-emerald-400'
                 : 'bg-red-900/40 border-red-800 text-slate-400'
@@ -489,10 +486,13 @@ export const MobilePistoleoTerminalModal: React.FC<MobilePistoleoTerminalModalPr
             {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
 
+          <div className="w-px h-5 bg-red-900/80 mx-1" />
+
           {/* Close */}
           <button
             onClick={onClose}
-            className="p-2.5 hover:bg-white/10 text-slate-300 hover:text-white rounded-xl transition-colors"
+            className="p-2 hover:bg-white/10 text-slate-300 hover:text-white rounded-xl transition-colors cursor-pointer"
+            title="Cerrar terminal"
           >
             <X className="w-5 h-5" />
           </button>

@@ -190,10 +190,12 @@ export function findMasterProduct(
   if (!targetSku) return null;
 
   const firstProd = products[0];
-  const keys = Object.keys(firstProd);
+  const keys = Object.keys(firstProd || {});
   const skuCol = findColumnBySemantic(keys, 'sku', customAliases) || keys.find(k => /sku|código|codigo/i.test(k));
 
-  for (const prod of products) {
+  // 1. Exact string match on primary SKU column
+  for (let i = 0; i < products.length; i++) {
+    const prod = products[i];
     if (!prod) continue;
     const prodVal = skuCol ? prod[skuCol] : (prod.SKU || prod.sku);
     if (prodVal !== undefined && prodVal !== null) {
@@ -204,25 +206,28 @@ export function findMasterProduct(
     }
   }
 
-  // Fallback 1: Normalized alphanumeric match (e.g. '1001' matches 'SKU-1001')
+  // 2. Exact normalized alphanumeric match (e.g. '1001' matches 'SKU-1001' or 'SKU1001')
   const alphaTarget = targetSku.replace(/[^a-z0-9]/g, '');
   if (alphaTarget) {
-    for (const prod of products) {
+    for (let i = 0; i < products.length; i++) {
+      const prod = products[i];
       if (!prod) continue;
       const prodVal = skuCol ? prod[skuCol] : (prod.SKU || prod.sku);
       if (prodVal !== undefined && prodVal !== null) {
         const cleanAlpha = String(prodVal).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (cleanAlpha === alphaTarget || cleanAlpha.endsWith(alphaTarget)) {
+        if (cleanAlpha === alphaTarget) {
           return prod;
         }
       }
     }
   }
 
-  // Fallback 2: check all fields for exact matching code
-  for (const prod of products) {
+  // 3. Fallback: Check barcode / code fields for exact match
+  for (let i = 0; i < products.length; i++) {
+    const prod = products[i];
+    if (!prod) continue;
     for (const k of Object.keys(prod)) {
-      if (/sku|código|codigo|id/i.test(k)) {
+      if (/sku|código|codigo|id|barcode|ean/i.test(k) && prod[k]) {
         if (String(prod[k]).trim().toLowerCase() === targetSku) {
           return prod;
         }

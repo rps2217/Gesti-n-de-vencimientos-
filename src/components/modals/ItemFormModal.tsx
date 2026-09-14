@@ -151,13 +151,18 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
     }
   };
 
-  // Look up linked master product
-  const linkedMasterProduct = currentSkuVal && products.length > 0 
-    ? findMasterProduct(currentSkuVal, products, sheetConfig.customAliases) 
-    : null;
-  const linkedMasterSummary = linkedMasterProduct 
-    ? getMasterProductSummary(linkedMasterProduct, sheetConfig.customAliases) 
-    : null;
+  // Look up linked master product (memoized)
+  const linkedMasterProduct = useMemo(() => {
+    return currentSkuVal && currentSkuVal.length >= 2 && products.length > 0 
+      ? findMasterProduct(currentSkuVal, products, sheetConfig.customAliases) 
+      : null;
+  }, [currentSkuVal, products, sheetConfig.customAliases]);
+
+  const linkedMasterSummary = useMemo(() => {
+    return linkedMasterProduct 
+      ? getMasterProductSummary(linkedMasterProduct, sheetConfig.customAliases) 
+      : null;
+  }, [linkedMasterProduct, sheetConfig.customAliases]);
 
   // Evaluate Show_If for all headers
   const evaluatedFields = headers.map(header => {
@@ -253,13 +258,16 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
     }
   };
 
-  // Filtered master catalog products for typeahead
-  const catalogSearchResults = searchMasterProducts(
-    catalogSearchQuery, 
-    products, 
-    8, 
-    sheetConfig.customAliases
-  );
+  // Filtered master catalog products for typeahead (memoized)
+  const catalogSearchResults = useMemo(() => {
+    if (!catalogSearchOpen) return [];
+    return searchMasterProducts(
+      catalogSearchQuery, 
+      products, 
+      8, 
+      sheetConfig.customAliases
+    );
+  }, [catalogSearchOpen, catalogSearchQuery, products, sheetConfig.customAliases]);
 
   if (!isOpen || !activeSheet) return null;
 

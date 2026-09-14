@@ -1978,10 +1978,12 @@ export const InventoryDashboard: React.FC = () => {
       }
     }
 
-    if (skuCol && name === skuCol && products.length > 0) {
+    if (skuCol && name === skuCol && products.length > 0 && value.trim().length >= 2) {
       const masterProduct = findMasterProduct(value, products, sheetConfig.customAliases);
       if (masterProduct) {
         const dereferenced = dereferenceMasterProduct(masterProduct, headers, sheetConfig.customAliases);
+        delete dereferenced[skuCol];
+        delete dereferenced[name];
         Object.assign(newForm, dereferenced);
       }
     }

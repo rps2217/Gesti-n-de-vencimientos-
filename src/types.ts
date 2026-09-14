@@ -147,6 +147,7 @@ export interface TicketColumnConfig {
 export interface TicketGeneralSettings {
   title?: string;
   paperWidth?: '80mm' | '58mm';
+  orientation?: 'portrait' | 'landscape'; // 'portrait' (Vertical - Predeterminado) | 'landscape' (Horizontal)
   showDateTime?: boolean;
   showTotalCount?: boolean;
   footerText?: string;

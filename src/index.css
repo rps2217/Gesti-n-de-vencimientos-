@@ -87,6 +87,12 @@
     visibility: hidden !important;
   }
 
+  /* Base page print layout - Force portrait default and zero margins */
+  @page {
+    size: portrait;
+    margin: 0mm;
+  }
+
   /* Thermal ticket container */
   #thermal-ticket-root {
     display: block !important;

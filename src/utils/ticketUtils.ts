@@ -27,6 +27,7 @@ export function getDefaultTicketGeneralSettings(activeView: string = 'main'): Ti
   return {
     title,
     paperWidth: '80mm',
+    orientation: 'portrait',
     showDateTime: true,
     showTotalCount: true,
     footerText: '--- FIN DEL REPORTE ---',
@@ -183,6 +184,7 @@ export function saveTicketConfigToStorage(config: GlobalTicketConfig): void {
 export interface ThermalPrintOptions {
   elementId?: string;
   paperWidth?: '80mm' | '58mm';
+  orientation?: 'portrait' | 'landscape';
   cutMarginMm?: number;
   onBeforePrint?: () => void;
   onAfterPrint?: () => void;
@@ -193,11 +195,13 @@ export interface ThermalPrintOptions {
  * Measures the exact rendered height of the ticket DOM element, calculates
  * exact millimeters, and injects a dynamic @page CSS rule so the printer
  * cuts immediately after the ticket footer, avoiding wasteful 11-inch/A4 feeds.
+ * Also forces portrait/vertical or landscape orientation at the driver level.
  */
 export function executeThermalPrint(options: ThermalPrintOptions = {}): void {
   const {
     elementId = 'thermal-ticket-root',
     paperWidth = '80mm',
+    orientation = 'portrait',
     cutMarginMm = 2,
     onBeforePrint,
     onAfterPrint
@@ -256,9 +260,13 @@ export function executeThermalPrint(options: ThermalPrintOptions = {}): void {
     }
 
     const effectiveMargin = Math.max(0, cutMarginMm);
+    const orientationKeyword = orientation === 'landscape' ? 'landscape' : 'portrait';
+    const isLandscape = orientation === 'landscape';
+
+    // When landscape, the width becomes the larger dimension or auto
     const sizeRule = calculatedHeightMm > 10
-      ? `size: ${paperWidth} ${calculatedHeightMm}mm;`
-      : `size: ${paperWidth} auto;`;
+      ? `size: ${isLandscape ? `${calculatedHeightMm}mm ${paperWidth}` : `${paperWidth} ${calculatedHeightMm}mm`} ${orientationKeyword};`
+      : `size: ${paperWidth} auto ${orientationKeyword};`;
 
     styleTag.textContent = `
       @media print {

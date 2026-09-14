@@ -53,6 +53,7 @@ export const TicketConfigModal: React.FC<TicketConfigModalProps> = ({
   const [localGeneral, setLocalGeneral] = useState<TicketGeneralSettings>({
     title: 'REPORTE VENCIMIENTOS',
     paperWidth: '80mm',
+    orientation: 'portrait',
     showDateTime: true,
     showTotalCount: true,
     footerText: '--- FIN DEL REPORTE ---'
@@ -70,6 +71,7 @@ export const TicketConfigModal: React.FC<TicketConfigModalProps> = ({
       setLocalGeneral(normalized.general || {
         title: activeView === 'events' ? 'REGISTRO DE INCIDENCIAS' : 'REPORTE VENCIMIENTOS',
         paperWidth: '80mm',
+        orientation: 'portrait',
         showDateTime: true,
         showTotalCount: true,
         footerText: '--- FIN DEL REPORTE ---'
@@ -160,6 +162,7 @@ export const TicketConfigModal: React.FC<TicketConfigModalProps> = ({
     executeThermalPrint({
       elementId: 'thermal-ticket-root',
       paperWidth: localGeneral.paperWidth || '80mm',
+      orientation: localGeneral.orientation || 'portrait',
       cutMarginMm: localGeneral.cutMarginMm !== undefined ? Number(localGeneral.cutMarginMm) : 2
     });
   };
@@ -432,6 +435,43 @@ export const TicketConfigModal: React.FC<TicketConfigModalProps> = ({
                       }`}
                     >
                       58mm (Compacto)
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">
+                      Orientación de Impresión
+                    </label>
+                    <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">
+                      {(localGeneral.orientation || 'portrait') === 'portrait' ? 'Vertical (Recomendado)' : 'Horizontal'}
+                    </span>
+                  </div>
+                  <div className="flex rounded-xl bg-slate-200 dark:bg-slate-700 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setLocalGeneral(prev => ({ ...prev, orientation: 'portrait' }))}
+                      className={`flex-1 py-1 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                        (localGeneral.orientation || 'portrait') === 'portrait'
+                          ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      <span className="inline-block w-2.5 h-3.5 border-2 border-current rounded-xs"></span>
+                      <span>Vertical (Retrato)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLocalGeneral(prev => ({ ...prev, orientation: 'landscape' }))}
+                      className={`flex-1 py-1 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                        localGeneral.orientation === 'landscape'
+                          ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      <span className="inline-block w-3.5 h-2.5 border-2 border-current rounded-xs"></span>
+                      <span>Horizontal (Paisaje)</span>
                     </button>
                   </div>
                 </div>

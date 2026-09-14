@@ -578,16 +578,18 @@ export const InventoryDashboard: React.FC = () => {
     setItemsToPrintList(itemsToPrint);
     setTicketPrintMode(mode);
 
-    // Retrieve active thermal config to pass exact paperWidth and cutMarginMm
+    // Retrieve active thermal config to pass exact paperWidth, orientation and cutMarginMm
     const activeConfig = (globalTicketConfig[activeView] || sheetConfig.ticketPrintConfig?.[activeView] || {}) as any;
     const generalSettings = activeConfig.general || activeConfig;
     const paperWidth = generalSettings.paperWidth || '80mm';
+    const orientation = generalSettings.orientation || 'portrait';
     const cutMarginMm = generalSettings.cutMarginMm !== undefined ? Number(generalSettings.cutMarginMm) : 2;
 
-    // Execute thermal print with precise height calculation to avoid excessive blank tail
+    // Execute thermal print with precise height calculation and explicit vertical orientation
     executeThermalPrint({
       elementId: 'thermal-ticket-root',
       paperWidth,
+      orientation,
       cutMarginMm
     });
   };

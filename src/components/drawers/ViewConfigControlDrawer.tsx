@@ -222,10 +222,10 @@ export const ViewConfigControlDrawer: React.FC<ViewConfigControlDrawerProps> = (
               <button
                 type="button"
                 onClick={onClose}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="p-1.5 rounded-lg text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border-2 border-indigo-500 dark:border-indigo-400/80 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 hover:scale-105 active:scale-95 shadow-sm shadow-indigo-100 dark:shadow-none transition-all duration-200 cursor-pointer flex items-center justify-center"
                 title="Cerrar panel lateral"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4 stroke-[2.5]" />
               </button>
             </div>
           </div>
@@ -985,14 +985,15 @@ export const ViewConfigControlDrawer: React.FC<ViewConfigControlDrawerProps> = (
 
           {/* Footer del Drawer */}
           <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 flex items-center justify-between text-xs">
-            <span className="text-slate-400 text-[11px]">Control Center v2.5</span>
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 rounded-lg font-bold text-xs hover:bg-slate-700 cursor-pointer"
+              className="px-5 py-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-2 border-indigo-500 dark:border-indigo-400/80 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 hover:scale-105 active:scale-95 rounded-lg font-bold text-xs cursor-pointer transition-all duration-200 shadow-sm shadow-indigo-100 dark:shadow-none flex items-center gap-1.5"
             >
-              Listo
+              <X className="w-3.5 h-3.5 stroke-[2.5]" />
+              Cerrar
             </button>
+            <span className="text-slate-400 text-[11px]">Control Center v2.5</span>
           </div>
 
         </div>

@@ -1,5 +1,6 @@
 import { findColumnBySemantic, KnownFieldSemantic } from './columnAliases';
 import { parseAnyDate } from './dateCalculations';
+import { extractCuVcFromRow } from './cuVcConsolidator';
 import { SheetConfig } from '../types';
 
 export interface MasterProductSummary {
@@ -484,22 +485,20 @@ export function autoCalculateItemFormData(
     }
   }
 
-  // 7. Auto-calculate CU_VC = SKU + YYYY + MM
-  if (cuVcCol) {
-    const cleanSkuForCu = skuVal.replace(/\s+/g, '');
-    let finalY = yVal;
-    let finalM = mVal;
-    if ((!finalY || !finalM) && fechaVcVal) {
-      const pDate = parseAnyDate(fechaVcVal);
-      if (pDate) {
-        finalY = String(pDate.getFullYear());
-        finalM = String(pDate.getMonth() + 1).padStart(2, '0');
+  // 7. Auto-calculate CU_VC = SKU + YYYY + MM using extractCuVcFromRow
+  const derivedCuInfo = extractCuVcFromRow(newForm, headers, customAliases);
+  if (derivedCuInfo.cuVc) {
+    headers.forEach(h => {
+      const isCuHeader = /^cu(_|\s)?(vc|calculado)?$/i.test(h.trim()) || 
+                         /^id_vc$/i.test(h.trim()) || 
+                         /^codigo(_|\s)?unico$/i.test(h.trim()) || 
+                         /^cu$/i.test(h.trim());
+      if (isCuHeader) {
+        newForm[h] = derivedCuInfo.cuVc;
       }
-    }
-
-    if (cleanSkuForCu && finalY && finalM) {
-      const formattedM = finalM.padStart(2, '0');
-      newForm[cuVcCol] = `${cleanSkuForCu}${finalY}${formattedM}`;
+    });
+    if (cuVcCol) {
+      newForm[cuVcCol] = derivedCuInfo.cuVc;
     }
   }
 

@@ -287,8 +287,8 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
       {/* RIGHT: Primary Action, Utilities & Sync Indicator */}
       <div className="flex items-center gap-2 shrink-0">
         
-        {/* PWA Install Button */}
-        <PWAInstallButton variant="compact" />
+        {/* PWA Install Button (Mobile Only) */}
+        <PWAInstallButton variant="compact" className="md:hidden" />
 
         {/* Special Action: Bulk Import FRC */}
         {activeView === 'events' && setIsBulkImportOpen && (

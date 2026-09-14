@@ -106,10 +106,10 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
 
   // Identify key semantic columns in current headers
   const skuHeader = findColumnBySemantic(headers, 'sku', sheetConfig.customAliases) || headers.find(h => /sku|código|codigo/i.test(h));
-  const currentSkuVal = skuHeader ? (formData[skuHeader] || '').trim() : '';
+  const currentSkuVal = skuHeader ? String(formData[skuHeader] || '').trim() : '';
 
   const cantHeader = findColumnBySemantic(headers, 'cantidad', sheetConfig.customAliases) || 
-                     headers.find(h => /^(cant|cantidad|stock|unidades)$/i.test(h.trim()));
+                     headers.find(h => /^(cant|cantidad|stock|unidades)$/i.test(String(h).trim()));
 
   const currentEnteredQty = cantHeader && formData[cantHeader] 
     ? parseLocaleNumber(formData[cantHeader]) 
@@ -215,7 +215,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
 
   // Handler for inserting operational comment suggestion (Valid_If)
   const handleApplySuggestion = (header: string, suggestion: string) => {
-    const currentVal = (formData[header] || '').trim();
+    const currentVal = String(formData[header] || '').trim();
     const newVal = currentVal ? `${currentVal}. ${suggestion}` : suggestion;
 
     if (onBatchUpdateFormData) {
@@ -482,7 +482,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                                    (colSchema?.behavior === 'calc_retiro' && activeView === 'main') || 
                                    colSchema?.behavior === 'auto_id' || 
                                    colSchema?.type === 'calculated' || 
-                                   /^ID_VC$/i.test(header.trim());
+                                   /^ID_VC$/i.test(String(header).trim());
                 
                 const isSku = /sku|código|codigo/i.test(header);
                 const isObs = /observ|nota|motivo|detalle|coment|causa/i.test(header);
@@ -490,7 +490,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 const isDateCol = colSchema?.type === 'date' || (/fecha|vencimiento|vence|retiro/i.test(header) && !/time/i.test(header));
                 const isDateTimeCol = colSchema?.type === 'datetime' || /timestamp|created_at/i.test(header);
                 const isTraspasoCol = /traspaso/i.test(header);
-                const traspasoVal = (formData[header] || '').trim();
+                const traspasoVal = String(formData[header] || '').trim();
                 const isTraspasoFilled = traspasoVal !== '' && traspasoVal !== '-' && traspasoVal !== '0';
                 
                 const hasError = !!formErrors[header];

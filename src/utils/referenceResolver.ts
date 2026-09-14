@@ -307,7 +307,7 @@ export function dereferenceMasterProduct(
     }
 
     if (val !== undefined && val !== null && String(val).trim() !== '') {
-      result[targetHeader] = val;
+      result[targetHeader] = String(val);
     }
   }
 

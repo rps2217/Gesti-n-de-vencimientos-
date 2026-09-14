@@ -973,7 +973,7 @@ export const StockCountTerminal: React.FC<StockCountTerminalProps> = ({
   const filteredReconciliation = useMemo(() => {
     let list = reconciliation;
     if (selectedProviderFilter !== 'ALL') {
-      list = list.filter(r => (r.rutProveedor || '').trim().toLowerCase() === selectedProviderFilter.trim().toLowerCase());
+      list = list.filter(r => String(r.rutProveedor || '').trim().toLowerCase() === String(selectedProviderFilter || '').trim().toLowerCase());
     }
     if (reconciliationFilter === 'ALL') return list;
     if (reconciliationFilter === 'DIF') return list.filter(r => r.estado !== 'CUADRADO');

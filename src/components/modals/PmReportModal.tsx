@@ -47,7 +47,7 @@ export const PmReportModal: React.FC<PmReportModalProps> = ({
       const keys = Object.keys(it);
       const provCol = findColumnBySemantic(keys, 'proveedor') || 'PROVEEDOR' || 'RUT';
       const val = it[provCol] || it['PROVEEDOR'] || it['RUT'] || it['LABORATORIO'];
-      return String(val || '').trim() === selectedProvider;
+      return String(val || '').trim() === String(selectedProvider || '').trim();
     });
   }, [drainageReportItems, selectedProvider]);
 

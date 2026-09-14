@@ -31,7 +31,7 @@ export const QuickTransferModal: React.FC<QuickTransferModalProps> = ({
 
   useEffect(() => {
     if (item) {
-      setTraspasoInput((item[traspasoCol] || '').trim());
+      setTraspasoInput(String(item[traspasoCol] || '').trim());
       setError(null);
     }
   }, [item, traspasoCol]);

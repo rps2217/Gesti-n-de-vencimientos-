@@ -74,7 +74,7 @@ export function evaluateShowIf(
   }
 
   // 3. If field already contains user data, never hide it
-  const val = (formData[header] || '').trim();
+  const val = String(formData[header] || '').trim();
   if (val !== '') {
     return { isVisible: true, isCoreField: false, reason: 'Contiene datos ingresados' };
   }

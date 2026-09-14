@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Package, Link as LinkIcon, Settings2, CheckCircle2, Moon, Sun, Contrast, Check } from 'lucide-react';
 import InventoryDashboard from './components/InventoryDashboard';
 import { ToastProvider } from './components/common/ToastContainer';
+import { PWAInstallButton } from './components/pwa/PWAInstallButton';
+import { PWAReloadPrompt } from './components/pwa/PWAReloadPrompt';
 
 export type ThemeMode = 'light' | 'dark-slate' | 'dark-gray';
 
@@ -158,6 +160,9 @@ export default function App() {
                   </div>
 
                   <div className="flex items-center gap-3">
+                    {/* Botón de Instalación PWA */}
+                    <PWAInstallButton variant="compact" />
+
                     {/* Theme Selector Dropdown */}
                     <div className="relative" ref={themeMenuRef}>
                       <button
@@ -253,6 +258,7 @@ export default function App() {
                 <main className="flex-1 flex flex-col overflow-hidden print:overflow-visible print:h-auto print:min-h-0 print:block">
                   <InventoryDashboard />
                 </main>
+                <PWAReloadPrompt />
               </>
             } />
             <Route path="/conteo" element={<Navigate to="/" replace />} />

@@ -10,6 +10,7 @@ import { VIRTUAL_COLUMNS } from '../../utils/virtualColumns';
 import { parseAnyDate } from '../../utils/dateCalculations';
 import { exportToExcel } from '../../utils/exportUtils';
 import { buildBulkActionContext, isActionEnabledForTable } from '../../utils/bulkActionsRegistry';
+import { PWAInstallButton } from '../pwa/PWAInstallButton';
 
 interface DashboardTopNavProps {
   isMobileMenuOpen: boolean;
@@ -286,6 +287,9 @@ export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
       {/* RIGHT: Primary Action, Utilities & Sync Indicator */}
       <div className="flex items-center gap-2 shrink-0">
         
+        {/* PWA Install Button */}
+        <PWAInstallButton variant="compact" />
+
         {/* Special Action: Bulk Import FRC */}
         {activeView === 'events' && setIsBulkImportOpen && (
           <button

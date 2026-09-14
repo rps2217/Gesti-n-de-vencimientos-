@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#1e1b4b" />
+      <stop offset="100%" stop-color="#064e3b" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#a855f7" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.5" />
+    </filter>
+  </defs>
+
+  <!-- Background Squircle / Rounded Rect -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+
+  <!-- Outer Neon Border / Glow -->
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="url(#accentGrad)" stroke-width="4" stroke-opacity="0.4" />
+
+  <!-- Shield / Cross Core Badge -->
+  <g filter="url(#shadow)">
+    <!-- Central Cross Structure (Medical / Pharmacy Theme) -->
+    <path d="M224 130 H288 V224 H382 V288 H288 V382 H224 V288 H130 V224 H224 Z" fill="url(#accentGrad)" rx="16" />
+    
+    <!-- Central Pulse Ring / Scanner Line -->
+    <circle cx="256" cy="256" r="140" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="16 12" stroke-opacity="0.5" />
+    
+    <!-- Barcode / Stock Lines at the bottom of the Cross -->
+    <g fill="#ffffff" opacity="0.9">
+      <!-- Barcode lines inside cross bottom or center -->
+      <rect x="180" y="240" width="8" height="32" rx="4" />
+      <rect x="196" y="240" width="14" height="32" rx="4" />
+      <rect x="218" y="240" width="6" height="32" rx="3" />
+      <rect x="232" y="240" width="12" height="32" rx="4" />
+      <rect x="252" y="240" width="8" height="32" rx="4" />
+      <rect x="268" y="240" width="16" height="32" rx="4" />
+      <rect x="292" y="240" width="6" height="32" rx="3" />
+      <rect x="306" y="240" width="12" height="32" rx="4" />
+      <rect x="326" y="240" width="6" height="32" rx="3" />
+    </g>
+
+    <!-- Glowing Target Laser Scanner Point -->
+    <circle cx="256" cy="256" r="8" fill="#f43f5e" />
+    <circle cx="256" cy="256" r="18" fill="none" stroke="#f43f5e" stroke-width="3" stroke-opacity="0.8" />
+  </g>
+
+  <!-- Small Pill Badge Icon top right -->
+  <g transform="translate(350, 110) rotate(45) scale(0.7)">
+    <rect x="-24" y="-48" width="48" height="48" rx="24" fill="#38bdf8" />
+    <rect x="-24" y="0" width="48" height="48" rx="24" fill="#fb7185" />
+    <line x1="-24" y1="0" x2="24" y2="0" stroke="#ffffff" stroke-width="4" />
+  </g>
+</svg>

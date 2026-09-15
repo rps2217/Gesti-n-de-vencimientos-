@@ -1,6 +1,7 @@
 import { VirtualColumn, UserVirtualColumn } from '../types';
 import { findColumnBySemantic } from './columnAliases';
-import { parseAnyDate, formatDisplayDate, calculateWithdrawalDate } from './dateCalculations';
+import { resolveItemPolicyAndRetiro } from './referenceResolver';
+import { parseAnyDate } from './dateCalculations';
 
 export const VIRTUAL_COLUMNS: VirtualColumn[] = [
   {
@@ -9,42 +10,28 @@ export const VIRTUAL_COLUMNS: VirtualColumn[] = [
     supportedViews: ['main'],
     calculate: (item, headers, allData) => {
       const { products, policies } = allData || {};
-      const vcCol = findColumnBySemantic(headers, 'fecha_vc');
-      const skuCol = findColumnBySemantic(headers, 'sku');
-
-      if (!vcCol || !item[vcCol]) return '-';
-
-      const dVc = parseAnyDate(item[vcCol]);
-      if (!dVc) return '-';
-
-      const sku = skuCol ? item[skuCol] : null;
-
-      const productEntry = products?.find((p: any) => {
-        const pSku = p['COD PRODUCTO'] || p['C'] || p['Código'] || p['Código Producto'];
-        return String(pSku).trim() === String(sku).trim();
-      });
-      const rutProveedor = productEntry ? (productEntry['RUT PROVEEDOR'] || productEntry['F'] || productEntry['RUT']) : null;
-
-      let diasRetiro = 30; 
-      
-      const diasRetiroCol = findColumnBySemantic(headers, 'dias_retiro');
-      if (diasRetiroCol && item[diasRetiroCol]) {
-        diasRetiro = parseInt(String(item[diasRetiroCol])) || 30;
-      } else if (rutProveedor) {
-        const policyEntry = policies?.find((p: any) => {
-          const pRut = p['RUT'] || p['A'];
-          return String(pRut).trim() === String(rutProveedor).trim();
-        });
-        
-        const retiroKey = Object.keys(policyEntry || {}).find(k => k.includes('RETIRO') || k === 'H');
-        if (policyEntry && retiroKey) {
-          diasRetiro = parseInt(policyEntry[retiroKey]) || 30;
-        }
-      }
-      
-      const dRet = calculateWithdrawalDate(dVc, diasRetiro);
-      
-      return formatDisplayDate(dRet);
+      const resolved = resolveItemPolicyAndRetiro(item, headers, products, policies);
+      return resolved.fechaRetiroDisplay;
+    }
+  },
+  {
+    id: 'politica_canje_calc',
+    label: 'Política Canje (Relac.)',
+    supportedViews: ['main'],
+    calculate: (item, headers, allData) => {
+      const { products, policies } = allData || {};
+      const resolved = resolveItemPolicyAndRetiro(item, headers, products, policies);
+      return resolved.policy || '-';
+    }
+  },
+  {
+    id: 'dias_retiro_calc',
+    label: 'Días Retiro (Relac.)',
+    supportedViews: ['main'],
+    calculate: (item, headers, allData) => {
+      const { products, policies } = allData || {};
+      const resolved = resolveItemPolicyAndRetiro(item, headers, products, policies);
+      return `${resolved.diasRetiro}d`;
     }
   },
   {
@@ -52,7 +39,9 @@ export const VIRTUAL_COLUMNS: VirtualColumn[] = [
     label: 'Proveedor (Catálogo)',
     supportedViews: ['main'],
     calculate: (item, headers, allData) => {
-      const { products } = allData || {};
+      const { products, policies } = allData || {};
+      const resolved = resolveItemPolicyAndRetiro(item, headers, products, policies);
+      if (resolved.providerName) return resolved.providerName;
       if (!products || products.length === 0) return '-';
 
       const skuCol = findColumnBySemantic(headers, 'sku');

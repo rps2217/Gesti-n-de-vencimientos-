@@ -183,6 +183,19 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
     };
   });
 
+  // Inject virtual FECHA_RETIRO_CALC in the form of the Vencimientos view if not physically present in headers
+  const hasRetiroCalc = headers.some(h => /fecha(_|\s)?retiro/i.test(h) || /retiro(_|\s)?calc/i.test(h));
+  if (activeView === 'main' && !hasRetiroCalc) {
+    evaluatedFields.push({
+      header: 'FECHA_RETIRO_CALC',
+      colSchema: { type: 'date', behavior: 'calc_retiro', label: 'Fecha Retiro Calc.' } as any,
+      isKey: false,
+      isVisible: true,
+      isCoreField: true,
+      reason: 'virtual_field'
+    });
+  }
+
   const visibleFields = evaluatedFields.filter(f => f.isVisible);
   const hiddenFieldsCount = evaluatedFields.length - visibleFields.length;
 

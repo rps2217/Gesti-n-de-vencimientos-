@@ -258,11 +258,28 @@ export function dereferenceMasterProduct(
   const masterKeys = Object.keys(masterProduct);
 
   const getMasterVal = (semantic: KnownFieldSemantic, fallbackRegex: RegExp) => {
-    const masterCol = findColumnBySemantic(masterKeys, semantic, customAliases);
+    let masterCol = findColumnBySemantic(masterKeys, semantic, customAliases);
+    
+    // Safety checks: do not match provider columns for policy, or date columns for days
+    if (semantic === 'politica' && masterCol && /proveedor|lab|fabricante|rut/i.test(masterCol)) {
+      masterCol = undefined;
+    }
+    if ((semantic === 'dias_retiro' || semantic === 'dias_anticipacion') && masterCol && /fecha|vencimiento|vto/i.test(masterCol)) {
+      masterCol = undefined;
+    }
+
     if (masterCol && masterProduct[masterCol] !== undefined && masterProduct[masterCol] !== '') {
       return masterProduct[masterCol];
     }
-    const fallbackCol = masterKeys.find(k => fallbackRegex.test(k));
+    
+    let fallbackCol = masterKeys.find(k => fallbackRegex.test(k));
+    if (semantic === 'politica' && fallbackCol && /proveedor|lab|fabricante|rut/i.test(fallbackCol)) {
+      fallbackCol = undefined;
+    }
+    if ((semantic === 'dias_retiro' || semantic === 'dias_anticipacion') && fallbackCol && /fecha|vencimiento|vto/i.test(fallbackCol)) {
+      fallbackCol = undefined;
+    }
+
     if (fallbackCol && masterProduct[fallbackCol] !== undefined && masterProduct[fallbackCol] !== '') {
       return masterProduct[fallbackCol];
     }
@@ -280,11 +297,12 @@ export function dereferenceMasterProduct(
     } else if (/proveedor|lab|fabricante|rut_prov/i.test(cleanHeader)) {
       val = getMasterVal('proveedor', /proveedor|lab|fabricante|rut_prov/i);
     } else if (/política|politica|regla/i.test(cleanHeader)) {
-      val = getMasterVal('politica', /canje(_|\s)?solo(_|\s)?por(_|\s)?vencimientos(_|\s)?dias/i) ||
+      val = getMasterVal('politica', /canje(_|\s)?solo(_|\s)?por(_|\s)?vencimiento(s)?(_|\s)?dia(s)?/i) ||
             getMasterVal('politica', /canje(_|\s)?solo/i) ||
             getMasterVal('politica', /pol[ií]tica|politica|regla/i);
     } else if (/dias(_|\s)?retiro|dias(_|\s)?ant|dias/i.test(cleanHeader)) {
-      val = getMasterVal('dias_retiro', /retiro(_|\s)?\((_|\s)?dias(_|\s)?\)/i) ||
+      val = getMasterVal('dias_retiro', /retiro(_|\s)?\((_|\s)?d[ií]as(_|\s)?\)/i) ||
+            getMasterVal('dias_retiro', /retiro(_|\s)?d[ií]as/i) ||
             getMasterVal('dias_retiro', /dias(_|\s)?(retiro|anticipacion|canje|limite)|dias_retiro_vc/i) ||
             getMasterVal('dias_anticipacion', /dias(_|\s)?anticipacion|anticipacion/i);
     } else if (/mundo|zona|division|segmento/i.test(cleanHeader)) {
@@ -385,9 +403,10 @@ export function autoCalculateItemFormData(
   // 2. Auto-fill POLITICA if empty
   if (policyCol && (!newForm[policyCol] || newForm[policyCol].trim() === '')) {
     if (masterProduct) {
-      const masterPolCol = Object.keys(masterProduct).find(k => /canje(_|\s)?solo(_|\s)?por(_|\s)?vencimientos(_|\s)?dias/i.test(k)) ||
+      const masterPolCol = Object.keys(masterProduct).find(k => /canje(_|\s)?solo(_|\s)?por(_|\s)?vencimiento/i.test(k)) ||
                            Object.keys(masterProduct).find(k => /canje(_|\s)?solo/i.test(k)) ||
-                           Object.keys(masterProduct).find(k => /pol[ií]tica|politica|canje|regla/i.test(k));
+                           Object.keys(masterProduct).find(k => /pol[ií]tica|politica/i.test(k) && !/proveedor|lab|fabricante|rut/i.test(k)) ||
+                           Object.keys(masterProduct).find(k => /regla|canje/i.test(k));
       if (masterPolCol && masterProduct[masterPolCol]) {
         newForm[policyCol] = String(masterProduct[masterPolCol]).trim();
       } else if (policies && policies.length > 0) {
@@ -413,7 +432,13 @@ export function autoCalculateItemFormData(
         });
 
         if (matchedPol) {
-          const polKeyCol = Object.keys(matchedPol).find(k => /política|politica|tipo|canje|familia|nombre/i.test(k)) || Object.keys(matchedPol)[0];
+          const polKeyCol = Object.keys(matchedPol).find(k => /canje(_|\s)?solo(_|\s)?por/i.test(k)) ||
+                            Object.keys(matchedPol).find(k => /canje(_|\s)?solo/i.test(k)) ||
+                            Object.keys(matchedPol).find(k => /pol[ií]tica|politica/i.test(k)) ||
+                            Object.keys(matchedPol).find(k => /regla|canje/i.test(k)) ||
+                            Object.keys(matchedPol).find(k => /tipo|familia/i.test(k) && !/proveedor|lab|fabricante|rut/i.test(k)) ||
+                            Object.keys(matchedPol).find(k => !/proveedor|lab|fabricante|rut|nombre/i.test(k)) ||
+                            Object.keys(matchedPol)[0];
           if (polKeyCol && matchedPol[polKeyCol]) {
             newForm[policyCol] = String(matchedPol[polKeyCol]).trim();
           }
@@ -440,8 +465,9 @@ export function autoCalculateItemFormData(
   }
 
   if (activeDays === null && masterProduct) {
-    const masterDaysCol = Object.keys(masterProduct).find(k => /retiro(_|\s)?\((_|\s)?dias(_|\s)?\)/i.test(k)) ||
-                          Object.keys(masterProduct).find(k => /dias(_|\s)?(retiro|anticipacion|canje|limite)|dias_retiro_vc/i.test(k));
+    const masterDaysCol = Object.keys(masterProduct).find(k => /retiro(_|\s)?\((_|\s)?d[ií]as(_|\s)?\)/i.test(k)) ||
+                          Object.keys(masterProduct).find(k => /retiro(_|\s)?d[ií]as/i.test(k)) ||
+                          Object.keys(masterProduct).find(k => /d[ií]as(_|\s)?(retiro|anticipacion|canje|limite)|dias_retiro_vc/i.test(k));
     if (masterDaysCol && masterProduct[masterDaysCol] && !isNaN(parseInt(masterProduct[masterDaysCol], 10))) {
       activeDays = parseInt(masterProduct[masterDaysCol], 10);
     }
@@ -470,7 +496,8 @@ export function autoCalculateItemFormData(
     });
 
     if (matchedPol) {
-      const polDaysCol = Object.keys(matchedPol).find(k => /dias|días|anticipacion|tiempo|lead|retiro/i.test(k));
+      const polDaysCol = Object.keys(matchedPol).find(k => /retiro(_|\s)?\((_|\s)?d[ií]as(_|\s)?\)/i.test(k)) ||
+                         Object.keys(matchedPol).find(k => /dias|días|anticipacion|tiempo|lead|retiro/i.test(k));
       if (polDaysCol && matchedPol[polDaysCol]) {
         const days = parseInt(matchedPol[polDaysCol], 10);
         if (!isNaN(days)) {
@@ -542,8 +569,8 @@ export function autoCalculateItemFormData(
     }
   }
 
-  // 6. FECHA_RETIRO Calculation = FECHA_VC - activeDays
-  if (fechaRetiroCol && fechaVcVal && activeDays !== null && !isNaN(activeDays)) {
+  // 6. FECHA_RETIRO Calculation = FECHA_VC - activeDays (Supports updating FECHA_RETIRO and FECHA_RETIRO_CALC)
+  if (fechaVcVal && activeDays !== null && !isNaN(activeDays)) {
     const expDate = parseAnyDate(fechaVcVal);
     if (expDate) {
       const d = new Date(expDate.getTime());
@@ -551,7 +578,18 @@ export function autoCalculateItemFormData(
       const rY = d.getFullYear();
       const rM = String(d.getMonth() + 1).padStart(2, '0');
       const rD = String(d.getDate()).padStart(2, '0');
-      newForm[fechaRetiroCol] = `${rY}-${rM}-${rD}`;
+      const formattedRetiroDate = `${rY}-${rM}-${rD}`;
+      
+      // Update ALL columns in headers representing retirement dates
+      headers.forEach(h => {
+        if (/fecha(_|\s)?retiro/i.test(h) || /retiro(_|\s)?calc/i.test(h) || /^fecha(_|\s)?canje/i.test(h)) {
+          newForm[h] = formattedRetiroDate;
+        }
+      });
+      if (fechaRetiroCol) {
+        newForm[fechaRetiroCol] = formattedRetiroDate;
+      }
+      newForm['FECHA_RETIRO_CALC'] = formattedRetiroDate;
     }
   }
 

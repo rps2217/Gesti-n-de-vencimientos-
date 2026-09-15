@@ -383,7 +383,7 @@ export function detectPolicyActionType(
 
 // Date reference cache (refreshed every minute or day for O(1) timestamp calculations)
 let cachedDateBucket = 0;
-let cachedEndOfMonthTime = 0;
+let cachedTodayTime = 0;
 let cachedRealTodayYear = 0;
 let cachedRealTodayMonth = 0;
 
@@ -396,12 +396,11 @@ function getCachedDateInfo() {
     cachedRealTodayYear = realToday.getFullYear();
     cachedRealTodayMonth = realToday.getMonth();
     
-    const endOfMonth = new Date(cachedRealTodayYear, cachedRealTodayMonth + 1, 0);
-    endOfMonth.setHours(0, 0, 0, 0);
-    cachedEndOfMonthTime = endOfMonth.getTime();
+    realToday.setHours(0, 0, 0, 0);
+    cachedTodayTime = realToday.getTime();
   }
   return {
-    todayTime: cachedEndOfMonthTime,
+    todayTime: cachedTodayTime,
     realTodayYear: cachedRealTodayYear,
     realTodayMonth: cachedRealTodayMonth
   };

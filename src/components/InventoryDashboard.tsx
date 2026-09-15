@@ -1942,12 +1942,44 @@ export const InventoryDashboard: React.FC = () => {
       });
     }
 
+    const skuCol = findColumnBySemantic(headers, 'sku', sheetConfig?.customAliases) || 
+                   headers.find(h => /sku|código|codigo/i.test(h));
+    
+    if (skuCol && name === skuCol) {
+      const descriptionCol = findColumnBySemantic(headers, 'descripcion', sheetConfig?.customAliases);
+      const providerCol = findColumnBySemantic(headers, 'proveedor', sheetConfig?.customAliases);
+      const policyCol = findColumnBySemantic(headers, 'politica', sheetConfig?.customAliases);
+      const diasRetiroCol = findColumnBySemantic(headers, 'dias_retiro', sheetConfig?.customAliases) || 
+                            findColumnBySemantic(headers, 'dias_anticipacion', sheetConfig?.customAliases);
+      
+      if (descriptionCol) newForm[descriptionCol] = '';
+      if (providerCol) newForm[providerCol] = '';
+      if (policyCol) newForm[policyCol] = '';
+      if (diasRetiroCol) newForm[diasRetiroCol] = '';
+    }
+
     newForm = autoCalculateItemFormData(newForm, headers, products, policies, sheetConfig);
     setFormData(newForm);
   };
 
   const handleBatchFormUpdate = (updates: Record<string, string>) => {
     let newForm = { ...formData, ...updates };
+
+    const skuCol = findColumnBySemantic(headers, 'sku', sheetConfig?.customAliases) || 
+                   headers.find(h => /sku|código|codigo/i.test(h));
+    
+    if (skuCol && updates[skuCol] !== undefined) {
+      const descriptionCol = findColumnBySemantic(headers, 'descripcion', sheetConfig?.customAliases);
+      const providerCol = findColumnBySemantic(headers, 'proveedor', sheetConfig?.customAliases);
+      const policyCol = findColumnBySemantic(headers, 'politica', sheetConfig?.customAliases);
+      const diasRetiroCol = findColumnBySemantic(headers, 'dias_retiro', sheetConfig?.customAliases) || 
+                            findColumnBySemantic(headers, 'dias_anticipacion', sheetConfig?.customAliases);
+      
+      if (descriptionCol && !updates[descriptionCol]) newForm[descriptionCol] = '';
+      if (providerCol && !updates[providerCol]) newForm[providerCol] = '';
+      if (policyCol && !updates[policyCol]) newForm[policyCol] = '';
+      if (diasRetiroCol && !updates[diasRetiroCol]) newForm[diasRetiroCol] = '';
+    }
 
     if (Object.keys(updates).some(k => formErrors[k])) {
       setFormErrors(prev => {

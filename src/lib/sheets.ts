@@ -450,6 +450,10 @@ export async function saveCampaignsToCloud(
   },
   configSheetName = '_CONFIG_APP'
 ): Promise<boolean> {
+  if (!getScriptUrl()) {
+    console.warn('[Sheets] saveCampaignsToCloud omitido: URL de script no configurada (Modo Demo)');
+    return false;
+  }
   try {
     const nowIso = new Date().toISOString();
     const jsonStr = JSON.stringify({
@@ -563,6 +567,10 @@ export async function loadCampaignsFromCloud(configSheetName = '_CONFIG_APP'): P
   sessions?: any[];
   lastUpdated?: string;
 } | null> {
+  if (!getScriptUrl()) {
+    console.warn('[Sheets] loadCampaignsFromCloud omitido: URL de script no configurada (Modo Demo)');
+    return null;
+  }
   // 1. Intentar cargar desde la hoja _CONFIG_APP con ensamblado de chunks (soporta fotos ERP de cualquier tamaño)
   try {
     const rows = await getSheetData(configSheetName, true);
@@ -643,6 +651,16 @@ export async function syncCampaignsWithCloud(
   newRemoteSessionsCount: number;
   success: boolean;
 }> {
+  if (!getScriptUrl()) {
+    console.warn('[Sheets] syncCampaignsWithCloud omitido: URL de script no configurada (Modo Demo)');
+    return {
+      mergedCampaigns: localPayload.campaigns,
+      mergedSessions: localPayload.sessions,
+      activeCampaignId: localPayload.activeCampaignId || null,
+      newRemoteSessionsCount: 0,
+      success: true
+    };
+  }
   try {
     const { mergeCampaignsAndSessions } = await import('../utils/stockCountUtils');
     

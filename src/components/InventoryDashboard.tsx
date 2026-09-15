@@ -1812,7 +1812,8 @@ export const InventoryDashboard: React.FC = () => {
 
     headers.forEach(header => {
       const colSchema = currentSchema[header];
-      const effectiveType = colSchema?.type || (/fecha|vencimiento|vence|retiro/i.test(header) ? 'date' : 'text');
+      const isDateName = /fecha|vencimiento|vence|retiro/i.test(header) && !/dias|días|cant|stock|unidades|num/i.test(header);
+      const effectiveType = colSchema?.type || (isDateName ? 'date' : 'text');
       const isAutoCalculated = colSchema?.behavior === 'auto_id' || 
                                colSchema?.behavior === 'calc_fecha_vc' || 
                                colSchema?.behavior === 'calc_retiro' || 
@@ -1828,7 +1829,7 @@ export const InventoryDashboard: React.FC = () => {
       // Base string schema
       let fieldSchema: z.ZodTypeAny = z.string().trim();
 
-      const isDateOrTimeCol = effectiveType === 'date' || effectiveType === 'datetime' || /fecha|vencimiento|vence|retiro|timestamp/i.test(header);
+      const isDateOrTimeCol = effectiveType === 'date' || effectiveType === 'datetime' || (/fecha|vencimiento|vence|retiro|timestamp/i.test(header) && !/dias|días|cant|stock|unidades|num/i.test(header));
 
       // Required logic:
       // En incidencias/FRC, las fechas (ej. FRC_VENCE), observaciones y folios son estrictamente opcionales.
@@ -1852,7 +1853,7 @@ export const InventoryDashboard: React.FC = () => {
           const num = parseLocaleNumber(val);
           return !isNaN(num);
         }, 'Debe ser un número válido.');
-      } else if (effectiveType === 'date' || /fecha|vencimiento|vence|retiro/i.test(header)) {
+      } else if (effectiveType === 'date' || (/fecha|vencimiento|vence|retiro/i.test(header) && !/dias|días|cant|stock|unidades|num/i.test(header))) {
         fieldSchema = fieldSchema.refine((val: any) => {
           if (!isRequired && (!val || String(val).trim() === '' || String(val).trim() === '-' || String(val).trim() === 'N/A')) return true;
           return parseAnyDate(val) !== null;

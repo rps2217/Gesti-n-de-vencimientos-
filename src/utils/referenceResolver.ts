@@ -384,6 +384,34 @@ export function autoCalculateItemFormData(
       const masterPolCol = Object.keys(masterProduct).find(k => /política|politica|canje|regla/i.test(k));
       if (masterPolCol && masterProduct[masterPolCol]) {
         newForm[policyCol] = String(masterProduct[masterPolCol]).trim();
+      } else if (policies && policies.length > 0) {
+        // Find provider RUT or provider name from masterProduct
+        const provRutCol = Object.keys(masterProduct).find(k => /rut.*prov|prov.*rut|rut/i.test(k));
+        const provRutVal = provRutCol ? String(masterProduct[provRutCol]).trim() : '';
+        
+        const provNameCol = Object.keys(masterProduct).find(k => /proveedor|lab|fabricante/i.test(k));
+        const provNameVal = provNameCol ? String(masterProduct[provNameCol]).trim() : '';
+
+        const matchedPol = policies.find(p => {
+          const pRutCol = Object.keys(p).find(k => /rut/i.test(k));
+          const pRutVal = pRutCol ? String(p[pRutCol]).trim() : '';
+          if (provRutVal && pRutVal && provRutVal.toLowerCase() === pRutVal.toLowerCase()) {
+            return true;
+          }
+          const pNameCol = Object.keys(p).find(k => /proveedor|lab|nombre/i.test(k));
+          const pNameVal = pNameCol ? String(p[pNameCol]).trim() : '';
+          if (provNameVal && pNameVal && provNameVal.toLowerCase() === pNameVal.toLowerCase()) {
+            return true;
+          }
+          return false;
+        });
+
+        if (matchedPol) {
+          const polKeyCol = Object.keys(matchedPol).find(k => /política|politica|tipo|canje|familia|nombre/i.test(k)) || Object.keys(matchedPol)[0];
+          if (polKeyCol && matchedPol[polKeyCol]) {
+            newForm[policyCol] = String(matchedPol[polKeyCol]).trim();
+          }
+        }
       }
     }
   }
@@ -409,6 +437,39 @@ export function autoCalculateItemFormData(
     const masterDaysCol = Object.keys(masterProduct).find(k => /dias(_|\s)?(retiro|anticipacion|canje|limite)/i.test(k));
     if (masterDaysCol && masterProduct[masterDaysCol] && !isNaN(parseInt(masterProduct[masterDaysCol], 10))) {
       activeDays = parseInt(masterProduct[masterDaysCol], 10);
+    }
+  }
+
+  if (activeDays === null && masterProduct && policies && policies.length > 0) {
+    // Look up by provider RUT or provider name in policies
+    const provRutCol = Object.keys(masterProduct).find(k => /rut.*prov|prov.*rut|rut/i.test(k));
+    const provRutVal = provRutCol ? String(masterProduct[provRutCol]).trim() : '';
+    
+    const provNameCol = Object.keys(masterProduct).find(k => /proveedor|lab|fabricante/i.test(k));
+    const provNameVal = provNameCol ? String(masterProduct[provNameCol]).trim() : '';
+
+    const matchedPol = policies.find(p => {
+      const pRutCol = Object.keys(p).find(k => /rut/i.test(k));
+      const pRutVal = pRutCol ? String(p[pRutCol]).trim() : '';
+      if (provRutVal && pRutVal && provRutVal.toLowerCase() === pRutVal.toLowerCase()) {
+        return true;
+      }
+      const pNameCol = Object.keys(p).find(k => /proveedor|lab|nombre/i.test(k));
+      const pNameVal = pNameCol ? String(p[pNameCol]).trim() : '';
+      if (provNameVal && pNameVal && provNameVal.toLowerCase() === pNameVal.toLowerCase()) {
+        return true;
+      }
+      return false;
+    });
+
+    if (matchedPol) {
+      const polDaysCol = Object.keys(matchedPol).find(k => /dias|días|anticipacion|tiempo|lead|retiro/i.test(k));
+      if (polDaysCol && matchedPol[polDaysCol]) {
+        const days = parseInt(matchedPol[polDaysCol], 10);
+        if (!isNaN(days)) {
+          activeDays = days;
+        }
+      }
     }
   }
 
@@ -438,7 +499,9 @@ export function autoCalculateItemFormData(
   }
 
   if (diasRetiroCol && activeDays !== null && !isNaN(activeDays)) {
-    if (!newForm[diasRetiroCol] || newForm[diasRetiroCol].trim() === '') {
+    // If empty or if it was invalid (due to previous date string classification bug), override it
+    const currentVal = String(newForm[diasRetiroCol] || '').trim();
+    if (currentVal === '' || isNaN(parseInt(currentVal, 10)) || currentVal.includes('-')) {
       newForm[diasRetiroCol] = String(activeDays);
     }
   }

@@ -491,7 +491,10 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 const isSku = /sku|código|codigo/i.test(header);
                 const isObs = /observ|nota|motivo|detalle|coment|causa/i.test(header);
                 const isCant = /^cant|unidades|stock/i.test(header);
-                const isDateCol = colSchema?.type === 'date' || (/fecha|vencimiento|vence|retiro/i.test(header) && !/time/i.test(header));
+                const isDateCol = colSchema?.type === 'date' || 
+                                  (/fecha|vencimiento|vence|retiro/i.test(header) && 
+                                   !/time/i.test(header) && 
+                                   !/dias|días|cant|stock|unidades|num/i.test(header));
                 const isDateTimeCol = colSchema?.type === 'datetime' || /timestamp|created_at/i.test(header);
                 const isTraspasoCol = /traspaso/i.test(header);
                 const traspasoVal = String(formData[header] || '').trim();

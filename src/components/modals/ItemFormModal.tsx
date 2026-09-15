@@ -486,12 +486,13 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                                    /^CU_VC$/i.test(String(header).trim()) ||
                                    /^CU$/i.test(String(header).trim()) ||
                                    /^CODIGO_UNICO$/i.test(String(header).trim()) ||
+                                    /FECHA_RETIRO_CALC/i.test(String(header).trim()) ||
                                    findColumnBySemantic(headers, 'id', sheetConfig?.customAliases) === header;
                 
                 const isSku = /sku|código|codigo/i.test(header);
                 const isObs = /observ|nota|motivo|detalle|coment|causa/i.test(header);
                 const isCant = /^cant|unidades|stock/i.test(header);
-                const isDateCol = colSchema?.type === 'date' || 
+                const isDateCol = (colSchema?.type === 'date' && !/dias|días|cant|stock|unidades|num/i.test(header)) || 
                                   (/fecha|vencimiento|vence|retiro/i.test(header) && 
                                    !/time/i.test(header) && 
                                    !/dias|días|cant|stock|unidades|num/i.test(header));

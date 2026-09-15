@@ -280,9 +280,12 @@ export function dereferenceMasterProduct(
     } else if (/proveedor|lab|fabricante|rut_prov/i.test(cleanHeader)) {
       val = getMasterVal('proveedor', /proveedor|lab|fabricante|rut_prov/i);
     } else if (/política|politica|regla/i.test(cleanHeader)) {
-      val = getMasterVal('politica', /política|politica|regla/i);
+      val = getMasterVal('politica', /canje(_|\s)?solo(_|\s)?por(_|\s)?vencimientos(_|\s)?dias/i) ||
+            getMasterVal('politica', /canje(_|\s)?solo/i) ||
+            getMasterVal('politica', /pol[ií]tica|politica|regla/i);
     } else if (/dias(_|\s)?retiro|dias(_|\s)?ant|dias/i.test(cleanHeader)) {
-      val = getMasterVal('dias_retiro', /dias(_|\s)?retiro|dias(_|\s)?ant|dias|lead_time/i) ||
+      val = getMasterVal('dias_retiro', /retiro(_|\s)?\((_|\s)?dias(_|\s)?\)/i) ||
+            getMasterVal('dias_retiro', /dias(_|\s)?(retiro|anticipacion|canje|limite)|dias_retiro_vc/i) ||
             getMasterVal('dias_anticipacion', /dias(_|\s)?anticipacion|anticipacion/i);
     } else if (/mundo|zona|division|segmento/i.test(cleanHeader)) {
       val = getMasterVal('mundo', /mundo|zona|division|segmento|area/i);
@@ -370,7 +373,8 @@ export function autoCalculateItemFormData(
       const dereferenced = dereferenceMasterProduct(masterProduct, headers, customAliases);
       for (const [k, v] of Object.entries(dereferenced)) {
         if (v !== undefined && v !== null && String(v).trim() !== '') {
-          if (!newForm[k] || newForm[k].trim() === '') {
+          const isPolicyOrDays = /pol[ií]tica|politica|canje|dias(_|\s)?(retiro|anticipacion|canje|limite)|dias_retiro_vc/i.test(k);
+          if (isPolicyOrDays || !newForm[k] || newForm[k].trim() === '') {
             newForm[k] = String(v);
           }
         }
@@ -381,7 +385,9 @@ export function autoCalculateItemFormData(
   // 2. Auto-fill POLITICA if empty
   if (policyCol && (!newForm[policyCol] || newForm[policyCol].trim() === '')) {
     if (masterProduct) {
-      const masterPolCol = Object.keys(masterProduct).find(k => /política|politica|canje|regla/i.test(k));
+      const masterPolCol = Object.keys(masterProduct).find(k => /canje(_|\s)?solo(_|\s)?por(_|\s)?vencimientos(_|\s)?dias/i.test(k)) ||
+                           Object.keys(masterProduct).find(k => /canje(_|\s)?solo/i.test(k)) ||
+                           Object.keys(masterProduct).find(k => /pol[ií]tica|politica|canje|regla/i.test(k));
       if (masterPolCol && masterProduct[masterPolCol]) {
         newForm[policyCol] = String(masterProduct[masterPolCol]).trim();
       } else if (policies && policies.length > 0) {
@@ -434,7 +440,8 @@ export function autoCalculateItemFormData(
   }
 
   if (activeDays === null && masterProduct) {
-    const masterDaysCol = Object.keys(masterProduct).find(k => /dias(_|\s)?(retiro|anticipacion|canje|limite)/i.test(k));
+    const masterDaysCol = Object.keys(masterProduct).find(k => /retiro(_|\s)?\((_|\s)?dias(_|\s)?\)/i.test(k)) ||
+                          Object.keys(masterProduct).find(k => /dias(_|\s)?(retiro|anticipacion|canje|limite)|dias_retiro_vc/i.test(k));
     if (masterDaysCol && masterProduct[masterDaysCol] && !isNaN(parseInt(masterProduct[masterDaysCol], 10))) {
       activeDays = parseInt(masterProduct[masterDaysCol], 10);
     }

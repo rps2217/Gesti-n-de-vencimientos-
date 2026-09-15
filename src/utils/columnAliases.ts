@@ -159,6 +159,7 @@ export const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
     /^exp(_|\s)?date$/i
   ],
   fecha_retiro: [
+    /^fecha(_|\s)?retiro(_|\s)?(calc|calculada)?$/i,
     /^fecha(_|\s)?(retiro|canje|limite|l[ií]mite)$/i,
     /^retiro$/i,
     /^canje$/i,
@@ -211,6 +212,8 @@ export const FIELD_PATTERNS: Record<KnownFieldSemantic, RegExp[]> = {
     /^lot(_|\s)?(number|no|num)?$/i
   ],
   politica: [
+    /^canje(_|\s)?solo(_|\s)?por(_|\s)?vencimientos(_|\s)?dias$/i,
+    /^canje(_|\s)?solo$/i,
     /^pol[ií]tica$/i,
     /^pol[ií]tica(_|\s)?(de)?(_|\s)?(canje|retiro|devolucion|devoluci[oó]n)?$/i,
     /^tipo(_|\s)?(de)?(_|\s)?(pol[ií]tica|canje)$/i,

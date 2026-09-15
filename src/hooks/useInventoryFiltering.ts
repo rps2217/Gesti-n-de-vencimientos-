@@ -602,7 +602,9 @@ export function useInventoryFiltering(props: UseInventoryFilteringProps) {
   // Paginated display rows
   const paginatedDisplayRows = useMemo<DisplayRow[]>(() => {
     if (pageSize === 'all' || groupByColumn !== 'none') return displayRows;
-    const start = (currentPage - 1) * (pageSize as number);
+    const maxPage = Math.max(1, Math.ceil(displayRows.length / (pageSize as number)));
+    const safePage = Math.min(Math.max(1, currentPage), maxPage);
+    const start = (safePage - 1) * (pageSize as number);
     return displayRows.slice(start, start + (pageSize as number));
   }, [displayRows, currentPage, pageSize, groupByColumn]);
 

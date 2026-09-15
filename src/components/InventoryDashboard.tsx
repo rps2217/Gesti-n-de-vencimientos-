@@ -942,6 +942,7 @@ export const InventoryDashboard: React.FC = () => {
   }, [augmentedItems, currentTableSlices, headers, frcBodCol]);
 
   const handleSelectSlice = useCallback((slice: TableSlice | null) => {
+    setCurrentPage(1);
     if (!slice) {
       setActiveSliceId(null);
       clearAllFilters();
@@ -984,6 +985,11 @@ export const InventoryDashboard: React.FC = () => {
       showAllColumns();
     }
   }, [clearAllFilters, showAllColumns, setVisibleColumns, setSortConfig, handleSetGroupByColumn, handleSetGroupByDirection, setEventFilter, setPmRadarFilter, setEventResolutionFilter, setFrcBodFilter, setColumnFilters, setDynamicMonthFilter, setDynamicMonthRange]);
+
+  // Auto-reset page when search terms or filter constraints change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, activeQuickChip, activeView]);
 
   const handleSaveSlice = useCallback((slice: TableSlice) => {
     setCustomSlices(prev => {

@@ -61,16 +61,17 @@ export function evaluateShowIf(
   selectedCategory: EventCategory,
   formData: Record<string, string>,
   isKey?: boolean,
-  showAllFields?: boolean
+  showAllFields?: boolean,
+  isRequired?: boolean
 ): ShowIfEvaluation {
   // 1. If explicit "show all" is active
   if (showAllFields) {
     return { isVisible: true, isCoreField: true, reason: 'Modo expandido' };
   }
 
-  // 2. Primary keys are never hidden
-  if (isKey) {
-    return { isVisible: true, isCoreField: true, reason: 'Identificador Clave' };
+  // 2. Primary keys and required fields are never hidden
+  if (isKey || isRequired) {
+    return { isVisible: true, isCoreField: true, reason: isKey ? 'Identificador Clave' : 'Campo Requerido' };
   }
 
   // 3. If field already contains user data, never hide it

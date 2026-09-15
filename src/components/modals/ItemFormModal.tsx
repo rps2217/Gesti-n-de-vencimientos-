@@ -174,11 +174,13 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   const evaluatedFields = headers.map(header => {
     const colSchema = activeSheet?.title ? sheetConfig.schema?.[activeSheet.title]?.[header] : undefined;
     const isKey = colSchema?.isKey;
-    const evaluation = evaluateShowIf(header, selectedEventCategory, formData, isKey, showAllFields);
+    const isRequired = colSchema?.required;
+    const evaluation = evaluateShowIf(header, selectedEventCategory, formData, isKey, showAllFields, isRequired);
     return {
       header,
       colSchema,
       isKey,
+      isRequired,
       ...evaluation
     };
   });
@@ -190,6 +192,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
       header: 'FECHA_RETIRO_CALC',
       colSchema: { type: 'date', behavior: 'calc_retiro', label: 'Fecha Retiro Calc.' } as any,
       isKey: false,
+      isRequired: false,
       isVisible: true,
       isCoreField: true,
       reason: 'virtual_field'

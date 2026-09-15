@@ -286,18 +286,25 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
                   ? mutation.headers 
                   : (currentRows[0] || []).map(String);
 
-                // If no direct entityKey was stored, try to extract it from the values array
+                // If no direct entityKey was stored, try to extract it from the values array or object
                 let searchKey = entityKey;
-                if (!searchKey && mutation.values && Array.isArray(mutation.values)) {
-                  // Check if any column is SKU or CU_VC
-                  const skuCol = findColumnBySemantic(effectiveHeaders, 'sku');
-                  const cuCol = effectiveHeaders.find(h => /^cu(_|\s)?(vc|calculado)?$/i.test(h.trim()));
-                  if (cuCol) {
-                    const cIdx = effectiveHeaders.indexOf(cuCol);
-                    if (cIdx >= 0 && mutation.values[cIdx]) searchKey = String(mutation.values[cIdx]).trim();
-                  } else if (skuCol) {
-                    const sIdx = effectiveHeaders.indexOf(skuCol);
-                    if (sIdx >= 0 && mutation.values[sIdx]) searchKey = String(mutation.values[sIdx]).trim();
+                if (!searchKey && mutation.values) {
+                  if (Array.isArray(mutation.values)) {
+                    // Check if any column is SKU or CU_VC
+                    const skuCol = findColumnBySemantic(effectiveHeaders, 'sku');
+                    const cuCol = effectiveHeaders.find(h => /^cu(_|\s)?(vc|calculado)?$/i.test(h.trim()));
+                    if (cuCol) {
+                      const cIdx = effectiveHeaders.indexOf(cuCol);
+                      if (cIdx >= 0 && mutation.values[cIdx]) searchKey = String(mutation.values[cIdx]).trim();
+                    } else if (skuCol) {
+                      const sIdx = effectiveHeaders.indexOf(skuCol);
+                      if (sIdx >= 0 && mutation.values[sIdx]) searchKey = String(mutation.values[sIdx]).trim();
+                    }
+                  } else if (typeof mutation.values === 'object') {
+                    const cuVal = mutation.values.CU_VC || mutation.values.cu_vc || mutation.values.CU;
+                    const skuVal = mutation.values.SKU || mutation.values.sku || mutation.values.id;
+                    if (cuVal) searchKey = String(cuVal).trim();
+                    else if (skuVal) searchKey = String(skuVal).trim();
                   }
                 }
 

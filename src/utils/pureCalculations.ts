@@ -210,22 +210,35 @@ export function parseLocaleNumber(val: any, fallback = 0): number {
   let str = String(val).trim();
   if (!str) return fallback;
 
-  // Remove currency signs, prefixes (like S/., CLP, USD, etc.) and outer whitespace
-  str = str.replace(/^(S\/\.|\$|€|£|CLP|USD)\s*/i, '').trim();
+  // Detect negative format (e.g., -100, -$100, (100))
+  let isNegative = false;
+  if (str.startsWith('-') || (str.startsWith('(') && str.endsWith(')'))) {
+    isNegative = true;
+    str = str.replace(/^[\(-]+|[\)]+$/g, '').trim();
+  }
+
+  // Strip out currencies, prefixes, and common unit suffixes
+  str = str.replace(/(S\/\.|\$|€|£|CLP|USD|UF|PEN|R\$|\bUN\b|\bUD\b|\bKG\b|%)/gi, '').trim();
+  if (!str) return fallback;
+
+  // Remove interior spaces (e.g., 1 250,50 -> 1250,50)
+  str = str.replace(/\s+/g, '');
 
   // Handle European/Latin style with thousands periods and comma decimal: 1.250,50 -> 1250.50
-  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(str)) {
+  if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(str)) {
     str = str.replace(/\./g, '').replace(',', '.');
-  } else if (/^\d+(,\d+)$/.test(str)) {
+  } else if (/^-?\d+(,\d+)$/.test(str)) {
     // Single comma decimal: 1250,50 -> 1250.50
     str = str.replace(',', '.');
-  } else if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(str)) {
+  } else if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(str)) {
     // US style with thousands commas and dot decimal: 1,250.50 -> 1250.50
     str = str.replace(/,/g, '');
   }
 
-  const num = parseFloat(str);
-  return isNaN(num) ? fallback : num;
+  let num = parseFloat(str);
+  if (isNaN(num)) return fallback;
+  if (isNegative && num > 0) num = -num;
+  return num;
 }
 
 /**

@@ -10,7 +10,7 @@ import {
   CountManifest
 } from '../types';
 import { findColumnBySemantic } from './columnAliases';
-import { parseLocaleNumber } from './pureCalculations';
+import { parseLocaleNumber, getEndOfMonthDateForYm, formatDisplayDate } from './pureCalculations';
 import { findMasterProduct, getMasterProductSummary } from './referenceResolver';
 import { exportToExcel } from './exportUtils';
 
@@ -49,16 +49,10 @@ export function calculateLastDayOfMonthDateString(
   const y = parseInt(String(yyyy), 10);
   const m = parseInt(String(mm), 10);
 
-  if (isNaN(y) || isNaN(m) || m < 1 || m > 12 || y < 1900 || y > 2100) {
-    return '';
-  }
+  const dateObj = getEndOfMonthDateForYm(y, m);
+  if (!dateObj) return '';
 
-  // Day 0 of next month is the last day of month m
-  const lastDayObj = new Date(y, m, 0);
-  const lastDay = String(lastDayObj.getDate()).padStart(2, '0');
-  const monthStr = String(m).padStart(2, '0');
-
-  return `${lastDay}/${monthStr}/${y}`;
+  return formatDisplayDate(dateObj);
 }
 
 /**

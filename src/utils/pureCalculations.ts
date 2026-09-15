@@ -281,6 +281,13 @@ export function getEventCategory(item: InventoryItem, headers: string[], colCont
   return 'VENCIMIENTO';
 }
 
+export function getEndOfMonthDateForYm(y: number, m: number): Date | null {
+  if (isNaN(y) || isNaN(m) || m < 1 || m > 12 || y < 1900 || y > 2100) {
+    return null;
+  }
+  return new Date(y, m, 0);
+}
+
 export function getEndOfMonthDate(): Date {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -296,9 +303,8 @@ export function getExpiryDateFromYm(item: InventoryItem, headers: string[], colC
   if (year !== undefined && year !== null && month !== undefined && month !== null) {
     const y = parseInt(String(year));
     const m = parseInt(String(month));
-    if (!isNaN(y) && !isNaN(m) && m >= 1 && m <= 12 && y >= 1900 && y <= 2100) {
-      return new Date(y, m, 0); // Last day of month
-    }
+    const d = getEndOfMonthDateForYm(y, m);
+    if (d) return d;
   }
 
   // Check if item has CU_VC (e.g., 2000210218569202712 -> ends with YYYYMM: 2027 + 12)
@@ -309,9 +315,8 @@ export function getExpiryDateFromYm(item: InventoryItem, headers: string[], colC
     if (match) {
       const y = parseInt(match[1]);
       const m = parseInt(match[2]);
-      if (y >= 1900 && y <= 2100 && m >= 1 && m <= 12) {
-        return new Date(y, m, 0);
-      }
+      const d = getEndOfMonthDateForYm(y, m);
+      if (d) return d;
     }
   }
   

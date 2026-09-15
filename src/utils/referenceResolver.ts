@@ -1,5 +1,5 @@
 import { findColumnBySemantic, KnownFieldSemantic } from './columnAliases';
-import { parseAnyDate } from './dateCalculations';
+import { parseAnyDate, calculateWithdrawalDate } from './dateCalculations';
 import { extractCuVcFromRow } from './cuVcConsolidator';
 import { SheetConfig } from '../types';
 
@@ -569,12 +569,11 @@ export function autoCalculateItemFormData(
     }
   }
 
-  // 6. FECHA_RETIRO Calculation = FECHA_VC - activeDays (Supports updating FECHA_RETIRO and FECHA_RETIRO_CALC)
+  // 6. FECHA_RETIRO Calculation = FECHA_VC - activeDays (Supports updating FECHA_RETIRO and FECHA_RETIRO_CALC using calculateWithdrawalDate for full consistency)
   if (fechaVcVal && activeDays !== null && !isNaN(activeDays)) {
     const expDate = parseAnyDate(fechaVcVal);
     if (expDate) {
-      const d = new Date(expDate.getTime());
-      d.setDate(d.getDate() - activeDays);
+      const d = calculateWithdrawalDate(expDate, activeDays);
       const rY = d.getFullYear();
       const rM = String(d.getMonth() + 1).padStart(2, '0');
       const rD = String(d.getDate()).padStart(2, '0');

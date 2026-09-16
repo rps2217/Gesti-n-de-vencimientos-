@@ -235,7 +235,10 @@ export const InventoryDashboard: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [isSyncAuditOpen, setIsSyncAuditOpen] = useState<boolean>(false);
 
-  // Local-First IndexedDB Offline Sync Hook
+  // Local-First IndexedDB Offline Sync Hook with Transition Refs
+  const prevIsOfflineRef = useRef<boolean>(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+  const activeSyncToastIdRef = useRef<string | null>(null);
+
   const {
     offlineQueue,
     auditLog,
@@ -262,9 +265,62 @@ export const InventoryDashboard: React.FC = () => {
     failedCount,
     clearQueue,
     clearAuditLog
-  } = useOfflineSync(async () => {
+  } = useOfflineSync(async (syncedCount?: number) => {
     await fetchData(sheetConfig, activeView, true);
+
+    // Auto-sync visual feedback toast resolution upon recovering connection
+    if (activeSyncToastIdRef.current) {
+      const count = syncedCount || offlineQueue.length || 1;
+      updateToast(
+        activeSyncToastIdRef.current,
+        `¡Sincronización automática completada! Se subieron ${count} cambios pendientes y tus datos ya están reflejados en Google Sheets.`,
+        'success',
+        'Datos Sincronizados',
+        4000
+      );
+      activeSyncToastIdRef.current = null;
+    } else if (syncedCount && syncedCount > 0) {
+      // Background sync succeeded without a preceding offline transition (e.g. periodic sync)
+      showToast(
+        `Se subieron automáticamente ${syncedCount} cambios pendientes en segundo plano.`,
+        'success',
+        'Sincronización en Segundo Plano'
+      );
+    }
   });
+
+  // Track transitions of connection status to show high-quality informative toasts
+  useEffect(() => {
+    if (prevIsOfflineRef.current !== isOffline) {
+      if (isOffline) {
+        // Online -> Offline transition
+        showToast(
+          'Sin conexión a Internet. Cambiando de forma segura a modo local. Puedes continuar registrando datos sin problemas.',
+          'warning',
+          'Modo Local Activo'
+        );
+      } else {
+        // Offline -> Online transition
+        if (offlineQueue.length > 0) {
+          // Sync is automatically triggered by handleOnline in useOfflineSync.ts
+          const toastId = showToast(
+            `¡Conexión recuperada! Sincronizando de forma automática ${offlineQueue.length} cambios guardados localmente...`,
+            'loading',
+            'Sincronizando Cambios',
+            0 // Persistent toast until resolved
+          );
+          activeSyncToastIdRef.current = toastId;
+        } else {
+          showToast(
+            '¡Conexión restablecida con éxito! La aplicación se encuentra en línea y conectada.',
+            'success',
+            'Conexión Recuperada'
+          );
+        }
+      }
+      prevIsOfflineRef.current = isOffline;
+    }
+  }, [isOffline, offlineQueue.length, showToast, updateToast]);
 
   // Background Stale-While-Revalidate Sync Indicator
   const [isBackgroundSyncing, setIsBackgroundSyncing] = useState<boolean>(false);

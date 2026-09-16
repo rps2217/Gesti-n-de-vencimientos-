@@ -45,7 +45,7 @@ function getMutationDescription(mutation: {
   return `Operación en ${mutation.sheetTitle}`;
 }
 
-export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
+export function useOfflineSync(onSyncSuccess?: (successCount?: number) => Promise<void>) {
   const [offlineQueue, setOfflineQueue] = useState<OfflineMutation[]>([]);
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
   const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
@@ -420,7 +420,7 @@ export function useOfflineSync(onSyncSuccess?: () => Promise<void>) {
       setConnectionStatus(!navigator.onLine ? 'offline' : (errors.length === 0 ? 'connected' : 'error'));
 
       if (successCount > 0 && onSyncSuccessRef.current) {
-        await onSyncSuccessRef.current();
+        await onSyncSuccessRef.current(successCount);
       }
 
       return {

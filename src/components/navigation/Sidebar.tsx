@@ -2,6 +2,7 @@ import React from 'react';
 import { 
   Database, FileSpreadsheet, Package, FileText, TableProperties, List, Settings, PanelLeftClose, PanelLeftOpen, PieChart, Barcode
 } from 'lucide-react';
+import { useDashboard } from '../../context/DashboardContext';
 
 interface SidebarItemProps {
   key?: string;
@@ -40,27 +41,28 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ icon, label, active, onClick,
   );
 }
 
-interface SidebarProps {
-  isSidebarCollapsed: boolean;
-  setIsSidebarCollapsed: (collapsed: boolean) => void;
-  activeView: string;
-  setActiveView: (view: string) => void;
-  setSelectedProduct: (prod: any) => void;
-  otherSheets: string[];
-  onOpenConfig: () => void;
+export interface SidebarProps {
+  isSidebarCollapsed?: boolean;
+  setIsSidebarCollapsed?: (collapsed: boolean) => void;
+  activeView?: string;
+  setActiveView?: (view: string) => void;
+  setSelectedProduct?: (prod: any) => void;
+  otherSheets?: string[];
+  onOpenConfig?: () => void;
   onOpenStockCount?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
-  isSidebarCollapsed,
-  setIsSidebarCollapsed,
-  activeView,
-  setActiveView,
-  setSelectedProduct,
-  otherSheets,
-  onOpenConfig,
-  onOpenStockCount
-}) => {
+export const Sidebar: React.FC<SidebarProps> = (props) => {
+  const dashboard = useDashboard();
+
+  const isSidebarCollapsed = props.isSidebarCollapsed ?? dashboard.isSidebarCollapsed ?? false;
+  const setIsSidebarCollapsed = props.setIsSidebarCollapsed ?? dashboard.setIsSidebarCollapsed ?? (() => {});
+  const activeView = props.activeView ?? dashboard.activeView;
+  const setActiveView = props.setActiveView ?? dashboard.setActiveView;
+  const setSelectedProduct = props.setSelectedProduct ?? dashboard.setSelectedProduct;
+  const otherSheets = props.otherSheets ?? dashboard.otherSheets ?? [];
+  const onOpenConfig = props.onOpenConfig ?? (() => dashboard.setIsConfigOpen(true));
+  const onOpenStockCount = props.onOpenStockCount ?? (() => dashboard.setIsStockCountOpen?.(true));
   return (
     <div className={`${isSidebarCollapsed ? 'w-20' : 'w-64'} bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0 z-20 transition-all duration-300`}>
       <div className={`p-4 border-b border-slate-100 dark:border-slate-800 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>

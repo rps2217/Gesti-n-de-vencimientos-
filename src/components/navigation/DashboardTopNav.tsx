@@ -11,41 +11,42 @@ import { parseAnyDate } from '../../utils/dateCalculations';
 import { exportToExcel } from '../../utils/exportUtils';
 import { buildBulkActionContext, isActionEnabledForTable } from '../../utils/bulkActionsRegistry';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
+import { useDashboard } from '../../context/DashboardContext';
 
-interface DashboardTopNavProps {
-  isMobileMenuOpen: boolean;
-  setIsMobileMenuOpen: (open: boolean) => void;
-  activeView: string;
+export interface DashboardTopNavProps {
+  isMobileMenuOpen?: boolean;
+  setIsMobileMenuOpen?: (open: boolean) => void;
+  activeView?: string;
   activeSheetTitle?: string;
-  searchableHeaders: string[];
-  searchTerm: string;
-  setSearchTerm: (term: string) => void;
-  hasActiveFilters: boolean;
-  clearAllFilters: () => void;
-  setIsScannerOpen: (open: boolean) => void;
+  searchableHeaders?: string[];
+  searchTerm?: string;
+  setSearchTerm?: (term: string) => void;
+  hasActiveFilters?: boolean;
+  clearAllFilters?: () => void;
+  setIsScannerOpen?: (open: boolean) => void;
   setIsMobilePistoleoOpen?: (open: boolean) => void;
-  isActionsMenuOpen: boolean;
-  setIsActionsMenuOpen: (open: boolean) => void;
-  setIsGmailModalOpen: (open: boolean) => void;
+  isActionsMenuOpen?: boolean;
+  setIsActionsMenuOpen?: (open: boolean) => void;
+  setIsGmailModalOpen?: (open: boolean) => void;
   setIsWhatsAppModalOpen?: (open: boolean) => void;
-  setIsPmReportOpen: (open: boolean) => void;
+  setIsPmReportOpen?: (open: boolean) => void;
   onOpenBulkActionsConfig?: () => void;
   onOpenTicketConfig?: () => void;
-  drainageReportItems: InventoryItem[];
-  headers: string[];
+  drainageReportItems?: InventoryItem[];
+  headers?: string[];
   visibleHeaders?: string[];
-  filteredItems: InventoryItem[];
-  sheetConfig: SheetConfig;
-  products: any[];
-  policies: any[];
-  handlePrintTicket: (items: InventoryItem[], mode?: 'standard' | 'barcode') => void;
-  isOffline: boolean;
+  filteredItems?: InventoryItem[];
+  sheetConfig?: SheetConfig;
+  products?: any[];
+  policies?: any[];
+  handlePrintTicket?: (items: InventoryItem[], mode?: 'standard' | 'barcode') => void;
+  isOffline?: boolean;
   lastCachedAt?: number | string | null;
   isSyncing?: boolean;
-  offlineQueue: any[];
-  handleSyncOfflineQueue: () => void;
-  fetchData: (config: SheetConfig, view: string, force?: boolean) => void;
-  loading: boolean;
+  offlineQueue?: any[];
+  handleSyncOfflineQueue?: () => void;
+  fetchData?: (config: SheetConfig, view: string, force?: boolean) => void;
+  loading?: boolean;
   latencyMs?: number | null;
   connectionStatus?: string;
   onOpenSyncAudit?: () => void;
@@ -60,51 +61,53 @@ interface DashboardTopNavProps {
   onOpenViewConfig?: () => void;
 }
 
-export const DashboardTopNav: React.FC<DashboardTopNavProps> = ({
-  setIsMobileMenuOpen,
-  activeView,
-  activeSheetTitle,
-  searchableHeaders,
-  searchTerm,
-  setSearchTerm,
-  hasActiveFilters,
-  clearAllFilters,
-  setIsScannerOpen,
-  setIsMobilePistoleoOpen,
-  isActionsMenuOpen,
-  setIsActionsMenuOpen,
-  setIsGmailModalOpen,
-  setIsWhatsAppModalOpen,
-  setIsPmReportOpen,
-  onOpenBulkActionsConfig,
-  onOpenTicketConfig,
-  drainageReportItems,
-  headers,
-  visibleHeaders,
-  filteredItems,
-  sheetConfig,
-  products,
-  policies,
-  handlePrintTicket,
-  isOffline,
-  lastCachedAt,
-  isSyncing,
-  offlineQueue,
-  handleSyncOfflineQueue,
-  fetchData,
-  loading,
-  latencyMs,
-  connectionStatus = 'connected',
-  onOpenSyncAudit,
-  failedCount = 0,
-  isRelationalActive = false,
-  activeSheet,
-  isModalOpen = false,
-  handleOpenModal,
-  setIsBulkImportOpen,
-  setIsScriptModalOpen,
-  onOpenViewConfig,
-}) => {
+export const DashboardTopNav: React.FC<DashboardTopNavProps> = (props) => {
+  const dashboard = useDashboard();
+
+  const isMobileMenuOpen = props.isMobileMenuOpen ?? false;
+  const setIsMobileMenuOpen = props.setIsMobileMenuOpen ?? (() => {});
+  const activeView = props.activeView ?? dashboard.activeView;
+  const activeSheetTitle = props.activeSheetTitle ?? dashboard.activeSheet?.title;
+  const searchableHeaders = props.searchableHeaders ?? dashboard.searchableHeaders ?? [];
+  const searchTerm = props.searchTerm ?? dashboard.searchTerm ?? '';
+  const setSearchTerm = props.setSearchTerm ?? dashboard.setSearchTerm;
+  const hasActiveFilters = props.hasActiveFilters ?? dashboard.hasActiveFilters ?? false;
+  const clearAllFilters = props.clearAllFilters ?? dashboard.clearAllFilters ?? (() => {});
+  const setIsScannerOpen = props.setIsScannerOpen ?? dashboard.setIsScannerOpen;
+  const setIsMobilePistoleoOpen = props.setIsMobilePistoleoOpen ?? dashboard.setIsMobilePistoleoOpen;
+  const isActionsMenuOpen = props.isActionsMenuOpen ?? dashboard.isActionsMenuOpen ?? false;
+  const setIsActionsMenuOpen = props.setIsActionsMenuOpen ?? dashboard.setIsActionsMenuOpen ?? (() => {});
+  const setIsGmailModalOpen = props.setIsGmailModalOpen ?? dashboard.setIsGmailModalOpen;
+  const setIsWhatsAppModalOpen = props.setIsWhatsAppModalOpen ?? dashboard.setIsWhatsAppModalOpen;
+  const setIsPmReportOpen = props.setIsPmReportOpen ?? dashboard.setIsPmReportOpen;
+  const onOpenBulkActionsConfig = props.onOpenBulkActionsConfig ?? (() => dashboard.setIsBulkActionsConfigOpen?.(true));
+  const onOpenTicketConfig = props.onOpenTicketConfig ?? (() => dashboard.setIsTicketConfigOpen?.(true));
+  const drainageReportItems = props.drainageReportItems ?? dashboard.drainageReportItems ?? [];
+  const headers = props.headers ?? dashboard.headers ?? [];
+  const visibleHeaders = props.visibleHeaders ?? dashboard.visibleHeaders;
+  const filteredItems = props.filteredItems ?? dashboard.filteredItems ?? [];
+  const sheetConfig = props.sheetConfig ?? dashboard.sheetConfig;
+  const products = props.products ?? dashboard.products ?? [];
+  const policies = props.policies ?? dashboard.policies ?? [];
+  const handlePrintTicket = props.handlePrintTicket ?? dashboard.handlePrintTicket;
+  const isOffline = props.isOffline ?? dashboard.isOffline ?? false;
+  const lastCachedAt = props.lastCachedAt ?? dashboard.lastCachedAt;
+  const isSyncing = props.isSyncing ?? dashboard.isSyncing;
+  const offlineQueue = props.offlineQueue ?? dashboard.offlineQueue ?? [];
+  const handleSyncOfflineQueue = props.handleSyncOfflineQueue ?? dashboard.handleSyncOfflineQueue ?? (() => {});
+  const fetchData = props.fetchData ?? dashboard.fetchData;
+  const loading = props.loading ?? dashboard.loading ?? false;
+  const latencyMs = props.latencyMs ?? dashboard.latencyMs;
+  const connectionStatus = props.connectionStatus ?? dashboard.connectionStatus ?? 'connected';
+  const onOpenSyncAudit = props.onOpenSyncAudit ?? (() => dashboard.setIsSyncAuditOpen?.(true));
+  const failedCount = props.failedCount ?? dashboard.failedCount ?? 0;
+  const isRelationalActive = props.isRelationalActive ?? dashboard.isRelationalActive ?? false;
+  const activeSheet = props.activeSheet ?? dashboard.activeSheet;
+  const isModalOpen = props.isModalOpen ?? dashboard.isModalOpen ?? false;
+  const handleOpenModal = props.handleOpenModal ?? dashboard.handleOpenModal;
+  const setIsBulkImportOpen = props.setIsBulkImportOpen ?? dashboard.setIsBulkImportOpen;
+  const setIsScriptModalOpen = props.setIsScriptModalOpen ?? dashboard.setIsScriptModalOpen;
+  const onOpenViewConfig = props.onOpenViewConfig ?? (() => dashboard.setIsRightDrawerOpen?.(true));
   const navigate = useNavigate();
   const searchInputRef = useRef<HTMLInputElement>(null);
 

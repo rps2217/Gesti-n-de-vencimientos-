@@ -6,132 +6,134 @@ import { ColumnMetadata } from '../hooks/usePrecomputedColumns';
 import { GripVertical, ChevronDown } from 'lucide-react';
 import { findColumnBySemantic } from '../utils/columnAliases';
 import { EVENT_CATEGORIES } from '../utils/dateCalculations';
+import { useDashboard } from '../context/DashboardContext';
 
-interface InventoryTableProps {
-  filteredItems: InventoryItem[];
-  selectedRowIds: number[];
-  setSelectedRowIds: (ids: number[]) => void;
-  headers: string[];
-  visibleHeaders: string[];
-  visibleColumnMeta: ColumnMetadata[];
-  activeView: string;
-  tableContainerRef: React.RefObject<HTMLDivElement>;
-  getColWidth: (headerId: string, label: string, type?: string) => number;
-  handleStartResize: (colId: string, startWidth: number, e: React.MouseEvent) => void;
-  handleAutoFitColumn: (colId: string, label: string) => void;
-  resizingCol: { colId: string; startWidth: number } | null;
-  pmRadarFilter: string[];
-  setPmRadarFilter: React.Dispatch<React.SetStateAction<string[]>>;
-  handleFilterToggle: (prev: string[], val: string, isMulti: boolean) => string[];
-  onSelectRow: (rowIndex: number, selected: boolean) => void;
-  onClickItem: (item: InventoryItem) => void;
-  onDeleteRow: (item: InventoryItem) => void;
-  onPmRadarFilterClick: (targetFilter: string, isMulti: boolean) => void;
-  onEventResolutionFilterClick: (status: 'pending' | 'completed', isMulti: boolean) => void;
-  onEventFilterClick: (eventCat: any, isMulti: boolean) => void;
-  onFrcBodFilterClick: (bodVal: string, isMulti: boolean) => void;
-  onOpenQuickTraspaso: (item: InventoryItem) => void;
+export interface InventoryTableProps {
+  filteredItems?: InventoryItem[];
+  selectedRowIds?: number[];
+  setSelectedRowIds?: (ids: number[]) => void;
+  headers?: string[];
+  visibleHeaders?: string[];
+  visibleColumnMeta?: ColumnMetadata[];
+  activeView?: string;
+  tableContainerRef?: React.RefObject<HTMLDivElement>;
+  getColWidth?: (headerId: string, label: string, type?: string) => number;
+  handleStartResize?: (colId: string, startWidth: number, e: React.MouseEvent) => void;
+  handleAutoFitColumn?: (colId: string, label: string) => void;
+  resizingCol?: { colId: string; startWidth: number } | null;
+  pmRadarFilter?: string[];
+  setPmRadarFilter?: React.Dispatch<React.SetStateAction<string[]>>;
+  handleFilterToggle?: (prev: string[], val: string, isMulti: boolean) => string[];
+  onSelectRow?: (rowIndex: number, selected: boolean) => void;
+  onClickItem?: (item: InventoryItem) => void;
+  onDeleteRow?: (item: InventoryItem) => void;
+  onPmRadarFilterClick?: (targetFilter: string, isMulti: boolean) => void;
+  onEventResolutionFilterClick?: (status: 'pending' | 'completed', isMulti: boolean) => void;
+  onEventFilterClick?: (eventCat: any, isMulti: boolean) => void;
+  onFrcBodFilterClick?: (bodVal: string, isMulti: boolean) => void;
+  onOpenQuickTraspaso?: (item: InventoryItem) => void;
   onOpenWhatsApp?: (item: InventoryItem) => void;
   onOpenEmail?: (item: InventoryItem) => void;
   isWhatsAppEnabled?: boolean;
   isEmailEnabled?: boolean;
-  frcBodFilter: string[];
-  setFrcBodFilter: React.Dispatch<React.SetStateAction<string[]>>;
-  sheetConfig: any;
-  activeSheet: any;
-  draggedCol: string | null;
-  setDraggedCol: (col: string | null) => void;
-  dragOverCol: string | null;
-  setDragOverCol: (col: string | null) => void;
-  handleColumnDrop: (target: string, source: string) => void;
-  eventFilter: string[];
-  setEventFilter: React.Dispatch<React.SetStateAction<string[]>>;
-  eventResolutionFilter: string[];
-  setEventResolutionFilter: React.Dispatch<React.SetStateAction<string[]>>;
-  columnFilters: Record<string, string[]>;
-  setColumnFilters: React.Dispatch<React.SetStateAction<Record<string, string[]>>>;
-  columnOptionsMap: Record<string, any[]>;
-  frcBodValues: string[];
-  frcBodCounts: Record<string, number>;
-  frcBodCol: string;
-  virtualRows: any[];
-  paginatedDisplayRows: any[];
-  paddingTop: number;
+  frcBodFilter?: string[];
+  setFrcBodFilter?: React.Dispatch<React.SetStateAction<string[]>>;
+  sheetConfig?: any;
+  activeSheet?: any;
+  draggedCol?: string | null;
+  setDraggedCol?: (col: string | null) => void;
+  dragOverCol?: string | null;
+  setDragOverCol?: (col: string | null) => void;
+  handleColumnDrop?: (target: string, source: string) => void;
+  eventFilter?: string[];
+  setEventFilter?: React.Dispatch<React.SetStateAction<string[]>>;
+  eventResolutionFilter?: string[];
+  setEventResolutionFilter?: React.Dispatch<React.SetStateAction<string[]>>;
+  columnFilters?: Record<string, string[]>;
+  setColumnFilters?: React.Dispatch<React.SetStateAction<Record<string, string[]>>>;
+  columnOptionsMap?: Record<string, any[]>;
+  frcBodValues?: string[];
+  frcBodCounts?: Record<string, number>;
+  frcBodCol?: string;
+  virtualRows?: any[];
+  paginatedDisplayRows?: any[];
+  paddingTop?: number;
   paddingBottom?: number;
   groupByColumn?: string;
   onSelectGroupRows?: (rowIndexes: number[], selected: boolean) => void;
   toggleGroupCollapse?: (groupKey: string) => void;
   measureElementRef?: (node: HTMLElement | null) => void;
-  sortConfig: SortConfig;
-  handleToggleSort: (columnName: string) => void;
+  sortConfig?: SortConfig;
+  handleToggleSort?: (columnName: string) => void;
   tableDensity?: 'comfortable' | 'compact' | 'ultra';
   expandAllGroups?: () => void;
   collapseAllGroups?: () => void;
   collapsedGroups?: Record<string, boolean>;
 }
 
-export const InventoryTable: React.FC<InventoryTableProps> = ({
-  filteredItems,
-  selectedRowIds,
-  setSelectedRowIds,
-  headers,
-  visibleHeaders,
-  visibleColumnMeta,
-  activeView,
-  tableContainerRef,
-  getColWidth,
-  handleStartResize,
-  handleAutoFitColumn,
-  resizingCol,
-  pmRadarFilter,
-  setPmRadarFilter,
-  handleFilterToggle,
-  onSelectRow,
-  onClickItem,
-  onDeleteRow,
-  onPmRadarFilterClick,
-  onEventResolutionFilterClick,
-  onEventFilterClick,
-  onFrcBodFilterClick,
-  onOpenQuickTraspaso,
-  onOpenWhatsApp,
-  onOpenEmail,
-  isWhatsAppEnabled,
-  isEmailEnabled,
-  frcBodFilter,
-  setFrcBodFilter,
-  sheetConfig,
-  activeSheet,
-  draggedCol,
-  setDraggedCol,
-  dragOverCol,
-  setDragOverCol,
-  handleColumnDrop,
-  eventFilter,
-  setEventFilter,
-  eventResolutionFilter,
-  setEventResolutionFilter,
-  columnFilters,
-  setColumnFilters,
-  columnOptionsMap,
-  frcBodValues,
-  frcBodCounts,
-  frcBodCol,
-  virtualRows,
-  paginatedDisplayRows,
-  paddingTop,
-  paddingBottom = 0,
-  groupByColumn,
-  onSelectGroupRows,
-  toggleGroupCollapse,
-  measureElementRef,
-  sortConfig,
-  handleToggleSort,
-  tableDensity = 'compact',
-  expandAllGroups,
-  collapseAllGroups,
-  collapsedGroups,
-}) => {
+export const InventoryTable: React.FC<InventoryTableProps> = (props) => {
+  const dashboard = useDashboard();
+
+  const filteredItems = props.filteredItems ?? dashboard.filteredItems ?? [];
+  const selectedRowIds = props.selectedRowIds ?? dashboard.selectedRowIds ?? [];
+  const setSelectedRowIds = props.setSelectedRowIds ?? dashboard.setSelectedRowIds ?? (() => {});
+  const headers = props.headers ?? dashboard.headers ?? [];
+  const visibleHeaders = props.visibleHeaders ?? dashboard.effectiveVisibleHeaders ?? dashboard.visibleHeaders ?? [];
+  const visibleColumnMeta = props.visibleColumnMeta ?? dashboard.visibleColumnMeta ?? [];
+  const activeView = props.activeView ?? dashboard.activeView;
+  const tableContainerRef = props.tableContainerRef ?? dashboard.tableContainerRef;
+  const getColWidth = props.getColWidth ?? dashboard.getColWidth ?? (() => 150);
+  const handleStartResize = props.handleStartResize ?? dashboard.handleStartResize ?? (() => {});
+  const handleAutoFitColumn = props.handleAutoFitColumn ?? dashboard.handleAutoFitColumn ?? (() => {});
+  const resizingCol = props.resizingCol ?? dashboard.resizingCol ?? null;
+  const pmRadarFilter = props.pmRadarFilter ?? dashboard.pmRadarFilter ?? [];
+  const setPmRadarFilter = props.setPmRadarFilter ?? dashboard.setPmRadarFilter ?? (() => {});
+  const handleFilterToggle = props.handleFilterToggle ?? dashboard.handleFilterToggle ?? ((prev, val) => prev);
+  const onSelectRow = props.onSelectRow ?? dashboard.onSelectRow ?? (() => {});
+  const onClickItem = props.onClickItem ?? dashboard.onClickItem ?? dashboard.setSelectedProduct;
+  const onDeleteRow = props.onDeleteRow ?? dashboard.onDeleteRow ?? dashboard.handleDelete;
+  const onPmRadarFilterClick = props.onPmRadarFilterClick ?? dashboard.onPmRadarFilterClick ?? (() => {});
+  const onEventResolutionFilterClick = props.onEventResolutionFilterClick ?? dashboard.onEventResolutionFilterClick ?? (() => {});
+  const onEventFilterClick = props.onEventFilterClick ?? dashboard.onEventFilterClick ?? (() => {});
+  const onFrcBodFilterClick = props.onFrcBodFilterClick ?? dashboard.onFrcBodFilterClick ?? (() => {});
+  const onOpenQuickTraspaso = props.onOpenQuickTraspaso ?? dashboard.onOpenQuickTraspaso ?? (() => {});
+  const onOpenWhatsApp = props.onOpenWhatsApp ?? dashboard.onOpenWhatsApp;
+  const onOpenEmail = props.onOpenEmail ?? dashboard.onOpenEmail;
+  const isWhatsAppEnabled = props.isWhatsAppEnabled ?? dashboard.isWhatsAppEnabled ?? false;
+  const isEmailEnabled = props.isEmailEnabled ?? dashboard.isEmailEnabled ?? false;
+  const frcBodFilter = props.frcBodFilter ?? dashboard.frcBodFilter ?? [];
+  const setFrcBodFilter = props.setFrcBodFilter ?? dashboard.setFrcBodFilter ?? (() => {});
+  const sheetConfig = props.sheetConfig ?? dashboard.sheetConfig;
+  const activeSheet = props.activeSheet ?? dashboard.activeSheet;
+  const draggedCol = props.draggedCol ?? dashboard.draggedCol ?? null;
+  const setDraggedCol = props.setDraggedCol ?? dashboard.setDraggedCol ?? (() => {});
+  const dragOverCol = props.dragOverCol ?? dashboard.dragOverCol ?? null;
+  const setDragOverCol = props.setDragOverCol ?? dashboard.setDragOverCol ?? (() => {});
+  const handleColumnDrop = props.handleColumnDrop ?? dashboard.handleColumnDrop ?? (() => {});
+  const eventFilter = props.eventFilter ?? dashboard.eventFilter ?? [];
+  const setEventFilter = props.setEventFilter ?? dashboard.setEventFilter ?? (() => {});
+  const eventResolutionFilter = props.eventResolutionFilter ?? dashboard.eventResolutionFilter ?? [];
+  const setEventResolutionFilter = props.setEventResolutionFilter ?? dashboard.setEventResolutionFilter ?? (() => {});
+  const columnFilters = props.columnFilters ?? dashboard.columnFilters ?? {};
+  const setColumnFilters = props.setColumnFilters ?? dashboard.setColumnFilters ?? (() => {});
+  const columnOptionsMap = props.columnOptionsMap ?? dashboard.columnOptionsMap ?? {};
+  const frcBodValues = props.frcBodValues ?? dashboard.frcBodValues ?? [];
+  const frcBodCounts = props.frcBodCounts ?? dashboard.frcBodCounts ?? {};
+  const frcBodCol = props.frcBodCol ?? dashboard.frcBodCol ?? '';
+  const virtualRows = props.virtualRows ?? dashboard.virtualRows ?? [];
+  const paginatedDisplayRows = props.paginatedDisplayRows ?? dashboard.paginatedDisplayRows ?? [];
+  const paddingTop = props.paddingTop ?? dashboard.paddingTop ?? 0;
+  const paddingBottom = props.paddingBottom ?? dashboard.paddingBottom ?? 0;
+  const groupByColumn = props.groupByColumn ?? dashboard.groupByColumn;
+  const onSelectGroupRows = props.onSelectGroupRows ?? dashboard.onSelectGroupRows;
+  const toggleGroupCollapse = props.toggleGroupCollapse ?? dashboard.toggleGroupCollapse;
+  const measureElementRef = props.measureElementRef ?? dashboard.measureElementRef;
+  const sortConfig = props.sortConfig ?? dashboard.sortConfig ?? { key: null, direction: null };
+  const handleToggleSort = props.handleToggleSort ?? dashboard.handleToggleSort ?? (() => {});
+  const tableDensity = props.tableDensity ?? dashboard.tableDensity ?? 'compact';
+  const expandAllGroups = props.expandAllGroups ?? dashboard.expandAllGroups;
+  const collapseAllGroups = props.collapseAllGroups ?? dashboard.collapseAllGroups;
+  const collapsedGroups = props.collapsedGroups ?? dashboard.collapsedGroups;
   const isSticky = sheetConfig?.enableStickyColumns === true;
 
   // Calculate padding class based on table density

@@ -40,6 +40,7 @@ El proyecto sigue una estructura modular limpia construida en **React 18+**, **T
     ├── hooks/
     │   ├── useInventoryWorker.ts # Hook de comunicación no bloqueante con el Web Worker
     │   ├── useInventoryFiltering.ts # Orquestación de filtros, paginación y agrupación
+    │   ├── useModuleViewState.ts # Persistencia y transiciones de estado por módulo/pestaña
     │   ├── useOfflineSync.ts     # Hook de sincronización y vaciado de cola offline
     │   └── useColumnResize.ts    # Manejo interactivo del ancho de columnas
     ├── utils/

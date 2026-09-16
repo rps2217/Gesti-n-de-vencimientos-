@@ -5,10 +5,11 @@ import {
 import { SheetProperties, TableSlice } from '../../types';
 import { SLICE_COLOR_CLASSES } from '../../utils/sliceRegistry';
 import { SliceIcon } from '../slices/SliceSelectorBar';
+import { useDashboard } from '../../context/DashboardContext';
 
-interface DashboardPageHeaderProps {
-  activeView: string;
-  isRelationalActive: boolean;
+export interface DashboardPageHeaderProps {
+  activeView?: string;
+  isRelationalActive?: boolean;
   setIsBulkImportOpen?: (open: boolean) => void;
   onOpenCreateSlice?: () => void;
   onOpenSliceManager?: () => void;
@@ -49,18 +50,26 @@ interface DashboardPageHeaderProps {
   setIsScriptModalOpen?: (open: boolean) => void;
 }
 
-export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
-  activeView,
-  setIsBulkImportOpen,
-  onOpenCreateSlice,
-  onOpenSliceManager,
-  onOpenViewConfig,
-  slices = [],
-  activeSliceId = null,
-  onSelectSlice,
-  sliceCounts = {},
-  totalItemsCount = 0,
-}) => {
+export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = (props) => {
+  const dashboard = useDashboard();
+
+  const activeView = props.activeView ?? dashboard.activeView;
+  const setIsBulkImportOpen = props.setIsBulkImportOpen ?? dashboard.setIsBulkImportOpen;
+  const onOpenCreateSlice = props.onOpenCreateSlice ?? (() => {
+    dashboard.setEditingSliceModalItem?.(null);
+    dashboard.setIsSliceModalOpen?.(true);
+  });
+  const onOpenSliceManager = props.onOpenSliceManager ?? (() => dashboard.setIsSliceManagerOpen?.(true));
+  const onOpenViewConfig = props.onOpenViewConfig ?? (() => dashboard.setIsRightDrawerOpen?.(true));
+  const slices = props.slices ?? dashboard.visibleTableSlices ?? dashboard.currentTableSlices ?? [];
+  const activeSliceId = props.activeSliceId ?? dashboard.activeSliceId ?? null;
+  const onSelectSlice = props.onSelectSlice ?? dashboard.handleSelectSlice ?? (() => {});
+  const sliceCounts = props.sliceCounts ?? dashboard.sliceCounts ?? {};
+  const totalItemsCount = props.totalItemsCount ?? dashboard.items?.length ?? 0;
+  const onEditSlice = props.onEditSlice ?? ((slice: TableSlice) => {
+    dashboard.setEditingSliceModalItem?.(slice);
+    dashboard.setIsSliceModalOpen?.(true);
+  });
   const hasSlices = slices.length > 0 && activeView !== 'schema' && activeView !== 'analytics';
 
   return (

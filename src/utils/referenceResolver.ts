@@ -403,6 +403,10 @@ export function buildMasterCatalogIndex(
       if (alpha && !alphaMap.has(alpha)) {
         alphaMap.set(alpha, prod);
       }
+      const numOnly = alpha.replace(/[^0-9]/g, '');
+      if (numOnly && !alphaMap.has(numOnly)) {
+        alphaMap.set(numOnly, prod);
+      }
     }
 
     // Also index by any barcode / EAN columns if present

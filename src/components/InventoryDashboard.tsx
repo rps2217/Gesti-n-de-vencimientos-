@@ -22,7 +22,8 @@ import {
   SortConfig,
   DynamicMonthRange
 } from '../types';
-import { z } from 'zod';
+import { useItemFormManager } from '../hooks/useItemFormManager';
+import { DashboardProvider, DashboardContextType } from '../context/DashboardContext';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
   Plus, Edit2, Trash2, RefreshCw, Loader2, Database, AlertCircle, Package, 
@@ -58,6 +59,7 @@ import { useColumnResize } from '../hooks/useColumnResize';
 import { useColumnManager } from '../hooks/useColumnManager';
 import { useInventoryFiltering, handleFilterToggle, DisplayRow } from '../hooks/useInventoryFiltering';
 import { useOfflineSync } from '../hooks/useOfflineSync';
+import { useModuleViewState } from '../hooks/useModuleViewState';
 import { indexedDbService } from '../db/indexedDbService';
 import { 
   SAMPLE_HEADERS, 
@@ -68,26 +70,15 @@ import {
   SAMPLE_POLICIES 
 } from '../data/sampleInventory';
 
-// Helpers para almacenamiento persistente en Modo Demostración / Offline
-const getStoredDemoItems = (view: string, defaultItems: any[]) => {
-  try {
-    const raw = localStorage.getItem(`app_demo_items_${view}`);
-    if (raw !== null) {
-      return JSON.parse(raw);
-    }
-  } catch (e) {
-    console.warn('Error al leer ítems demo de localStorage:', e);
-  }
-  return defaultItems;
-};
-
-const saveStoredDemoItems = (view: string, items: any[]) => {
-  try {
-    localStorage.setItem(`app_demo_items_${view}`, JSON.stringify(items));
-  } catch (e) {
-    console.warn('Error al guardar ítems demo en localStorage:', e);
-  }
-};
+// Helpers para almacenamiento persistente y configuración modular
+import {
+  getStoredDemoItems,
+  saveStoredDemoItems,
+  mergeCloudConfigs,
+  ModuleViewState,
+  DEFAULT_MODULE_STATE
+} from '../utils/dashboardConfigUtils';
+export { mergeCloudConfigs, type ModuleViewState };
 
 // Modals & Drawers & Sub-components
 import { InventoryTable } from './InventoryTable';
@@ -99,6 +90,10 @@ import { SchemaEditorView } from './views/SchemaEditorView';
 import { AnalyticsDashboard } from './views/AnalyticsDashboard';
 import { FloatingBulkActionBar } from './dashboard/FloatingBulkActionBar';
 import { DashboardModalsManager } from './dashboard/DashboardModalsManager';
+import { ZenModeOverlay } from './dashboard/ZenModeOverlay';
+import { DashboardMobileDrawer } from './dashboard/DashboardMobileDrawer';
+import { DashboardMobileFABs } from './dashboard/DashboardMobileFABs';
+import { DashboardTableContainer } from './dashboard/DashboardTableContainer';
 import { exportToExcel } from '../utils/exportUtils';
 import { EventResolutionCards } from './views/EventResolutionCards';
 import { EventFilterChips } from './views/EventFilterChips';
@@ -117,94 +112,8 @@ import {
 import { GlobalTicketConfig, ViewTicketConfig, TableSlice } from '../types';
 import { SkeletonLoader } from './common/SkeletonLoader';
 import { useToast } from './common/ToastContainer';
-import { 
-  loadCustomSlices, 
-  saveCustomSlices, 
-  loadHiddenSliceIds,
-  saveHiddenSliceIds,
-  getSlicesForTable, 
-  getVisibleSlicesForTable,
-  computeSliceCounts 
-} from '../utils/sliceRegistry';
+import { useTableSlices } from '../hooks/useTableSlices';
 import { SliceSelectorBar } from './slices/SliceSelectorBar';
-
-export function mergeCloudConfigs(local: SheetConfig, remote: SheetConfig): SheetConfig {
-  if (!local && !remote) return {};
-  if (!local) return remote;
-  if (!remote) return local;
-
-  const localTime = local?.updatedAt ? new Date(local.updatedAt).getTime() : 0;
-  const remoteTime = remote?.updatedAt ? new Date(remote.updatedAt).getTime() : 0;
-
-  const isRemoteNewer = remoteTime >= localTime;
-  const primary = isRemoteNewer ? remote : local;
-  const secondary = isRemoteNewer ? local : remote;
-
-  // Non-destructive Merge for Custom Slices
-  const primarySlices = primary.slices || [];
-  const secondarySlices = secondary.slices || [];
-  const sliceMap = new Map<string, TableSlice>();
-
-  secondarySlices.forEach(s => {
-    if (s && s.id) sliceMap.set(s.id, s);
-  });
-  primarySlices.forEach(s => {
-    if (s && s.id) sliceMap.set(s.id, s);
-  });
-
-  // Non-destructive Merge for Schema
-  const mergedSchema = {
-    ...(secondary.schema || {}),
-    ...(primary.schema || {})
-  };
-
-  // Non-destructive Merge for Bulk Actions
-  const mergedBulk = {
-    ...(secondary.tableBulkActions || {}),
-    ...(primary.tableBulkActions || {})
-  };
-
-  return {
-    ...secondary,
-    ...primary,
-    slices: Array.from(sliceMap.values()),
-    schema: mergedSchema,
-    tableBulkActions: mergedBulk,
-    updatedAt: new Date(Math.max(localTime, remoteTime, Date.now())).toISOString()
-  };
-}
-
-export interface ModuleViewState {
-  activeSliceId: string | null;
-  searchTerm: string;
-  activeQuickChip: string | null;
-  sortConfig: SortConfig;
-  eventFilter: string[];
-  frcBodFilter: string[];
-  eventResolutionFilter: string[];
-  pmRadarFilter: string[];
-  columnFilters: Record<string, string[]>;
-  dynamicMonthFilter: number[];
-  dynamicMonthRange: DynamicMonthRange | null;
-  groupByColumn: string;
-  groupByDirection: 'asc' | 'desc';
-}
-
-const DEFAULT_MODULE_STATE: ModuleViewState = {
-  activeSliceId: null,
-  searchTerm: '',
-  activeQuickChip: null,
-  sortConfig: { column: null, direction: null },
-  eventFilter: [],
-  frcBodFilter: [],
-  eventResolutionFilter: [],
-  pmRadarFilter: [],
-  columnFilters: {},
-  dynamicMonthFilter: [],
-  dynamicMonthRange: null,
-  groupByColumn: 'none',
-  groupByDirection: 'asc',
-};
 
 export const InventoryDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -340,43 +249,39 @@ export const InventoryDashboard: React.FC = () => {
     }
   };
 
-  // Search, Selection and Scoped Module States
-  const [moduleStates, setModuleStates] = useState<Record<string, ModuleViewState>>(() => {
-    try {
-      const saved = localStorage.getItem('app_module_states');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
+  const [activeView, setActiveView] = useState<string>('main');
 
-  const initialModuleState = useMemo(() => {
-    try {
-      const saved = localStorage.getItem('app_module_states');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed['main']) return { ...DEFAULT_MODULE_STATE, ...parsed['main'] };
-      }
-    } catch {
-      // ignore
-    }
-    return DEFAULT_MODULE_STATE;
-  }, []);
-
-  const [searchTerm, setSearchTerm] = useState(initialModuleState.searchTerm);
-  const [activeQuickChip, setActiveQuickChip] = useState<string | null>(initialModuleState.activeQuickChip);
-  const [activeSliceId, setActiveSliceId] = useState<string | null>(initialModuleState.activeSliceId);
-
-  const [sortConfig, setSortConfig] = useState<SortConfig>(initialModuleState.sortConfig);
-  const [eventFilter, setEventFilter] = useState<string[]>(initialModuleState.eventFilter);
-  const [frcBodFilter, setFrcBodFilter] = useState<string[]>(initialModuleState.frcBodFilter);
-  const [eventResolutionFilter, setEventResolutionFilter] = useState<string[]>(initialModuleState.eventResolutionFilter);
-  const [pmRadarFilter, setPmRadarFilter] = useState<string[]>(initialModuleState.pmRadarFilter);
-  const [columnFilters, setColumnFilters] = useState<Record<string, string[]>>(initialModuleState.columnFilters);
-  const [dynamicMonthFilter, setDynamicMonthFilter] = useState<number[]>(initialModuleState.dynamicMonthFilter);
-  const [dynamicMonthRange, setDynamicMonthRange] = useState<DynamicMonthRange | null>(initialModuleState.dynamicMonthRange);
-  const [groupByColumn, setGroupByColumn] = useState<string>(initialModuleState.groupByColumn);
-  const [groupByDirection, setGroupByDirection] = useState<'asc' | 'desc'>(initialModuleState.groupByDirection);
+  // Search, Selection and Scoped Module States via useModuleViewState Hook
+  const {
+    moduleStates,
+    setModuleStates,
+    searchTerm,
+    setSearchTerm,
+    activeQuickChip,
+    setActiveQuickChip,
+    activeSliceId,
+    setActiveSliceId,
+    sortConfig,
+    setSortConfig,
+    eventFilter,
+    setEventFilter,
+    frcBodFilter,
+    setFrcBodFilter,
+    eventResolutionFilter,
+    setEventResolutionFilter,
+    pmRadarFilter,
+    setPmRadarFilter,
+    columnFilters,
+    setColumnFilters,
+    dynamicMonthFilter,
+    setDynamicMonthFilter,
+    dynamicMonthRange,
+    setDynamicMonthRange,
+    groupByColumn,
+    setGroupByColumn,
+    groupByDirection,
+    setGroupByDirection
+  } = useModuleViewState({ activeView });
 
   const [selectedRowIds, setSelectedRowIds] = useState<number[]>([]);
   const [quickTraspasoItem, setQuickTraspasoItem] = useState<InventoryItem | null>(null);
@@ -405,144 +310,42 @@ export const InventoryDashboard: React.FC = () => {
   });
 
   const tableContainerRef = useRef<HTMLDivElement>(null);
-  const [activeView, setActiveView] = useState<string>('main');
-  const lastViewRef = useRef<string>('main');
-
-  // 1. Tab switch transition: save previous view's state and restore target view's state
-  useEffect(() => {
-    const prevView = lastViewRef.current;
-    if (prevView === activeView) return;
-
-    // Save previous view state
-    const prevViewState: ModuleViewState = {
-      activeSliceId,
-      searchTerm,
-      activeQuickChip,
-      sortConfig,
-      eventFilter,
-      frcBodFilter,
-      eventResolutionFilter,
-      pmRadarFilter,
-      columnFilters,
-      dynamicMonthFilter,
-      dynamicMonthRange,
-      groupByColumn,
-      groupByDirection,
-    };
-
-    setModuleStates(prev => {
-      const updated = {
-        ...prev,
-        [prevView]: prevViewState
-      };
-      try {
-        localStorage.setItem('app_module_states', JSON.stringify(updated));
-      } catch (e) {
-        // ignore
-      }
-      return updated;
-    });
-
-    // Load target view state
-    const targetState = moduleStates[activeView] || DEFAULT_MODULE_STATE;
-
-    // Batch apply target view state
-    setActiveSliceId(targetState.activeSliceId);
-    setSearchTerm(targetState.searchTerm);
-    setActiveQuickChip(targetState.activeQuickChip);
-    setSortConfig(targetState.sortConfig || { column: null, direction: null });
-    setEventFilter(targetState.eventFilter || []);
-    setFrcBodFilter(targetState.frcBodFilter || []);
-    setEventResolutionFilter(targetState.eventResolutionFilter || []);
-    setPmRadarFilter(targetState.pmRadarFilter || []);
-    setColumnFilters(targetState.columnFilters || {});
-    setDynamicMonthFilter(targetState.dynamicMonthFilter || []);
-    setDynamicMonthRange(targetState.dynamicMonthRange || null);
-    setGroupByColumn(targetState.groupByColumn || 'none');
-    setGroupByDirection(targetState.groupByDirection || 'asc');
-
-    // Update ref
-    lastViewRef.current = activeView;
-  }, [activeView]);
-
-  // 2. Continuous background persistence: save state of active view on modification (page reload safety)
-  useEffect(() => {
-    if (lastViewRef.current !== activeView) return; // Prevent overwriting during transitions
-
-    const stateToSave: ModuleViewState = {
-      activeSliceId,
-      searchTerm,
-      activeQuickChip,
-      sortConfig,
-      eventFilter,
-      frcBodFilter,
-      eventResolutionFilter,
-      pmRadarFilter,
-      columnFilters,
-      dynamicMonthFilter,
-      dynamicMonthRange,
-      groupByColumn,
-      groupByDirection,
-    };
-
-    setModuleStates(prev => {
-      const currentSaved = prev[activeView];
-      if (currentSaved && 
-          currentSaved.activeSliceId === stateToSave.activeSliceId &&
-          currentSaved.searchTerm === stateToSave.searchTerm &&
-          currentSaved.activeQuickChip === stateToSave.activeQuickChip &&
-          JSON.stringify(currentSaved.sortConfig) === JSON.stringify(stateToSave.sortConfig) &&
-          JSON.stringify(currentSaved.eventFilter) === JSON.stringify(stateToSave.eventFilter) &&
-          JSON.stringify(currentSaved.frcBodFilter) === JSON.stringify(stateToSave.frcBodFilter) &&
-          JSON.stringify(currentSaved.eventResolutionFilter) === JSON.stringify(stateToSave.eventResolutionFilter) &&
-          JSON.stringify(currentSaved.pmRadarFilter) === JSON.stringify(stateToSave.pmRadarFilter) &&
-          JSON.stringify(currentSaved.columnFilters) === JSON.stringify(stateToSave.columnFilters) &&
-          JSON.stringify(currentSaved.dynamicMonthFilter) === JSON.stringify(stateToSave.dynamicMonthFilter) &&
-          JSON.stringify(currentSaved.dynamicMonthRange) === JSON.stringify(stateToSave.dynamicMonthRange) &&
-          currentSaved.groupByColumn === stateToSave.groupByColumn &&
-          currentSaved.groupByDirection === stateToSave.groupByDirection) {
-        return prev;
-      }
-
-      const updated = {
-        ...prev,
-        [activeView]: stateToSave
-      };
-      try {
-        localStorage.setItem('app_module_states', JSON.stringify(updated));
-      } catch (e) {
-        // ignore
-      }
-      return updated;
-    });
-  }, [
-    activeView,
-    activeSliceId,
-    searchTerm,
-    activeQuickChip,
-    sortConfig,
-    eventFilter,
-    frcBodFilter,
-    eventResolutionFilter,
-    pmRadarFilter,
-    columnFilters,
-    dynamicMonthFilter,
-    dynamicMonthRange,
-    groupByColumn,
-    groupByDirection
-  ]);
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
   const [areFiltersVisible, setAreFiltersVisible] = useState<boolean>(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isScriptModalOpen, setIsScriptModalOpen] = useState(false);
   const [isPmReportOpen, setIsPmReportOpen] = useState(false);
   const [isSchemaLoading, setIsSchemaLoading] = useState(false);
-  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
-  const [selectedEventCategory, setSelectedEventCategory] = useState<EventCategory>('VENCIMIENTO');
-  const [formData, setFormData] = useState<Record<string, string>>({});
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  const {
+    isModalOpen,
+    setIsModalOpen,
+    editingItem,
+    setEditingItem,
+    formData,
+    setFormData,
+    formErrors,
+    setFormErrors,
+    selectedEventCategory,
+    setSelectedEventCategory,
+    handleOpenModal,
+    handleCloseModal,
+    handleSelectEventCategory,
+    validateForm,
+    handleFormChange,
+    handleBatchFormUpdate
+  } = useItemFormManager({
+    headers,
+    activeSheet,
+    activeView,
+    sheetConfig,
+    products,
+    policies,
+    eventFilter,
+    onBeforeOpen: () => setIsConfigOpen(false)
+  });
+
   const [isSaving, setIsSaving] = useState(false);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
@@ -961,191 +764,58 @@ export const InventoryDashboard: React.FC = () => {
   }, [clearHookFilters]);
 
   // AppSheet Pattern: Slices / Vistas Personalizadas
-  const [customSlices, setCustomSlices] = useState<TableSlice[]>(() => loadCustomSlices());
-  const [hiddenSliceIds, setHiddenSliceIds] = useState<string[]>(() => loadHiddenSliceIds(sheetConfig.hiddenSliceIds));
-  const [isSliceModalOpen, setIsSliceModalOpen] = useState(false);
-  const [isSliceManagerOpen, setIsSliceManagerOpen] = useState(false);
-  const [editingSliceModalItem, setEditingSliceModalItem] = useState<TableSlice | null>(null);
-
-  // Sync hidden slice IDs if sheetConfig updates from cloud
-  useEffect(() => {
-    if (sheetConfig.hiddenSliceIds) {
-      setHiddenSliceIds(prev => {
-        const merged = Array.from(new Set([...prev, ...(sheetConfig.hiddenSliceIds || [])]));
-        return merged;
-      });
-    }
-  }, [sheetConfig.hiddenSliceIds]);
-
-  // Compute all slices available for current table (built-in + custom)
-  const currentTableSlices = useMemo(() => {
-    return getSlicesForTable(activeView, customSlices, sheetConfig.slices);
-  }, [activeView, customSlices, sheetConfig.slices]);
-
-  // Filtered slices visible in the top bar (excluding hidden ones)
-  const visibleTableSlices = useMemo(() => {
-    return getVisibleSlicesForTable(activeView, customSlices, sheetConfig.slices, hiddenSliceIds);
-  }, [activeView, customSlices, sheetConfig.slices, hiddenSliceIds]);
-
-  const activeSlice = useMemo(() => {
-    if (!activeSliceId) return null;
-    return currentTableSlices.find(s => s.id === activeSliceId) || null;
-  }, [currentTableSlices, activeSliceId]);
-
-  // High-performance single-pass slice live counts
-  const sliceCounts = useMemo(() => {
-    return computeSliceCounts(augmentedItems, currentTableSlices, headers, frcBodCol);
-  }, [augmentedItems, currentTableSlices, headers, frcBodCol]);
-
-  const handleSelectSlice = useCallback((slice: TableSlice | null) => {
-    setCurrentPage(1);
-    if (!slice) {
-      setActiveSliceId(null);
-      clearAllFilters();
-      showAllColumns();
-      return;
-    }
-
-    setActiveSliceId(slice.id);
-
-    // Apply slice filters
-    const filterConfig = slice.filterConfig || {};
-    setSearchTerm(filterConfig.searchTerm || '');
-    setActiveQuickChip(filterConfig.quickChip || null);
-    setEventFilter(filterConfig.eventFilter || []);
-    setPmRadarFilter(filterConfig.pmRadarFilter || []);
-    setEventResolutionFilter(filterConfig.eventResolutionFilter || []);
-    setFrcBodFilter(filterConfig.frcBodFilter || []);
-    setColumnFilters(filterConfig.columnFilters || {});
-    setDynamicMonthFilter(filterConfig.dynamicMonthFilter || []);
-    setDynamicMonthRange(filterConfig.dynamicMonthRange || null);
-
-    // Apply slice grouping if defined
-    if (slice.groupByColumn) {
-      handleSetGroupByColumn(slice.groupByColumn);
-      handleSetGroupByDirection(slice.groupByDirection || 'asc');
-    } else {
-      handleSetGroupByColumn('none');
-      handleSetGroupByDirection('asc');
-    }
-
-    // Apply slice sorting if defined
-    if (slice.sortConfig) {
-      setSortConfig(slice.sortConfig);
-    }
-
-    // Apply slice visible columns (AppSheet slice feature)
-    if (slice.visibleColumns && slice.visibleColumns.length > 0) {
-      setVisibleColumns(slice.visibleColumns);
-    } else {
-      showAllColumns();
-    }
-  }, [clearAllFilters, showAllColumns, setVisibleColumns, setSortConfig, handleSetGroupByColumn, handleSetGroupByDirection, setEventFilter, setPmRadarFilter, setEventResolutionFilter, setFrcBodFilter, setColumnFilters, setDynamicMonthFilter, setDynamicMonthRange]);
+  const {
+    customSlices,
+    hiddenSliceIds,
+    isSliceModalOpen,
+    setIsSliceModalOpen,
+    isSliceManagerOpen,
+    setIsSliceManagerOpen,
+    editingSliceModalItem,
+    setEditingSliceModalItem,
+    currentTableSlices,
+    visibleTableSlices,
+    activeSlice,
+    sliceCounts,
+    handleSelectSlice,
+    handleSaveSlice,
+    handleDeleteSlice,
+    handleToggleStickyColumns,
+    handleToggleSliceVisibility,
+    handleSetBulkVisibility
+  } = useTableSlices({
+    activeView,
+    sheetConfig,
+    setSheetConfig,
+    saveConfig,
+    headers,
+    augmentedItems,
+    frcBodCol,
+    activeSliceId,
+    setActiveSliceId,
+    clearAllFilters,
+    showAllColumns,
+    setVisibleColumns,
+    setSortConfig,
+    handleSetGroupByColumn,
+    handleSetGroupByDirection,
+    setSearchTerm,
+    setActiveQuickChip,
+    setEventFilter,
+    setPmRadarFilter,
+    setEventResolutionFilter,
+    setFrcBodFilter,
+    setColumnFilters,
+    setDynamicMonthFilter,
+    setDynamicMonthRange,
+    setCurrentPage,
+    showToast
+  });
 
   // Auto-reset page when search terms or filter constraints change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, activeQuickChip, activeView]);
-
-  const handleSaveSlice = useCallback((slice: TableSlice) => {
-    setCustomSlices(prev => {
-      const exists = prev.some(s => s.id === slice.id);
-      const updated = exists ? prev.map(s => s.id === slice.id ? slice : s) : [...prev, slice];
-      saveCustomSlices(updated);
-      return updated;
-    });
-
-    const updatedConfig: SheetConfig = {
-      ...sheetConfig,
-      slices: [
-        ...(sheetConfig.slices || []).filter(s => s.id !== slice.id),
-        slice
-      ]
-    };
-    setSheetConfig(updatedConfig);
-    saveConfig(updatedConfig);
-
-    showToast(`Vista personalizada "${slice.name}" guardada con éxito`, 'success');
-    handleSelectSlice(slice);
-  }, [sheetConfig, saveConfig, showToast, handleSelectSlice]);
-
-  const handleDeleteSlice = useCallback((sliceId: string) => {
-    setCustomSlices(prev => {
-      const updated = prev.filter(s => s.id !== sliceId);
-      saveCustomSlices(updated);
-      return updated;
-    });
-
-    if (sheetConfig.slices) {
-      const updatedConfig: SheetConfig = {
-        ...sheetConfig,
-        slices: sheetConfig.slices.filter(s => s.id !== sliceId)
-      };
-      setSheetConfig(updatedConfig);
-      saveConfig(updatedConfig);
-    }
-
-    if (activeSliceId === sliceId) {
-      handleSelectSlice(null);
-    }
-    showToast('Slice eliminado', 'info');
-  }, [sheetConfig, saveConfig, activeSliceId, handleSelectSlice, showToast]);
-
-  const handleToggleStickyColumns = useCallback(() => {
-    const nextVal = !sheetConfig?.enableStickyColumns;
-    const updatedConfig: SheetConfig = {
-      ...sheetConfig,
-      enableStickyColumns: nextVal
-    };
-    setSheetConfig(updatedConfig);
-    saveConfig(updatedConfig);
-    showToast(
-      nextVal ? 'Columnas fijas (Sticky) ACTIVADAS' : 'Columnas fijas (Sticky) DESACTIVADAS',
-      'info',
-      'Vista de Tabla'
-    );
-  }, [sheetConfig, saveConfig, showToast]);
-
-  const handleToggleSliceVisibility = useCallback((sliceId: string) => {
-    setHiddenSliceIds(prev => {
-      const isHidden = prev.includes(sliceId);
-      const updated = isHidden ? prev.filter(id => id !== sliceId) : [...prev, sliceId];
-      saveHiddenSliceIds(updated);
-
-      const updatedConfig: SheetConfig = {
-        ...sheetConfig,
-        hiddenSliceIds: updated
-      };
-      setSheetConfig(updatedConfig);
-      saveConfig(updatedConfig);
-
-      showToast(isHidden ? 'Vista ahora visible en la barra superior' : 'Vista oculta de la barra superior', 'info');
-      return updated;
-    });
-  }, [sheetConfig, saveConfig, showToast]);
-
-  const handleSetBulkVisibility = useCallback((sliceIds: string[], visible: boolean) => {
-    setHiddenSliceIds(prev => {
-      let updated: string[];
-      if (visible) {
-        const toRemove = new Set(sliceIds);
-        updated = prev.filter(id => !toRemove.has(id));
-      } else {
-        updated = Array.from(new Set([...prev, ...sliceIds]));
-      }
-      saveHiddenSliceIds(updated);
-
-      const updatedConfig: SheetConfig = {
-        ...sheetConfig,
-        hiddenSliceIds: updated
-      };
-      setSheetConfig(updatedConfig);
-      saveConfig(updatedConfig);
-
-      showToast(visible ? 'Vistas ahora visibles en la barra' : 'Vistas ocultadas de la barra superior', 'info');
-      return updated;
-    });
-  }, [sheetConfig, saveConfig, showToast]);
 
   const totalPages = pageSize === 'all' || groupByColumn !== 'none' ? 1 : Math.ceil(filteredItems.length / (pageSize as number)) || 1;
 
@@ -1733,81 +1403,6 @@ export const InventoryDashboard: React.FC = () => {
     setSelectedRowIds([]);
   }, [activeView]);
 
-  const handleSelectEventCategory = (cat: EventCategory) => {
-    setSelectedEventCategory(cat);
-    const eventCol = findColumnBySemantic(headers, 'tipo_evento') || headers.find(h => /^frc(_|\s)?even/i.test(h.trim()));
-    if (eventCol) {
-      setFormData(prev => ({
-        ...prev,
-        [eventCol]: EVENT_CATEGORIES[cat].rawCode || EVENT_CATEGORIES[cat].name
-      }));
-    }
-  };
-
-  const handleOpenModal = (item?: InventoryItem, prefillSku?: string, initialCategory?: EventCategory) => {
-    setIsConfigOpen(false);
-    setFormErrors({});
-    if (item) {
-      setEditingItem(item);
-      const cat = getEventCategory(item, headers);
-      setSelectedEventCategory(cat);
-      const initialData: Record<string, string> = {};
-      headers.forEach(h => {
-        const colSchema = sheetConfig.schema?.[activeSheet.title]?.[h];
-        const isDateTime = colSchema?.type === 'datetime' || /timestamp|created_at|fecha_creaci[oó]n|fecha_registro/i.test(h);
-        const isDate = colSchema?.type === 'date' || (/fecha|vencimiento|vence|retiro/i.test(h) && !/time/i.test(h));
-        const raw = item[h] !== undefined && item[h] !== null ? String(item[h]).trim() : '';
-
-        if (isDateTime && raw) {
-          initialData[h] = formatInputDateTime(raw) || raw;
-        } else if (isDate && raw) {
-          initialData[h] = formatInputDate(raw) || raw;
-        } else {
-          initialData[h] = raw;
-        }
-      });
-      const calculatedData = autoCalculateItemFormData(initialData, headers, products, policies, sheetConfig);
-      setFormData(calculatedData);
-    } else {
-      setEditingItem(null);
-      const cat: EventCategory = initialCategory || (Array.isArray(eventFilter) && eventFilter.length === 1 && (eventFilter[0] in EVENT_CATEGORIES) ? (eventFilter[0] as EventCategory) : 'VENCIMIENTO');
-      setSelectedEventCategory(cat);
-
-      const initialData: Record<string, string> = {};
-      
-      const idVcCol = headers.find(h => /^ID_VC$/i.test(h.trim()));
-      const skuCol = headers.find(h => /sku|código|codigo/i.test(h));
-      const eventCol = headers.find(h => /tipo.*evento|evento|tipo.*registro|incidencia|categor[ií]a/i.test(h));
-      
-      headers.forEach(h => {
-        const colSchema = sheetConfig.schema?.[activeSheet.title]?.[h];
-        if (colSchema?.type === 'datetime' || /timestamp|created_at|fecha_creaci[oó]n|fecha_registro|fecha_ingreso/i.test(h)) {
-          const now = new Date();
-          const localISO = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-          initialData[h] = localISO;
-        } else {
-          initialData[h] = '';
-        }
-      });
-      
-      if (idVcCol) {
-        initialData[idVcCol] = `VC-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      }
-
-      if (eventCol) {
-        initialData[eventCol] = EVENT_CATEGORIES[cat].name;
-      }
-
-      if (prefillSku && skuCol) {
-        initialData[skuCol] = prefillSku;
-      }
-      
-      const calculatedData = autoCalculateItemFormData(initialData, headers, products, policies, sheetConfig);
-      setFormData(calculatedData);
-    }
-    setIsModalOpen(true);
-  };
-
   // Handle batch synchronization from stock count terminal to VENCIMIENTOS sheet
   const handleSyncRowsToVencimientos = async (rows: Record<string, any>[]) => {
     if (!activeSheet) return;
@@ -1853,206 +1448,6 @@ export const InventoryDashboard: React.FC = () => {
     } catch (err: any) {
       showToast(`Error durante sincronización: ${err.message}`, 'error', 'Error');
     }
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setEditingItem(null);
-    setFormData({});
-    setFormErrors({});
-  };
-
-  const validateForm = (): Record<string, string> => {
-    const errors: Record<string, string> = {};
-    if (!activeSheet) return errors;
-
-    const currentSchema = sheetConfig.schema?.[activeSheet.title] || {};
-    const isEventsSheet = activeView === 'events' || /frc|evento|incidenc|averia|merma|diferencia|transporte/i.test(activeSheet.title);
-    
-    // Dynamic Zod Schema generation based on our internal types
-    const zSchemaShape: Record<string, z.ZodTypeAny> = {};
-
-    headers.forEach(header => {
-      const colSchema = currentSchema[header];
-      const isDateName = /fecha|vencimiento|vence|retiro/i.test(header) && !/dias|días|cant|stock|unidades|num/i.test(header);
-      const effectiveType = colSchema?.type || (isDateName ? 'date' : 'text');
-      const isAutoCalculated = colSchema?.behavior === 'auto_id' || 
-                               colSchema?.behavior === 'calc_fecha_vc' || 
-                               colSchema?.behavior === 'calc_retiro' || 
-                               effectiveType === 'calculated' || 
-                               /^ID_VC$/i.test(header.trim());
-
-      // If auto calculated, we don't strictly validate user input (it's read-only)
-      if (isAutoCalculated) {
-        zSchemaShape[header] = z.any();
-        return;
-      }
-
-      // Base string schema
-      let fieldSchema: z.ZodTypeAny = z.string().trim();
-
-      const isDateOrTimeCol = effectiveType === 'date' || effectiveType === 'datetime' || (/fecha|vencimiento|vence|retiro|timestamp/i.test(header) && !/dias|días|cant|stock|unidades|num/i.test(header));
-
-      // Required logic:
-      // En incidencias/FRC, las fechas (ej. FRC_VENCE), observaciones y folios son estrictamente opcionales.
-      // Solo las llaves primarias declaradas o SKU en tabla principal son obligatorios.
-      const isRequired = Boolean(
-        colSchema?.isKey || 
-        colSchema?.required || 
-        (!isEventsSheet && !isDateOrTimeCol && /^(sku|c[oó]digo)$/i.test(header.trim()))
-      );
-
-      if (!isRequired) {
-        fieldSchema = z.string().trim().optional().or(z.literal(''));
-      } else {
-        fieldSchema = z.string().trim().min(1, 'Este campo es obligatorio.');
-      }
-
-      // Type specific validation
-      if (effectiveType === 'number' || /^cant|unidades|stock|dias|precio/i.test(header)) {
-        fieldSchema = fieldSchema.refine((val: any) => {
-          if (!isRequired && (!val || String(val).trim() === '' || String(val).trim() === '-')) return true;
-          const num = parseLocaleNumber(val);
-          return !isNaN(num);
-        }, 'Debe ser un número válido.');
-      } else if (effectiveType === 'date' || (/fecha|vencimiento|vence|retiro/i.test(header) && !/dias|días|cant|stock|unidades|num/i.test(header))) {
-        fieldSchema = fieldSchema.refine((val: any) => {
-          if (!isRequired && (!val || String(val).trim() === '' || String(val).trim() === '-' || String(val).trim() === 'N/A')) return true;
-          return parseAnyDate(val) !== null;
-        }, 'Formato de fecha inválido.');
-      } else if (effectiveType === 'datetime' || /timestamp/i.test(header)) {
-        fieldSchema = fieldSchema.refine((val: any) => {
-          if (!isRequired && (!val || String(val).trim() === '' || String(val).trim() === '-' || String(val).trim() === 'N/A')) return true;
-          return !isNaN(new Date(val).getTime()) || parseAnyDate(val) !== null;
-        }, 'Formato de fecha y hora inválido.');
-      }
-
-      // Custom validations for Vencimiento
-      if (selectedEventCategory === 'VENCIMIENTO') {
-        if (/^MM$/i.test(header.trim())) {
-          fieldSchema = fieldSchema.refine((val: any) => {
-            if (!val && !isRequired) return true;
-            const num = parseInt(String(val).trim(), 10);
-            return !isNaN(num) && num >= 1 && num <= 12;
-          }, 'El mes debe estar entre 1 y 12.');
-        } else if (/^YYYY$/i.test(header.trim())) {
-          fieldSchema = fieldSchema.refine((val: any) => {
-            if (!val && !isRequired) return true;
-            const num = parseInt(String(val).trim(), 10);
-            return !isNaN(num) && num >= 1990 && num <= 2100;
-          }, 'El año debe ser válido (ej. 2026).');
-        }
-      }
-
-      zSchemaShape[header] = fieldSchema;
-    });
-
-    const formSchema = z.object(zSchemaShape).superRefine((data, ctx) => {
-      // Cross-field validation: Expiration vs Withdrawal Date
-      if (selectedEventCategory === 'VENCIMIENTO') {
-        const fechaVcHeader = headers.find(h => /^FECHA_VC$/i.test(h.trim()) || sheetConfig.schema?.[activeSheet.title]?.[h]?.behavior === 'calc_fecha_vc');
-        const withdrawalHeader = headers.find(h => /retiro/i.test(h) || sheetConfig.schema?.[activeSheet.title]?.[h]?.behavior === 'calc_retiro');
-        
-        if (fechaVcHeader && withdrawalHeader) {
-          const vcVal = data[fechaVcHeader] as string;
-          const retVal = data[withdrawalHeader] as string;
-          
-          if (vcVal && retVal) {
-            const vcDate = parseAnyDate(vcVal);
-            const retDate = parseAnyDate(retVal);
-            
-            if (vcDate && retDate && retDate > vcDate) {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: 'La fecha de retiro no puede ser posterior al vencimiento.',
-                path: [withdrawalHeader]
-              });
-            }
-          }
-        }
-      }
-    });
-
-    // Normalize formData so undefined values become empty strings for z.string().trim()
-    const normalizedFormData: Record<string, any> = {};
-    headers.forEach(h => {
-      normalizedFormData[h] = formData[h] !== undefined ? formData[h] : '';
-    });
-
-    const parseResult = formSchema.safeParse(normalizedFormData);
-    
-    if (!parseResult.success) {
-      parseResult.error.issues.forEach(issue => {
-        const key = issue.path[0] as string;
-        if (!errors[key]) {
-          errors[key] = issue.message;
-        }
-      });
-    }
-
-    return errors;
-  };
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    let newForm = { ...formData, [name]: value };
-    
-    if (formErrors[name]) {
-      setFormErrors(prev => {
-        const updated = { ...prev };
-        delete updated[name];
-        return updated;
-      });
-    }
-
-    const skuCol = findColumnBySemantic(headers, 'sku', sheetConfig?.customAliases) || 
-                   headers.find(h => /sku|código|codigo/i.test(h));
-    
-    if (skuCol && name === skuCol) {
-      const descriptionCol = findColumnBySemantic(headers, 'descripcion', sheetConfig?.customAliases);
-      const providerCol = findColumnBySemantic(headers, 'proveedor', sheetConfig?.customAliases);
-      const policyCol = findColumnBySemantic(headers, 'politica', sheetConfig?.customAliases);
-      const diasRetiroCol = findColumnBySemantic(headers, 'dias_retiro', sheetConfig?.customAliases) || 
-                            findColumnBySemantic(headers, 'dias_anticipacion', sheetConfig?.customAliases);
-      
-      if (descriptionCol) newForm[descriptionCol] = '';
-      if (providerCol) newForm[providerCol] = '';
-      if (policyCol) newForm[policyCol] = '';
-      if (diasRetiroCol) newForm[diasRetiroCol] = '';
-    }
-
-    newForm = autoCalculateItemFormData(newForm, headers, products, policies, sheetConfig);
-    setFormData(newForm);
-  };
-
-  const handleBatchFormUpdate = (updates: Record<string, string>) => {
-    let newForm = { ...formData, ...updates };
-
-    const skuCol = findColumnBySemantic(headers, 'sku', sheetConfig?.customAliases) || 
-                   headers.find(h => /sku|código|codigo/i.test(h));
-    
-    if (skuCol && updates[skuCol] !== undefined) {
-      const descriptionCol = findColumnBySemantic(headers, 'descripcion', sheetConfig?.customAliases);
-      const providerCol = findColumnBySemantic(headers, 'proveedor', sheetConfig?.customAliases);
-      const policyCol = findColumnBySemantic(headers, 'politica', sheetConfig?.customAliases);
-      const diasRetiroCol = findColumnBySemantic(headers, 'dias_retiro', sheetConfig?.customAliases) || 
-                            findColumnBySemantic(headers, 'dias_anticipacion', sheetConfig?.customAliases);
-      
-      if (descriptionCol && !updates[descriptionCol]) newForm[descriptionCol] = '';
-      if (providerCol && !updates[providerCol]) newForm[providerCol] = '';
-      if (policyCol && !updates[policyCol]) newForm[policyCol] = '';
-      if (diasRetiroCol && !updates[diasRetiroCol]) newForm[diasRetiroCol] = '';
-    }
-
-    if (Object.keys(updates).some(k => formErrors[k])) {
-      setFormErrors(prev => {
-        const next = { ...prev };
-        Object.keys(updates).forEach(k => delete next[k]);
-        return next;
-      });
-    }
-
-    newForm = autoCalculateItemFormData(newForm, headers, products, policies, sheetConfig);
-    setFormData(newForm);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -2590,244 +1985,310 @@ export const InventoryDashboard: React.FC = () => {
     .map((s: any) => s.properties.title)
     .filter((t: string) => !mappedSheets.includes(t) && !/^_/i.test(t.trim())) || [];
 
+  const dashboardContextValue: DashboardContextType = {
+    sheetConfig,
+    setSheetConfig,
+    saveConfig,
+    metadata,
+    activeSheet,
+    activeView,
+    setActiveView,
+    headers,
+    visibleHeaders,
+    products,
+    policies,
+    allMainItems,
+    items,
+    filteredItems,
+    fetchData,
+    showToast,
+
+    selectedProduct,
+    setSelectedProduct,
+    handleDelete,
+    handlePrintTicket,
+
+    isModalOpen,
+    setIsModalOpen,
+    editingItem,
+    setEditingItem,
+    formData,
+    setFormData,
+    formErrors,
+    setFormErrors,
+    selectedEventCategory,
+    setSelectedEventCategory,
+    handleOpenModal,
+    handleCloseModal,
+    handleSelectEventCategory,
+    handleFormChange,
+    handleBatchFormUpdate,
+    handleSave,
+    isSaving,
+
+    isPmReportOpen,
+    setIsPmReportOpen,
+    drainageReportItems,
+
+    isScriptModalOpen,
+    setIsScriptModalOpen,
+
+    isConfigOpen,
+    setIsConfigOpen,
+
+    isScannerOpen,
+    setIsScannerOpen,
+    searchTerm,
+    setSearchTerm,
+
+    isMobilePistoleoOpen,
+    setIsMobilePistoleoOpen,
+    handleSavePistoleoItem,
+
+    isBulkEditOpen,
+    setIsBulkEditOpen,
+    selectedRowIds,
+    handleApplyBulkEdit,
+
+    isGmailModalOpen,
+    setIsGmailModalOpen,
+    gmailModalItems,
+    setGmailModalItems,
+
+    isWhatsAppModalOpen,
+    setIsWhatsAppModalOpen,
+    whatsAppModalItems,
+    setWhatsAppModalItems,
+
+    isColumnManagerOpen,
+    setIsColumnManagerOpen,
+    allManageableColumns,
+    toggleVisibility,
+    moveColumn,
+    showAllColumns,
+    resetColumnOrder,
+    handleColumnDrop,
+
+    isQuickTraspasoOpen,
+    setIsQuickTraspasoOpen,
+    quickTraspasoItem,
+    setQuickTraspasoItem,
+    handleSaveQuickTraspaso,
+
+    isTicketConfigOpen,
+    setIsTicketConfigOpen,
+    globalTicketConfig,
+    handleSaveTicketConfig,
+
+    isBulkImportOpen,
+    setIsBulkImportOpen,
+    handleUniversalImportConfirmed,
+
+    isBulkActionsConfigOpen,
+    setIsBulkActionsConfigOpen,
+
+    isSliceManagerOpen,
+    setIsSliceManagerOpen,
+    currentTableSlices,
+    sliceCounts,
+    activeSliceId,
+    hiddenSliceIds,
+    handleSelectSlice,
+    setEditingSliceModalItem,
+    handleDeleteSlice,
+    handleToggleSliceVisibility,
+    handleSetBulkVisibility,
+    isSliceModalOpen,
+    setIsSliceModalOpen,
+    editingSliceModalItem,
+    currentFilters: {
+      searchTerm,
+      quickChip: activeQuickChip,
+      eventFilter,
+      pmRadarFilter,
+      eventResolutionFilter,
+      frcBodFilter,
+      columnFilters,
+      dynamicMonthFilter,
+      dynamicMonthRange
+    },
+    sortConfig,
+    groupByColumn,
+    groupByDirection,
+    handleSaveSlice,
+
+    isStockCountOpen,
+    setIsStockCountOpen,
+    handleSyncRowsToVencimientos,
+
+    isSyncAuditOpen,
+    setIsSyncAuditOpen,
+    offlineQueue,
+    auditLog,
+    isOffline,
+    isSyncing: isBackgroundSyncing || isSyncingCloud,
+    latencyMs,
+    connectionStatus,
+    lastHealthCheck,
+    healthErrorMessage,
+    testConnectionHealth,
+    syncQueue,
+    removeMutation,
+    discardMutation,
+    discardAllFailedMutations,
+    retryMutation,
+    retryAllFailedMutations,
+    forkMutationAsAppend,
+    failedMutations,
+    failedCount,
+    clearQueue,
+    clearAuditLog,
+
+    // Bulk Operations & Selection
+    setSelectedRowIds,
+    handleBulkDelete,
+    bulkActionCtx,
+    columnLabelsMap,
+
+    // View & Presentation Controls
+    isRightDrawerOpen,
+    setIsRightDrawerOpen,
+    isZenMode,
+    setIsZenMode,
+    tableDensity,
+    setTableDensity,
+    isSummaryView,
+    handleToggleSummaryView,
+    areFiltersVisible,
+    setAreFiltersVisible,
+    hasCustomColWidths,
+    handleResetColWidths,
+    handleToggleStickyColumns,
+    hiddenColumns,
+    activeSlice,
+    visibleTableSlices,
+    customSlices,
+    isRelationalActive,
+    searchableHeaders,
+    hasActiveFilters,
+    clearAllFilters,
+    isActionsMenuOpen,
+    setIsActionsMenuOpen,
+    lastCachedAt,
+    handleSyncOfflineQueue,
+    loading,
+    error,
+
+    // Sidebar & Navigation
+    isSidebarCollapsed,
+    setIsSidebarCollapsed,
+    otherSheets,
+    isMobileMenuOpen,
+    setIsMobileMenuOpen,
+
+    // Filter Panels & Metrics
+    quickChips,
+    activeQuickChip,
+    setActiveQuickChip,
+    eventResolutionFilter,
+    setEventResolutionFilter,
+    handleFilterToggle,
+    eventResolutionMetrics,
+    eventFilter,
+    setEventFilter,
+    eventMetrics,
+    frcBodValues,
+    frcBodCounts,
+    frcBodFilter,
+    setFrcBodFilter,
+    pmRadarFilter,
+    setPmRadarFilter,
+    pmMetrics,
+
+    // Table Container & Virtualization
+    effectiveVisibleHeaders,
+    visibleColumnMeta,
+    tableContainerRef,
+    getColWidth,
+    handleStartResize,
+    handleAutoFitColumn,
+    resizingCol,
+    onSelectRow: handleSelectRow,
+    onClickItem: handleRowClick,
+    onDeleteRow: handleDelete,
+    onPmRadarFilterClick: handlePmRadarFilterClick,
+    onEventResolutionFilterClick: handleEventResolutionFilterClick,
+    onEventFilterClick: handleEventFilterClick,
+    onFrcBodFilterClick: handleFrcBodFilterClick,
+    onOpenQuickTraspaso: handleOpenQuickTraspaso,
+    onOpenWhatsApp: (item: InventoryItem) => {
+      setWhatsAppModalItems([item]);
+      setIsWhatsAppModalOpen(true);
+    },
+    onOpenEmail: (item: InventoryItem) => {
+      setGmailModalItems([item]);
+      setIsGmailModalOpen(true);
+    },
+    isWhatsAppEnabled: isActionEnabledForTable('whatsapp', bulkActionCtx, sheetConfig),
+    isEmailEnabled: isActionEnabledForTable('gmail', bulkActionCtx, sheetConfig),
+    draggedCol,
+    setDraggedCol,
+    dragOverCol,
+    setDragOverCol,
+    columnFilters,
+    setColumnFilters,
+    columnOptionsMap,
+    frcBodCol,
+    virtualRows,
+    paginatedDisplayRows,
+    paddingTop,
+    paddingBottom,
+    onSelectGroupRows: handleSelectGroupRows,
+    toggleGroupCollapse,
+    measureElementRef: rowVirtualizer.measureElement,
+    handleToggleSort,
+    expandAllGroups,
+    collapseAllGroups,
+    collapsedGroups,
+    groupedItems,
+    toggleGroupByDirection
+  };
+
   return (
-    <>
+    <DashboardProvider value={dashboardContextValue}>
     <div className="flex h-full overflow-hidden bg-[#F8FAFC] dark:bg-slate-950 print:hidden">
       
       {/* DESKTOP SIDEBAR NAVIGATION */}
       {!isZenMode && (
         <div className="hidden lg:flex">
-          <Sidebar
-            isSidebarCollapsed={isSidebarCollapsed}
-            setIsSidebarCollapsed={setIsSidebarCollapsed}
-            activeView={activeView}
-            setActiveView={setActiveView}
-            setSelectedProduct={setSelectedProduct}
-            otherSheets={otherSheets}
-            onOpenConfig={() => setIsConfigOpen(true)}
-            onOpenStockCount={() => setIsStockCountOpen(true)}
-          />
+          <Sidebar />
         </div>
       )}
 
       {/* MOBILE SIDEBAR DRAWER */}
-      {isMobileMenuOpen && !isZenMode && (
-        <div className="fixed inset-0 z-50 lg:hidden flex">
-          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
-          <div className="relative w-72 bg-white dark:bg-slate-900 h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-left duration-200">
-            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <span className="font-bold text-slate-800 dark:text-slate-100 text-base">Menú de Navegación</span>
-              <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              <Sidebar
-                isSidebarCollapsed={false}
-                setIsSidebarCollapsed={() => {}}
-                activeView={activeView}
-                setActiveView={(v) => { setActiveView(v); setSelectedProduct(null); setIsMobileMenuOpen(false); }}
-                setSelectedProduct={setSelectedProduct}
-                otherSheets={otherSheets}
-                onOpenConfig={() => { setIsConfigOpen(true); setIsMobileMenuOpen(false); }}
-                onOpenStockCount={() => { setIsStockCountOpen(true); setIsMobileMenuOpen(false); }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      <DashboardMobileDrawer />
 
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
         
         {/* FLOATING ZEN FOCUS OVERLAY CONTROLS */}
-        {isZenMode && (
-          <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-slate-900/95 dark:bg-slate-900/95 text-white backdrop-blur-md px-5 py-2.5 rounded-2xl shadow-2xl border border-slate-700/80 text-xs font-bold animate-in fade-in slide-in-from-top duration-200 max-w-3xl w-[92%] sm:w-auto justify-between sm:justify-start">
-            <div className="flex items-center gap-2 shrink-0">
-              <Maximize2 className="w-4 h-4 text-purple-400 animate-pulse shrink-0" />
-              <span className="hidden sm:inline">Modo Zen</span>
-              <span className="text-[10px] text-slate-400 font-mono hidden lg:inline">(Esc para salir)</span>
-            </div>
-            
-            {/* Extended search input in Zen Mode */}
-            <div className="relative flex-1 sm:w-72 md:w-96 lg:w-[420px]">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar SKU, producto, vencimiento, proveedor..."
-                className="w-full pl-9 pr-8 py-1.5 text-xs rounded-xl bg-slate-800/90 text-white placeholder:text-slate-400 border border-slate-700 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-all shadow-inner"
-                autoFocus
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
-                  title="Limpiar búsqueda"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsRightDrawerOpen(true)}
-              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm shrink-0"
-              title="Abrir panel de vistas, columnas y configuraciones"
-            >
-              <Sliders className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Ajustes</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setIsZenMode(false);
-                showToast('Modo Zen desactivado', 'info', 'Enfoque');
-              }}
-              className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm shrink-0"
-              title="Salir del Modo Zen y restaurar todas las barras periféricas"
-            >
-              <span>Salir</span>
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
+        <ZenModeOverlay />
 
         {/* MACRO SEARCH NAV (Always top, sticky) */}
         {!isZenMode && (
-          <DashboardTopNav
-            isMobileMenuOpen={isMobileMenuOpen}
-            setIsMobileMenuOpen={setIsMobileMenuOpen}
-            activeView={activeView}
-            activeSheetTitle={activeSheet?.title}
-            searchableHeaders={searchableHeaders}
-            searchTerm={searchTerm}
-            setSearchTerm={setSearchTerm}
-            hasActiveFilters={hasActiveFilters}
-            clearAllFilters={clearAllFilters}
-            setIsScannerOpen={setIsScannerOpen}
-            setIsMobilePistoleoOpen={setIsMobilePistoleoOpen}
-            isActionsMenuOpen={isActionsMenuOpen}
-            setIsActionsMenuOpen={setIsActionsMenuOpen}
-            setIsGmailModalOpen={setIsGmailModalOpen}
-            setIsWhatsAppModalOpen={setIsWhatsAppModalOpen}
-            setIsPmReportOpen={setIsPmReportOpen}
-            onOpenBulkActionsConfig={() => setIsBulkActionsConfigOpen(true)}
-            onOpenTicketConfig={() => setIsTicketConfigOpen(true)}
-            drainageReportItems={drainageReportItems}
-            headers={headers}
-            visibleHeaders={visibleHeaders}
-            filteredItems={filteredItems}
-            sheetConfig={sheetConfig}
-            products={products}
-            policies={policies}
-            handlePrintTicket={handlePrintTicket}
-            isOffline={isOffline}
-            lastCachedAt={lastCachedAt}
-            isSyncing={isBackgroundSyncing || isSyncingCloud}
-            offlineQueue={offlineQueue}
-            handleSyncOfflineQueue={handleSyncOfflineQueue}
-            fetchData={fetchData}
-            loading={loading}
-            latencyMs={latencyMs}
-            connectionStatus={connectionStatus}
-            onOpenSyncAudit={() => setIsSyncAuditOpen(true)}
-            failedCount={failedCount}
-            isRelationalActive={isRelationalActive}
-            activeSheet={activeSheet}
-            isModalOpen={isModalOpen}
-            handleOpenModal={handleOpenModal}
-            setIsBulkImportOpen={setIsBulkImportOpen}
-            setIsScriptModalOpen={setIsScriptModalOpen}
-            onOpenViewConfig={() => setIsRightDrawerOpen(true)}
-          />
+          <DashboardTopNav />
         )}
 
         {/* DESKTOP ONLY CONTEXTUAL TOOLS */}
         <div className="hidden md:flex flex-col">
           {/* CONTEXTUAL PAGE HEADER (Unified Command & Slices Toolbar) */}
           {!isZenMode && (
-            <DashboardPageHeader
-              activeView={activeView}
-              isRelationalActive={isRelationalActive}
-              isViewMenuOpen={isViewMenuOpen}
-              setIsViewMenuOpen={setIsViewMenuOpen}
-              groupByColumn={groupByColumn}
-              setGroupByColumn={handleSetGroupByColumn}
-              groupByDirection={groupByDirection}
-              onToggleGroupByDirection={handleToggleGroupByDirection}
-              visibleHeaders={visibleHeaders}
-              setIsColumnManagerOpen={setIsColumnManagerOpen}
-              areFiltersVisible={areFiltersVisible}
-              setAreFiltersVisible={setAreFiltersVisible}
-              setIsTicketConfigOpen={setIsTicketConfigOpen}
-              hasCustomColWidths={hasCustomColWidths}
-              handleResetColWidths={handleResetColWidths}
-              setIsBulkImportOpen={setIsBulkImportOpen}
-              setIsScriptModalOpen={setIsScriptModalOpen}
-              activeSheet={activeSheet}
-              isModalOpen={isModalOpen}
-              handleOpenModal={handleOpenModal}
-              onOpenCreateSlice={() => {
-                setEditingSliceModalItem(null);
-                setIsSliceModalOpen(true);
-              }}
-              onOpenSliceManager={() => setIsSliceManagerOpen(true)}
-              activeSlice={activeSlice}
-              onEditSlice={(slice) => {
-                setEditingSliceModalItem(slice);
-                setIsSliceModalOpen(true);
-              }}
-              isSummaryView={isSummaryView}
-              onToggleSummaryView={handleToggleSummaryView}
-              isZenMode={isZenMode}
-              onToggleZenMode={() => {
-                const next = !isZenMode;
-                setIsZenMode(next);
-                showToast(next ? 'Modo Zen activado (Presiona Esc para salir)' : 'Modo Zen desactivado', 'info', 'Enfoque');
-              }}
-              onOpenStockCount={() => setIsStockCountOpen(true)}
-              onToggleStickyColumns={handleToggleStickyColumns}
-              isStickyEnabled={sheetConfig?.enableStickyColumns === true}
-              onOpenViewConfig={() => setIsRightDrawerOpen(true)}
-              slices={visibleTableSlices}
-              activeSliceId={activeSliceId}
-              onSelectSlice={handleSelectSlice}
-              sliceCounts={sliceCounts}
-              totalItemsCount={items.length}
-            />
+            <DashboardPageHeader />
           )}
 
           {/* FILTERS & RADAR PANELS (Collapsible) */}
           {!isZenMode && (
-            <DashboardFilterPanels
-              areFiltersVisible={areFiltersVisible}
-              quickChips={quickChips}
-              activeQuickChip={activeQuickChip}
-              setActiveQuickChip={setActiveQuickChip}
-              activeView={activeView}
-              activeSheet={activeSheet}
-              items={items}
-              eventResolutionFilter={eventResolutionFilter}
-              setEventResolutionFilter={setEventResolutionFilter}
-              handleFilterToggle={handleFilterToggle}
-              eventResolutionMetrics={eventResolutionMetrics}
-              eventFilter={eventFilter}
-              setEventFilter={setEventFilter}
-              eventMetrics={eventMetrics}
-              frcBodValues={frcBodValues}
-              frcBodCounts={frcBodCounts}
-              frcBodFilter={frcBodFilter}
-              setFrcBodFilter={setFrcBodFilter}
-              pmRadarFilter={pmRadarFilter}
-              setPmRadarFilter={setPmRadarFilter}
-              pmMetrics={pmMetrics}
-              onOpenBulkImport={() => setIsBulkImportOpen(true)}
-              onOpenNewItemModal={() => handleOpenModal()}
-            />
+            <DashboardFilterPanels />
           )}
         </div>
 
@@ -2879,364 +2340,22 @@ export const InventoryDashboard: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="h-full flex flex-col bg-slate-50 dark:bg-slate-950 md:bg-white md:dark:bg-slate-900 md:border border-slate-200 dark:border-slate-800 md:rounded-3xl md:shadow-sm overflow-hidden min-h-0 relative">
-              <InventoryTable 
-                filteredItems={filteredItems}
-                selectedRowIds={selectedRowIds}
-                setSelectedRowIds={setSelectedRowIds}
-                headers={headers}
-                visibleHeaders={effectiveVisibleHeaders}
-                visibleColumnMeta={visibleColumnMeta}
-                activeView={activeView}
-                tableContainerRef={tableContainerRef}
-                getColWidth={getColWidth}
-                handleStartResize={handleStartResize}
-                handleAutoFitColumn={handleAutoFitColumn}
-                resizingCol={resizingCol}
-                pmRadarFilter={pmRadarFilter}
-                setPmRadarFilter={setPmRadarFilter}
-                handleFilterToggle={handleFilterToggle}
-                onSelectRow={handleSelectRow}
-                onClickItem={handleRowClick}
-                onDeleteRow={handleDelete}
-                onPmRadarFilterClick={handlePmRadarFilterClick}
-                onEventResolutionFilterClick={handleEventResolutionFilterClick}
-                onEventFilterClick={handleEventFilterClick}
-                onFrcBodFilterClick={handleFrcBodFilterClick}
-                onOpenQuickTraspaso={handleOpenQuickTraspaso}
-                onOpenWhatsApp={(item) => {
-                  setWhatsAppModalItems([item]);
-                  setIsWhatsAppModalOpen(true);
-                }}
-                onOpenEmail={(item) => {
-                  setGmailModalItems([item]);
-                  setIsGmailModalOpen(true);
-                }}
-                isWhatsAppEnabled={isActionEnabledForTable('whatsapp', bulkActionCtx, sheetConfig)}
-                isEmailEnabled={isActionEnabledForTable('gmail', bulkActionCtx, sheetConfig)}
-                frcBodFilter={frcBodFilter}
-                setFrcBodFilter={setFrcBodFilter}
-                sheetConfig={sheetConfig}
-                activeSheet={activeSheet}
-                draggedCol={draggedCol}
-                setDraggedCol={setDraggedCol}
-                dragOverCol={dragOverCol}
-                setDragOverCol={setDragOverCol}
-                handleColumnDrop={handleColumnDrop}
-                eventFilter={eventFilter}
-                setEventFilter={setEventFilter}
-                eventResolutionFilter={eventResolutionFilter}
-                setEventResolutionFilter={setEventResolutionFilter}
-                columnFilters={columnFilters}
-                setColumnFilters={setColumnFilters}
-                columnOptionsMap={columnOptionsMap}
-                frcBodValues={frcBodValues}
-                frcBodCounts={frcBodCounts}
-                frcBodCol={frcBodCol}
-                virtualRows={virtualRows}
-                paginatedDisplayRows={paginatedDisplayRows}
-                paddingTop={paddingTop}
-                paddingBottom={paddingBottom}
-                groupByColumn={groupByColumn}
-                onSelectGroupRows={handleSelectGroupRows}
-                toggleGroupCollapse={toggleGroupCollapse}
-                measureElementRef={rowVirtualizer.measureElement}
-                sortConfig={sortConfig}
-                handleToggleSort={handleToggleSort}
-                tableDensity={tableDensity}
-                expandAllGroups={expandAllGroups}
-                collapseAllGroups={collapseAllGroups}
-                collapsedGroups={collapsedGroups}
-              />
-
-              {/* Footer summary bar */}
-              <div className="hidden md:flex p-3 bg-slate-100 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 flex-col sm:flex-row justify-between items-center gap-2">
-                <div className="flex items-center gap-3">
-                  <span>
-                    Mostrando <strong className="text-slate-800 dark:text-slate-100">{filteredItems.length}</strong> de <strong className="text-slate-800 dark:text-slate-100">{items.length}</strong> registros
-                  </span>
-                  {groupByColumn !== 'none' && groupedItems && (
-                    <div className="flex items-center gap-2 border-l border-slate-300 dark:border-slate-600 pl-3">
-                      <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                        Agrupado en {groupedItems.length} grupos ({groupByColumn})
-                      </span>
-                      <button
-                        onClick={toggleGroupByDirection}
-                        className="text-[10px] bg-blue-100 dark:bg-blue-900/60 hover:bg-blue-200 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 font-extrabold px-1.5 py-0.5 rounded transition-colors cursor-pointer"
-                        title={`Orden de grupos: ${groupByDirection === 'desc' ? 'Descendente (Z-A)' : 'Ascendente (A-Z)'}. Clic para cambiar.`}
-                      >
-                        {groupByDirection === 'desc' ? 'Orden Z-A' : 'Orden A-Z'}
-                      </button>
-                      <button
-                        onClick={expandAllGroups}
-                        className="text-[10px] text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 font-bold underline cursor-pointer"
-                      >
-                        Expandir todos
-                      </button>
-                      <span className="text-slate-300 dark:text-slate-600">|</span>
-                      <button
-                        onClick={collapseAllGroups}
-                        className="text-[10px] text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 font-bold underline cursor-pointer"
-                      >
-                        Contraer todos
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Tip: Arrastra las líneas entre columnas para cambiar su tamaño, o haz <strong>doble clic</strong> para auto-ajustar.
-                </span>
-              </div>
-            </div>
+            <DashboardTableContainer />
           )}
 
           {/* FLOATING ACTION BAR (BULK ACTIONS) */}
-          <FloatingBulkActionBar
-            selectedRowIds={selectedRowIds}
-            filteredItems={filteredItems}
-            activeView={activeView}
-            bulkActionCtx={bulkActionCtx}
-            sheetConfig={sheetConfig}
-            headers={headers}
-            visibleHeaders={visibleHeaders}
-            columnLabelsMap={columnLabelsMap}
-            products={products}
-            policies={policies}
-            handlePrintTicket={handlePrintTicket}
-            setIsTicketConfigOpen={setIsTicketConfigOpen}
-            setIsGmailModalOpen={setIsGmailModalOpen}
-            setWhatsAppModalItems={setWhatsAppModalItems}
-            setIsWhatsAppModalOpen={setIsWhatsAppModalOpen}
-            setIsPmReportOpen={setIsPmReportOpen}
-            setIsBulkEditOpen={setIsBulkEditOpen}
-            handleBulkDelete={handleBulkDelete}
-            setIsBulkActionsConfigOpen={setIsBulkActionsConfigOpen}
-            setSelectedRowIds={setSelectedRowIds}
-          />
+          <FloatingBulkActionBar />
 
           {/* MOBILE ONLY FABs (Floating Action Buttons) */}
-          {!isZenMode && activeView !== 'schema' && activeView !== 'analytics' && activeSheet && (
-            <div className="md:hidden fixed bottom-6 right-5 z-40 flex flex-col items-end gap-2.5">
-              <button
-                onClick={() => setIsMobilePistoleoOpen(true)}
-                className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-red-800 via-rose-900 to-red-800 text-white font-extrabold text-xs rounded-full shadow-[0_8px_25px_rgba(153,27,27,0.45)] border border-red-500/40 active:scale-95 transition-all"
-                title="Abrir Terminal de Pistoleo Móvil (Cámara / Láser PDA)"
-              >
-                <Barcode className="w-4 h-4 text-rose-300 animate-pulse" />
-                <span>Pistoleo Móvil</span>
-              </button>
-
-              <button
-                onClick={() => handleOpenModal()}
-                className="bg-blue-600 text-white p-3 rounded-full shadow-[0_8px_25px_rgba(37,99,235,0.4)] border border-blue-500/20 active:scale-95 transition-all"
-                title="Nuevo Registro"
-              >
-                <Plus className="w-5 h-5 stroke-[2.5]" />
-              </button>
-            </div>
-          )}
+          <DashboardMobileFABs />
         </div>
       </div>
 
       {/* WORKSPACE SIDE DRAWER */}
-      <ViewConfigControlDrawer
-        isOpen={isRightDrawerOpen}
-        onClose={() => setIsRightDrawerOpen(false)}
-        allHeaders={headers}
-        hiddenColumns={hiddenColumns?.[activeView] || []}
-        onToggleColumnVisibility={(col) => toggleVisibility(col)}
-        onResetColumns={resetColumnOrder}
-        onShowAllColumns={showAllColumns}
-        activeTableKey={activeView}
-        activeSliceId={activeSliceId}
-        onSelectSlice={(sliceId) => {
-          if (!sliceId) {
-            handleSelectSlice(null);
-          } else {
-            const found = currentTableSlices.find(s => s.id === sliceId);
-            handleSelectSlice(found || null);
-          }
-        }}
-        customSlices={customSlices}
-        onOpenSliceEditor={(slice) => {
-          setEditingSliceModalItem(slice || null);
-          setIsSliceModalOpen(true);
-        }}
-        isZenMode={isZenMode}
-        onToggleZenMode={() => {
-          const next = !isZenMode;
-          setIsZenMode(next);
-          showToast(next ? 'Modo Zen activado (Presiona Esc para salir)' : 'Modo Zen desactivado', 'info', 'Enfoque');
-        }}
-        tableDensity={tableDensity}
-        onChangeTableDensity={(density) => setTableDensity(density)}
-        sheetConfig={sheetConfig}
-        onOpenGlobalConfig={() => setIsConfigOpen(true)}
-        onOpenBulkActionsConfig={() => setIsBulkActionsConfigOpen(true)}
-        onOpenSchemaEditor={() => setActiveView('schema')}
-        totalItemsCount={items.length}
-        filteredItemsCount={filteredItems.length}
-        // Shifted states passed from header to drawer
-        groupByColumn={groupByColumn}
-        setGroupByColumn={setGroupByColumn}
-        groupByDirection={groupByDirection}
-        onToggleGroupByDirection={toggleGroupByDirection}
-        isSummaryView={isSummaryView}
-        onToggleSummaryView={handleToggleSummaryView}
-        areFiltersVisible={areFiltersVisible}
-        onToggleFiltersVisible={() => setAreFiltersVisible(prev => !prev)}
-        isStickyEnabled={sheetConfig?.enableStickyColumns === true}
-        onToggleStickyColumns={handleToggleStickyColumns}
-        hasCustomColWidths={hasCustomColWidths}
-        handleResetColWidths={handleResetColWidths}
-        onOpenTicketConfig={() => setIsTicketConfigOpen(true)}
-        // Actions & Export Props
-        activeSheetTitle={activeSheet?.title}
-        filteredItems={filteredItems}
-        products={products}
-        policies={policies}
-        drainageReportItems={drainageReportItems}
-        visibleHeaders={visibleHeaders}
-        handlePrintTicket={handlePrintTicket}
-        setIsGmailModalOpen={setIsGmailModalOpen}
-        setIsWhatsAppModalOpen={setIsWhatsAppModalOpen}
-        setIsPmReportOpen={setIsPmReportOpen}
-      />
+      <ViewConfigControlDrawer />
 
-      {/* CENTRALIZED DASHBOARD MODALS AND DRAWERS */}
-      <DashboardModalsManager
-        selectedProduct={selectedProduct}
-        setSelectedProduct={setSelectedProduct}
-        handleOpenModal={handleOpenModal}
-        handleDelete={handleDelete}
-        handlePrintTicket={handlePrintTicket}
-        allMainItems={allMainItems}
-        policies={policies}
-        products={products}
-        sheetConfig={sheetConfig}
-        setSheetConfig={setSheetConfig}
-        saveConfig={saveConfig}
-        isPmReportOpen={isPmReportOpen}
-        setIsPmReportOpen={setIsPmReportOpen}
-        drainageReportItems={drainageReportItems}
-        isScriptModalOpen={isScriptModalOpen}
-        setIsScriptModalOpen={setIsScriptModalOpen}
-        isModalOpen={isModalOpen}
-        handleCloseModal={handleCloseModal}
-        editingItem={editingItem}
-        setEditingItem={setEditingItem}
-        activeSheet={activeSheet}
-        activeView={activeView}
-        headers={headers}
-        formData={formData}
-        formErrors={formErrors}
-        selectedEventCategory={selectedEventCategory}
-        handleSelectEventCategory={handleSelectEventCategory}
-        handleFormChange={handleFormChange}
-        handleSave={handleSave}
-        isSaving={isSaving}
-        handleBatchFormUpdate={handleBatchFormUpdate}
-        isConfigOpen={isConfigOpen}
-        setIsConfigOpen={setIsConfigOpen}
-        metadata={metadata}
-        fetchData={fetchData}
-        isScannerOpen={isScannerOpen}
-        setIsScannerOpen={setIsScannerOpen}
-        setSearchTerm={setSearchTerm}
-        isMobilePistoleoOpen={isMobilePistoleoOpen}
-        setIsMobilePistoleoOpen={setIsMobilePistoleoOpen}
-        handleSavePistoleoItem={handleSavePistoleoItem}
-        isBulkEditOpen={isBulkEditOpen}
-        setIsBulkEditOpen={setIsBulkEditOpen}
-        selectedRowIds={selectedRowIds}
-        handleApplyBulkEdit={handleApplyBulkEdit}
-        isGmailModalOpen={isGmailModalOpen}
-        setIsGmailModalOpen={setIsGmailModalOpen}
-        gmailModalItems={gmailModalItems}
-        setGmailModalItems={setGmailModalItems}
-        filteredItems={filteredItems}
-        visibleHeaders={visibleHeaders}
-        isWhatsAppModalOpen={isWhatsAppModalOpen}
-        setIsWhatsAppModalOpen={setIsWhatsAppModalOpen}
-        whatsAppModalItems={whatsAppModalItems}
-        setWhatsAppModalItems={setWhatsAppModalItems}
-        isColumnManagerOpen={isColumnManagerOpen}
-        setIsColumnManagerOpen={setIsColumnManagerOpen}
-        allManageableColumns={allManageableColumns}
-        toggleVisibility={toggleVisibility}
-        moveColumn={moveColumn}
-        showAllColumns={showAllColumns}
-        resetColumnOrder={resetColumnOrder}
-        handleColumnDrop={handleColumnDrop}
-        isQuickTraspasoOpen={isQuickTraspasoOpen}
-        setIsQuickTraspasoOpen={setIsQuickTraspasoOpen}
-        quickTraspasoItem={quickTraspasoItem}
-        setQuickTraspasoItem={setQuickTraspasoItem}
-        handleSaveQuickTraspaso={handleSaveQuickTraspaso}
-        isTicketConfigOpen={isTicketConfigOpen}
-        setIsTicketConfigOpen={setIsTicketConfigOpen}
-        globalTicketConfig={globalTicketConfig}
-        handleSaveTicketConfig={handleSaveTicketConfig}
-        isBulkImportOpen={isBulkImportOpen}
-        setIsBulkImportOpen={setIsBulkImportOpen}
-        handleUniversalImportConfirmed={handleUniversalImportConfirmed}
-        isBulkActionsConfigOpen={isBulkActionsConfigOpen}
-        setIsBulkActionsConfigOpen={setIsBulkActionsConfigOpen}
-        isSliceManagerOpen={isSliceManagerOpen}
-        setIsSliceManagerOpen={setIsSliceManagerOpen}
-        currentTableSlices={currentTableSlices}
-        sliceCounts={sliceCounts}
-        activeSliceId={activeSliceId}
-        hiddenSliceIds={hiddenSliceIds}
-        handleSelectSlice={handleSelectSlice}
-        setEditingSliceModalItem={setEditingSliceModalItem}
-        handleDeleteSlice={handleDeleteSlice}
-        handleToggleSliceVisibility={handleToggleSliceVisibility}
-        handleSetBulkVisibility={handleSetBulkVisibility}
-        isSliceModalOpen={isSliceModalOpen}
-        setIsSliceModalOpen={setIsSliceModalOpen}
-        editingSliceModalItem={editingSliceModalItem}
-        currentFilters={{
-          searchTerm,
-          quickChip: activeQuickChip,
-          eventFilter,
-          pmRadarFilter,
-          eventResolutionFilter,
-          frcBodFilter,
-          columnFilters,
-          dynamicMonthFilter,
-          dynamicMonthRange
-        }}
-        sortConfig={sortConfig}
-        groupByColumn={groupByColumn}
-        groupByDirection={groupByDirection}
-        handleSaveSlice={handleSaveSlice}
-        isStockCountOpen={isStockCountOpen}
-        setIsStockCountOpen={setIsStockCountOpen}
-        items={items}
-        handleSyncRowsToVencimientos={handleSyncRowsToVencimientos}
-        showToast={showToast}
-        isSyncAuditOpen={isSyncAuditOpen}
-        setIsSyncAuditOpen={setIsSyncAuditOpen}
-        offlineQueue={offlineQueue}
-        auditLog={auditLog}
-        isOffline={isOffline}
-        isSyncing={isBackgroundSyncing || isSyncingCloud}
-        latencyMs={latencyMs}
-        connectionStatus={connectionStatus}
-        lastHealthCheck={lastHealthCheck}
-        healthErrorMessage={healthErrorMessage}
-        testConnectionHealth={testConnectionHealth}
-        syncQueue={syncQueue}
-        removeMutation={removeMutation}
-        discardMutation={discardMutation}
-        discardAllFailedMutations={discardAllFailedMutations}
-        retryMutation={retryMutation}
-        retryAllFailedMutations={retryAllFailedMutations}
-        forkMutationAsAppend={forkMutationAsAppend}
-        clearQueue={clearQueue}
-        clearAuditLog={clearAuditLog}
-      />
+      {/* CENTRALIZED DASHBOARD MODALS AND DRAWERS (Consumes state from DashboardContext) */}
+      <DashboardModalsManager />
 
     </div>
 
@@ -3248,7 +2367,7 @@ export const InventoryDashboard: React.FC = () => {
       activeView={activeView}
       mode={ticketPrintMode}
     />
-    </>
+    </DashboardProvider>
   );
 };
 

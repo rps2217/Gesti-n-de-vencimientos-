@@ -350,7 +350,10 @@ export async function pingGoogleSheets(): Promise<{
   try {
     const response = await fetch(url, {
       method: 'POST',
-      body: JSON.stringify({ action: 'getAppProperties' }),
+      body: JSON.stringify({ 
+        action: 'getAppProperties',
+        securityToken: getSecurityToken()
+      }),
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       signal: controller.signal
     });
@@ -360,6 +363,16 @@ export async function pingGoogleSheets(): Promise<{
 
     if (!response.ok) {
       return { success: false, latencyMs, urlConfigured: true, error: `HTTP ${response.status}` };
+    }
+
+    const text = await response.text();
+    try {
+      const data = JSON.parse(text);
+      if (data && data.error) {
+        return { success: false, latencyMs, urlConfigured: true, error: data.error };
+      }
+    } catch (e) {
+      // Ignore parse failure if not valid JSON, but trust HTTP 200
     }
 
     return { success: true, latencyMs, urlConfigured: true };

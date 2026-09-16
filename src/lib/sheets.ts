@@ -24,6 +24,14 @@ interface FetchOptions {
   retryDelayMs?: number;
 }
 
+function getSecurityToken(): string {
+  try {
+    return localStorage.getItem('appsheet_clone_securityToken') || '';
+  } catch {
+    return '';
+  }
+}
+
 /**
  * Robust fetch client for Google Apps Script with exponential backoff retries,
  * network timeout handling, and informative Spanish error messages.
@@ -39,6 +47,23 @@ async function fetchFromScript<T = ScriptResponse>(
     throw new Error('La URL del script no está configurada. Ve a Configuración para ingresar tu Web App URL.');
   }
 
+  // Intercept and inject dynamic Spreadsheet ID and Security Token
+  const customId = (() => {
+    try {
+      return localStorage.getItem('appsheet_clone_spreadsheetId') || '';
+    } catch {
+      return '';
+    }
+  })();
+  
+  const finalSpreadsheetId = customId.trim() ? customId.trim() : SPREADSHEET_ID;
+  
+  const finalPayload = {
+    ...payload,
+    spreadsheetId: payload.spreadsheetId === SPREADSHEET_ID ? finalSpreadsheetId : (payload.spreadsheetId || finalSpreadsheetId),
+    securityToken: getSecurityToken()
+  };
+
   let attempt = 0;
   let lastError: any = null;
 
@@ -51,7 +76,7 @@ async function fetchFromScript<T = ScriptResponse>(
       // which Apps Script doesn't handle natively.
       const response = await fetch(url, {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(finalPayload),
         headers: {
           'Content-Type': 'text/plain;charset=utf-8'
         },
@@ -835,6 +860,15 @@ function doPost(e) {
     const payload = JSON.parse(e.postData.contents);
     const action = payload.action;
     const spreadsheetId = payload.spreadsheetId;
+
+    // CONTROL DE SEGURIDAD / VALIDACIÓN DE PIN-TOKEN
+    const SECURITY_PIN = ""; // Puedes escribir un PIN de 4 dígitos o contraseña aquí para forzarlo
+    const scriptProperties = PropertiesService.getScriptProperties();
+    const expectedToken = SECURITY_PIN || scriptProperties.getProperty('SECURITY_TOKEN') || '';
+    if (expectedToken && payload.securityToken !== expectedToken) {
+      return responseJson({ error: 'Acceso No Autorizado: PIN o Token de seguridad incorrecto o ausente.' });
+    }
+
     const ss = spreadsheetId ? SpreadsheetApp.openById(spreadsheetId) : SpreadsheetApp.getActiveSpreadsheet();
 
     // OPTIMIZACIÓN 1: El candado de exclusión SOLO se activa en escrituras/mutaciones
@@ -1114,6 +1148,12 @@ function doPost(e) {
 }
 
 function doGet(e) {
+  const SECURITY_PIN = ""; // Puedes escribir un PIN de 4 dígitos o contraseña aquí para forzarlo
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const expectedToken = SECURITY_PIN || scriptProperties.getProperty('SECURITY_TOKEN') || '';
+  if (expectedToken && e.parameter.securityToken !== expectedToken) {
+    return responseJson({ error: 'Acceso No Autorizado: PIN o Token de seguridad incorrecto o ausente.' });
+  }
   return responseJson({ status: 'ok', message: 'API Apps Script lista y conectada.' });
 }
 
